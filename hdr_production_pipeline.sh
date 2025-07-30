@@ -4,12 +4,13 @@
 # ==========================================
 
 search_and_select() {
-    local prompt="$1" ext="$2" query
-    local files choice
+    local prompt="$1" exts="$2" query
+    local files choice pattern
     while true; do
         read -rp "$prompt" query
         [ -z "$query" ] && return 1
-        IFS=$'\n' read -r -d '' -a files < <(find . -type f -iname "*${query}*" -name "*.${ext}" -print0)
+        pattern=".*\.(${exts})"
+        IFS=$'\n' read -r -d '' -a files < <(find . -type f -iname "*${query}*" -iregex "$pattern" -print0)
         if [ ${#files[@]} -eq 0 ]; then
             echo "No matches found for '$query'."
             continue
@@ -36,7 +37,7 @@ search_and_select() {
 }
 
 while true; do
-    INPUT=$(search_and_select "Search term for input video (or press Enter to finish): " "mp4")
+    INPUT=$(search_and_select "Search term for input video (or press Enter to finish): " "mp4|mov")
     [ -z "$INPUT" ] && break
     LUT_PATH=$(search_and_select "Search term for 3D LUT: " "cube") || continue
 
