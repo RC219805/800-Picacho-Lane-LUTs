@@ -37,5 +37,38 @@ Override any preset control (exposure, midtone contrast, vibrance, clarity, glow
 by providing the corresponding command-line flag. Use `--dry-run` to audit the processing
 plan without writing files, and `--recursive` to mirror nested shoot-day folders.
 
+## Luxury Video Master Grader
+
+`luxury_video_master_grader.py` brings the same curated aesthetic to short-form motion
+content. It wraps FFmpeg with preset-driven LUT application, tasteful denoising, clarity
+and film-grain treatments, then exports a mezzanine-ready Apple ProRes master by default.
+
+### Requirements
+- FFmpeg 6+
+
+### Examples
+```bash
+# Inspect available looks and recipes
+python luxury_video_master_grader.py --list-presets
+
+# Grade a clip with the signature exterior look and generate a ProRes 422 HQ master
+python luxury_video_master_grader.py foyer.mov foyer_master.mov --preset signature_estate --overwrite
+
+# Apply the courtyard sunset preset, but intensify saturation and render a 240-frame preview
+python luxury_video_master_grader.py pool.mp4 pool_preview.mov \
+  --preset golden_hour_courtyard --saturation 1.2 --preview-frames 240 --dry-run
+
+# Force a master at 23.976fps if the source is variable frame rate
+python luxury_video_master_grader.py drone.mov drone_master.mov \
+  --target-fps 23.976 --overwrite
+```
+
+Use `--custom-lut` to feed bespoke `.cube` files, tweak parameters such as `--contrast`
+or `--grain`, and enable `--dry-run` to inspect the underlying FFmpeg command without
+rendering. The script automatically probes the source to surface resolution, frame-rate
+metadata and audio configuration before processing, then monitors for drift or variable
+frame-rate clips. When necessary it conforms delivery to the nearest cinema broadcast
+standard (or a user-specified `--target-fps`) to guarantee smooth, continuous playback.
+
 ## License
 Professional use permitted with attribution.
