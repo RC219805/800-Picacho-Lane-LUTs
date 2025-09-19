@@ -204,7 +204,43 @@ def summarize_probe(data: Dict[str, object]) -> str:
             video.get("avg_frame_rate"), video.get("r_frame_rate")
         )
         codec = video.get("codec_name")
-        pieces.append(f"video {codec} {w}x{h} @ {fps}")
+        pix_fmt = video.get("pix_fmt")
+        
+        # Build video info string
+        video_info = f"video {codec} {w}x{h} @ {fps}"
+        if pix_fmt:
+            video_info += f" {pix_fmt}"
+        
+        # Add bit depth if available
+        bits_per_raw_sample = video.get("bits_per_raw_sample")
+        if bits_per_raw_sample:
+            video_info += f" {bits_per_raw_sample}bit"
+        elif pix_fmt:
+            # Try to derive bit depth from pixel format
+            if "10" in pix_fmt:
+                video_info += " 10bit"
+            elif "12" in pix_fmt:
+                video_info += " 12bit"
+            elif "16" in pix_fmt:
+                video_info += " 16bit"
+
+        # Add color metadata if present
+        color_parts = []
+        color_primaries = video.get("color_primaries")
+        color_trc = video.get("color_trc")
+        colorspace = video.get("colorspace")
+
+        if color_primaries and color_primaries != "unknown":
+            color_parts.append(f"primaries={color_primaries}")
+        if color_trc and color_trc != "unknown":
+            color_parts.append(f"trc={color_trc}")
+        if colorspace and colorspace != "unknown":
+            color_parts.append(f"space={colorspace}")
+
+        if color_parts:
+            video_info += f" ({', '.join(color_parts)})"
+        
+        pieces.append(video_info)
     if audio:
         codec = audio.get("codec_name")
         sr = audio.get("sample_rate")
@@ -426,8 +462,6 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     graded_label = current
 
     lut_strength = float(config.get("lut_strength", 1.0))
-    if lut_strength < 0.0 or lut_strength > 1.0:
-        raise ValueError("lut_strength must be between 0.0 and 1.0")
 
     if lut_strength < 0.999:
         blend_label = next_label()
@@ -462,6 +496,30 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     return graph, "vout"
 
 
+def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Determine color metadata based on priority: explicit > color-from-source > none."""
+    # Priority 1: Explicit overrides
+    if args.color_primaries or args.color_transfer or args.color_space:
+        return args.color_primaries, args.color_transfer, args.color_space
+
+    # Priority 2: Copy from source if requested
+    if args.color_from_source:
+        streams = probe.get("streams", [])
+        video = next((s for s in streams if s.get("codec_type") == "video"), {})
+        if video:
+            primaries = video.get("color_primaries")
+            transfer = video.get("color_trc")
+            space = video.get("colorspace")
+            # Only use if not "unknown"
+            primaries = primaries if primaries and primaries != "unknown" else None
+            transfer = transfer if transfer and transfer != "unknown" else None
+            space = space if space and space != "unknown" else None
+            return primaries, transfer, space
+
+    # Priority 3: None (default behavior - no color tags set)
+    return None, None, None
+
+
 def build_command(
     input_path: Path,
     output_path: Path,
@@ -477,7 +535,10 @@ def build_command(
     threads: Optional[int],
     log_level: str,
     preview_frames: Optional[int],
-    output_fps: Optional[str],
+    vsync: str,
+    color_primaries: Optional[str] = None,
+    color_transfer: Optional[str] = None,
+    color_space: Optional[str] = None,
 ) -> List[str]:
     cmd: List[str] = [
         "ffmpeg",
@@ -502,7 +563,13 @@ def build_command(
     if bitrate:
         cmd.extend(["-b:v", bitrate])
 
-    cmd.extend(["-color_primaries", "1", "-color_trc", "1", "-colorspace", "1"])
+    # Add color metadata if specified (priority: explicit > none by default)
+    if color_primaries:
+        cmd.extend(["-color_primaries", color_primaries])
+    if color_transfer:
+        cmd.extend(["-color_trc", color_transfer])
+    if color_space:
+        cmd.extend(["-colorspace", color_space])
 
     cmd.extend(["-c:a", audio_codec])
     if audio_bitrate:
@@ -514,8 +581,7 @@ def build_command(
     if threads:
         cmd.extend(["-threads", str(threads)])
 
-    if output_fps:
-        cmd.extend(["-r", output_fps])
+    cmd.extend(["-vsync", vsync])
 
     cmd.append(str(output_path))
     return cmd
@@ -573,6 +639,34 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         type=float,
         default=0.05,
         help="Tolerance in fps when assessing frame-rate drift before conforming.",
+    )
+    parser.add_argument(
+        "--vsync",
+        choices=["auto", "cfr", "vfr", "drop", "passthrough"],
+        default="cfr",
+        help="Video sync method (muxer vsync behavior).",
+    )
+    parser.add_argument(
+        "--print-filter-graph",
+        action="store_true",
+        help="Print the filter graph in human-readable format for debugging.",
+    )
+    parser.add_argument(
+        "--color-primaries",
+        help="Set explicit color primaries (e.g., bt709, bt2020).",
+    )
+    parser.add_argument(
+        "--color-transfer",
+        help="Set explicit color transfer characteristics (e.g., bt709, smpte2084).",
+    )
+    parser.add_argument(
+        "--color-space",
+        help="Set explicit color space (e.g., bt709, bt2020nc).",
+    )
+    parser.add_argument(
+        "--color-from-source",
+        action="store_true",
+        help="Copy color metadata from source instead of overriding.",
     )
 
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -650,11 +744,49 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     config = build_config(args, target_fps=frame_plan.target)
 
+    # Validate grading parameters early with clear error messages
+    try:
+        contrast = float(config.get("contrast", 1.0))
+        if contrast <= 0:
+            raise ValueError("contrast must be greater than 0")
+
+        saturation = float(config.get("saturation", 1.0))
+        if saturation <= 0:
+            raise ValueError("saturation must be greater than 0")
+
+        gamma = float(config.get("gamma", 1.0))
+        if gamma <= 0:
+            raise ValueError("gamma must be greater than 0")
+
+        brightness = float(config.get("brightness", 0.0))
+        if brightness < -1.0 or brightness > 1.0:
+            raise ValueError("brightness must be in range [-1.0, 1.0]")
+        # Use existing clamp helper to ensure brightness is within bounds
+        config["brightness"] = clamp(brightness, -1.0, 1.0)
+
+        lut_strength = float(config.get("lut_strength", 1.0))
+        if lut_strength < 0.0 or lut_strength > 1.0:
+            raise ValueError("lut_strength must be in range [0.0, 1.0]")
+    except ValueError as exc:
+        print(f"Parameter validation error: {exc}", file=sys.stderr)
+        return 7
+
     try:
         filter_graph, filter_output = build_filter_graph(config)
     except Exception as exc:  # pylint: disable=broad-except
         print(f"Failed to build filter graph: {exc}", file=sys.stderr)
         return 5
+
+    if args.print_filter_graph:
+        print("\nFilter graph (human-readable):")
+        # Convert semicolon-separated filter chain to multi-line format
+        filter_nodes = filter_graph.split(";")
+        for i, node in enumerate(filter_nodes):
+            print(f"  {i+1:2d}. {node}")
+        print()
+
+    # Determine color metadata based on priority system
+    color_primaries, color_transfer, color_space = determine_color_metadata(args, probe)
 
     cmd = build_command(
         input_video,
@@ -670,7 +802,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         threads=args.threads,
         log_level=args.log_level,
         preview_frames=args.preview_frames,
-        output_fps=config.get("target_fps"),
+        vsync=args.vsync,
+        color_primaries=color_primaries,
+        color_transfer=color_transfer,
+        color_space=color_space,
     )
 
     print("\nFFmpeg command:")
