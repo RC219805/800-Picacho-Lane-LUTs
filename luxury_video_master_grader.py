@@ -203,8 +203,43 @@ def summarize_probe(data: Dict[str, object]) -> str:
         fps = describe_frame_rates(
             video.get("avg_frame_rate"), video.get("r_frame_rate")
         )
-        codec = video.get("codec_name")
-        pieces.append(f"video {codec} {w}x{h} @ {fps}")
+        codec = video.get("codec_name") or "unknown"
+        video_info = f"video {codec}"
+        if w and h:
+            video_info += f" {w}x{h}"
+        video_info += f" @ {fps}"
+
+        pix_fmt = video.get("pix_fmt")
+        if pix_fmt:
+            video_info += f" {pix_fmt}"
+
+        bits_per_raw_sample = video.get("bits_per_raw_sample")
+        if bits_per_raw_sample:
+            video_info += f" {bits_per_raw_sample}bit"
+        elif pix_fmt:
+            if "10" in pix_fmt:
+                video_info += " 10bit"
+            elif "12" in pix_fmt:
+                video_info += " 12bit"
+            elif "16" in pix_fmt:
+                video_info += " 16bit"
+
+        color_parts = []
+        color_primaries = video.get("color_primaries")
+        color_trc = video.get("color_trc")
+        colorspace = video.get("colorspace")
+
+        if color_primaries and color_primaries != "unknown":
+            color_parts.append(f"primaries={color_primaries}")
+        if color_trc and color_trc != "unknown":
+            color_parts.append(f"trc={color_trc}")
+        if colorspace and colorspace != "unknown":
+            color_parts.append(f"space={colorspace}")
+
+        if color_parts:
+            video_info += f" ({', '.join(color_parts)})"
+
+        pieces.append(video_info)
     if audio:
         codec = audio.get("codec_name")
         sr = audio.get("sample_rate")
