@@ -28,6 +28,8 @@ except Exception:  # pragma: no cover - optional dependency
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
+RESAMPLING_LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
+
 
 @dataclasses.dataclass
 class AdjustmentSettings:
@@ -286,6 +288,218 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
     return mapping.get(comp, comp)
 
 
+def _cumsum_with_pad(arr: np.ndarray, axis: int) -> np.ndarray:
+    pad_width = [(0, 0)] * arr.ndim
+    pad_width[axis] = (1, 0)
+    return np.pad(np.cumsum(arr, axis=axis), pad_width, mode="constant")
+
+
+def box_blur(arr: np.ndarray, radius: int) -> np.ndarray:
+    """Simple box blur that preserves array shape using reflective padding."""
+
+    if radius <= 0:
+        return arr
+
+    kernel_size = radius * 2 + 1
+    pad_width = [(radius, radius), (radius, radius)]
+    pad_width.extend([(0, 0)] * (arr.ndim - 2))
+    padded = np.pad(arr, pad_width, mode="reflect")
+
+    summed_axis0 = _cumsum_with_pad(padded, axis=0)
+    window_axis0 = summed_axis0[kernel_size:, ...] - summed_axis0[:-kernel_size, ...]
+
+    summed_axis1 = _cumsum_with_pad(window_axis0, axis=1)
+    window_axis1 = summed_axis1[:, kernel_size:, ...] - summed_axis1[:, :-kernel_size, ...]
+
+    return window_axis1 / float(kernel_size * kernel_size)
+
+
+def kelvin_to_rgb(temp: float) -> np.ndarray:
+    """Approximate RGB scaling factors for a given color temperature."""
+
+    if temp is None:
+        temp = 6500.0
+
+    temp = max(1000.0, min(40000.0, float(temp))) / 100.0
+
+    if temp <= 66.0:
+        red = 255.0
+        green = 99.4708025861 * math.log(temp) - 161.1195681661
+        blue = 0.0 if temp <= 19.0 else 138.5177312231 * math.log(temp - 10.0) - 305.0447927307
+    else:
+        red = 329.698727446 * ((temp - 60.0) ** -0.1332047592)
+        green = 288.1221695283 * ((temp - 60.0) ** -0.0755148492)
+        blue = 255.0
+
+    rgb = np.array([red, green, blue], dtype=np.float32) / 255.0
+    return np.clip(rgb, 0.0, 4.0)
+
+
+def apply_white_balance(arr: np.ndarray, temp: Optional[float], tint: float) -> np.ndarray:
+    if temp is None and abs(tint) < 1e-6:
+        return arr
+
+    reference = kelvin_to_rgb(6500.0)
+    target = kelvin_to_rgb(temp if temp is not None else 6500.0)
+    scale = target / np.clip(reference, 1e-6, None)
+
+    if abs(tint) > 1e-6:
+        # Positive tint introduces magenta by reducing green slightly.
+        tint_scale = np.array([
+            1.0 + tint * 0.002,
+            1.0 - tint * 0.004,
+            1.0 + tint * 0.002,
+        ], dtype=np.float32)
+        scale *= tint_scale
+
+    return np.clip(arr * scale, 0.0, 1.0)
+
+
+def apply_exposure(arr: np.ndarray, exposure: float) -> np.ndarray:
+    if abs(exposure) < 1e-6:
+        return arr
+    factor = 2.0 ** exposure
+    return np.clip(arr * factor, 0.0, 1.0)
+
+
+def apply_shadow_highlight(
+    arr: np.ndarray, shadow_lift: float, highlight_recovery: float
+) -> np.ndarray:
+    if abs(shadow_lift) < 1e-6 and abs(highlight_recovery) < 1e-6:
+        return arr
+
+    lum = np.dot(arr, np.array([0.2126, 0.7152, 0.0722], dtype=np.float32))
+
+    if shadow_lift:
+        shadow_mask = 1.0 - np.clip(lum / 0.6, 0.0, 1.0)
+        arr = arr + shadow_mask[..., None] * shadow_lift * 0.8
+
+    if highlight_recovery:
+        highlight_mask = np.clip((lum - 0.65) / 0.35, 0.0, 1.0)
+        compression = 1.0 - highlight_recovery * 0.7 * highlight_mask[..., None]
+        arr = arr * compression
+
+    return np.clip(arr, 0.0, 1.0)
+
+
+def apply_midtone_contrast(arr: np.ndarray, amount: float) -> np.ndarray:
+    if abs(amount) < 1e-6:
+        return arr
+
+    midpoint = 0.5
+    contrast = 1.0 + amount * 1.6
+    return np.clip((arr - midpoint) * contrast + midpoint, 0.0, 1.0)
+
+
+def apply_vibrance(arr: np.ndarray, vibrance: float) -> np.ndarray:
+    if abs(vibrance) < 1e-6:
+        return arr
+
+    maxc = arr.max(axis=2, keepdims=True)
+    minc = arr.min(axis=2, keepdims=True)
+    sat = maxc - minc
+    sat_norm = sat / (sat.max() + 1e-6)
+    mean = arr.mean(axis=2, keepdims=True)
+    factor = 1.0 + vibrance * (1.0 - sat_norm)
+    return np.clip(mean + (arr - mean) * factor, 0.0, 1.0)
+
+
+def apply_saturation(arr: np.ndarray, saturation: float) -> np.ndarray:
+    if abs(saturation) < 1e-6:
+        return arr
+
+    factor = 1.0 + saturation
+    mean = arr.mean(axis=2, keepdims=True)
+    return np.clip(mean + (arr - mean) * factor, 0.0, 1.0)
+
+
+def apply_clarity(arr: np.ndarray, clarity: float) -> np.ndarray:
+    if clarity <= 1e-6:
+        return arr
+
+    radius = max(1, int(round(clarity * 6)))
+    blurred = box_blur(arr, radius)
+    detail = arr - blurred
+    return np.clip(arr + detail * clarity * 1.5, 0.0, 1.0)
+
+
+def rgb_to_ycbcr(arr: np.ndarray) -> np.ndarray:
+    matrix = np.array(
+        [
+            [0.299, 0.587, 0.114],
+            [-0.168736, -0.331264, 0.5],
+            [0.5, -0.418688, -0.081312],
+        ],
+        dtype=np.float32,
+    )
+    offset = np.array([0.0, 0.5, 0.5], dtype=np.float32)
+    return arr @ matrix.T + offset
+
+
+def ycbcr_to_rgb(arr: np.ndarray) -> np.ndarray:
+    y = arr[..., 0]
+    cb = arr[..., 1] - 0.5
+    cr = arr[..., 2] - 0.5
+    r = y + 1.402 * cr
+    g = y - 0.344136 * cb - 0.714136 * cr
+    b = y + 1.772 * cb
+    return np.stack([r, g, b], axis=-1)
+
+
+def apply_chroma_denoise(arr: np.ndarray, amount: float) -> np.ndarray:
+    if amount <= 1e-6:
+        return arr
+
+    ycbcr = rgb_to_ycbcr(arr)
+    radius = max(1, int(round(amount * 6)))
+    cb = box_blur(ycbcr[..., 1][..., None], radius)[..., 0]
+    cr = box_blur(ycbcr[..., 2][..., None], radius)[..., 0]
+    ycbcr[..., 1] = cb
+    ycbcr[..., 2] = cr
+    return np.clip(ycbcr_to_rgb(ycbcr), 0.0, 1.0)
+
+
+def apply_glow(arr: np.ndarray, amount: float) -> np.ndarray:
+    if amount <= 1e-6:
+        return arr
+
+    radius = max(1, int(round(2 + amount * 10)))
+    softened = box_blur(arr, radius)
+    lum = np.dot(arr, np.array([0.2126, 0.7152, 0.0722], dtype=np.float32))
+    mask = np.clip((lum - 0.55) / 0.45, 0.0, 1.0)
+    blend = arr + (softened - arr) * (mask[..., None] * amount)
+    return np.clip(blend, 0.0, 1.0)
+
+
+def apply_adjustments(arr: np.ndarray, settings: AdjustmentSettings) -> np.ndarray:
+    arr = arr.astype(np.float32, copy=True)
+    arr = apply_exposure(arr, settings.exposure)
+    arr = apply_white_balance(arr, settings.white_balance_temp, settings.white_balance_tint)
+    arr = apply_shadow_highlight(arr, settings.shadow_lift, settings.highlight_recovery)
+    arr = apply_midtone_contrast(arr, settings.midtone_contrast)
+    arr = apply_vibrance(arr, settings.vibrance)
+    arr = apply_saturation(arr, settings.saturation)
+    arr = apply_clarity(arr, settings.clarity)
+    arr = apply_chroma_denoise(arr, settings.chroma_denoise)
+    arr = apply_glow(arr, settings.glow)
+    return np.clip(arr, 0.0, 1.0)
+
+
+def resize_image(image: Image.Image, target_long_edge: Optional[int]) -> Image.Image:
+    if not target_long_edge:
+        return image
+
+    width, height = image.size
+    current_long_edge = max(width, height)
+    if current_long_edge <= target_long_edge:
+        return image
+
+    scale = target_long_edge / float(current_long_edge)
+    new_size = (max(1, int(round(width * scale))), max(1, int(round(height * scale))))
+    LOGGER.debug("Resizing image from %s to %s", (width, height), new_size)
+    return image.resize(new_size, RESAMPLING_LANCZOS)
+
+
 SAFE_TIFF_TAGS = {
     270,  # ImageDescription
     271,  # Make
@@ -375,3 +589,88 @@ def save_image(
         return
 
     image.save(destination, **save_kwargs)
+
+
+def process_single_image(
+    source: Path,
+    destination: Path,
+    adjustments: AdjustmentSettings,
+    compression: str,
+    resize_long_edge: Optional[int],
+) -> None:
+    LOGGER.info("Processing %s -> %s", source, destination)
+
+    with Image.open(source) as image:
+        image.load()
+        metadata = getattr(image, "tag_v2", None)
+        icc_profile = image.info.get("icc_profile") if hasattr(image, "info") else None
+
+        frame_count = getattr(image, "n_frames", 1)
+        if frame_count > 1:
+            LOGGER.warning("%s contains multiple frames; only the first frame will be processed", source)
+
+        image = resize_image(image, resize_long_edge)
+
+        arr_float, dtype, alpha = image_to_float(image)
+        adjusted = apply_adjustments(arr_float, adjustments)
+        arr_int = float_to_dtype_array(adjusted, dtype, alpha)
+
+    save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
+
+
+def describe_plan(
+    source: Path,
+    destination: Path,
+    resize_long_edge: Optional[int],
+    adjustments: AdjustmentSettings,
+) -> str:
+    pieces = [f"{source.name} -> {destination.name}"]
+    if resize_long_edge:
+        pieces.append(f"resize≤{resize_long_edge}px")
+    pieces.append(f"preset={adjustments}")
+    return ", ".join(pieces)
+
+
+def run_pipeline(args: argparse.Namespace) -> int:
+    input_root = args.input.resolve()
+    output_root = args.output.resolve()
+
+    if not input_root.exists() or not input_root.is_dir():
+        raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
+
+    adjustments = build_adjustments(args)
+    images = sorted(collect_images(input_root, args.recursive))
+    if not images:
+        LOGGER.warning("No TIFF images found in %s", input_root)
+        return 0
+
+    processed = 0
+    for source in images:
+        destination = ensure_output_path(input_root, output_root, source, args.suffix, args.recursive)
+
+        if destination.exists() and not args.overwrite:
+            LOGGER.warning("Skipping %s because %s already exists", source, destination)
+            continue
+
+        if args.dry_run:
+            LOGGER.info("DRY RUN: %s", describe_plan(source, destination, args.resize_long_edge, adjustments))
+            continue
+
+        try:
+            process_single_image(source, destination, adjustments, args.compression, args.resize_long_edge)
+            processed += 1
+        except Exception:
+            LOGGER.exception("Failed to process %s", source)
+
+    LOGGER.info("Finished processing %d image(s)", processed)
+    return processed
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    args = parse_args(argv)
+    run_pipeline(args)
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - CLI entry point
+    raise SystemExit(main())
