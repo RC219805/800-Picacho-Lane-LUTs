@@ -243,21 +243,25 @@ def float_to_dtype_array(
     """Convert a float array back to the original image dtype without bias."""
 
     arr = np.clip(arr, 0.0, 1.0)
-    np_dtype = np.dtype(dtype)
-    dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
-    if dtype_info:
+    target_dtype = np.dtype(dtype)
+
+    dtype_info: Optional[Any] = None
+    dtype_max: Optional[float] = None
+    if np.issubdtype(target_dtype, np.integer):
+        dtype_info = np.iinfo(target_dtype)
         dtype_max = float(dtype_info.max)
-        arr_int = np.round(arr * dtype_max).astype(np_dtype)
+        arr_int = np.round(arr * dtype_max).astype(target_dtype)
     else:
-        # Preserve floating-point sample formats (e.g. 32-bit float TIFF)
-        arr_int = arr.astype(np_dtype, copy=False)
+        # Preserve floating-point sample formats (e.g. 32-bit float TIFF) or
+        # fall back to the requested dtype for exotic sample types.
+        arr_int = arr.astype(target_dtype, copy=False)
 
     if alpha is not None:
         alpha = np.clip(alpha, 0.0, 1.0)
-        if dtype_info:
-            alpha_int = np.round(alpha * dtype_max).astype(np_dtype)
+        if dtype_info is not None and dtype_max is not None:
+            alpha_int = np.round(alpha * dtype_max).astype(target_dtype)
         else:
-            alpha_int = alpha.astype(np_dtype, copy=False)
+            alpha_int = alpha.astype(target_dtype, copy=False)
         arr_int = np.concatenate([arr_int, alpha_int[:, :, None]], axis=2)
 
     return np.ascontiguousarray(arr_int)
