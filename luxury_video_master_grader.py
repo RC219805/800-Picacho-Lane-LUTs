@@ -248,15 +248,9 @@ def summarize_probe(data: Dict[str, object]) -> str:
 
         # Add color metadata if present
         color_parts = []
-        copilot/fix-acc44894-7440-470d-87ee-38faaa084415
-        color_primaries = normalize_color_tag(video.get("color_primaries"))
-        color_trc = normalize_color_tag(video.get("color_trc"))
-        colorspace = normalize_color_tag(video.get("colorspace"))
-
         color_primaries = normalise_color_tag(video.get("color_primaries"))
         color_trc = normalise_color_tag(video.get("color_trc"))
         colorspace = normalise_color_tag(video.get("colorspace"))
-        main
 
         if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
@@ -517,18 +511,15 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
     tone_map = config.get("tone_map")
     if tone_map and str(tone_map).lower() != "off":
-        zscale_args = [
-            "primaries=bt709",
-            "transfer=bt709",
-            "matrix=bt709",
-            "range=tv",
-        ]
+        tone_map_peak = config.get("tone_map_peak")
+        pre_tonemap_args = ["transfer=linear"]
+        if tone_map_peak is not None:
+            pre_tonemap_args.append(f"npl={float(tone_map_peak):.4f}")
         new_label = next_label()
-        nodes.append(f"[{current}]zscale={':'.join(zscale_args)}[{new_label}]")
+        nodes.append(f"[{current}]zscale={':'.join(pre_tonemap_args)}[{new_label}]")
         current = new_label
 
-        tonemap_args = [f"tonemap={tone_map}"]
-        tone_map_peak = config.get("tone_map_peak")
+        tonemap_args = [str(tone_map)]
         if tone_map_peak is not None:
             tonemap_args.append(f"peak={float(tone_map_peak):.4f}")
         tone_map_desat = config.get("tone_map_desat")
@@ -536,6 +527,16 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
             tonemap_args.append(f"desat={float(tone_map_desat):.4f}")
         new_label = next_label()
         nodes.append(f"[{current}]tonemap={':'.join(tonemap_args)}[{new_label}]")
+        current = new_label
+
+        post_tonemap_args = [
+            "primaries=bt709",
+            "transfer=bt709",
+            "matrix=bt709",
+            "range=tv",
+        ]
+        new_label = next_label()
+        nodes.append(f"[{current}]zscale={':'.join(post_tonemap_args)}[{new_label}]")
         current = new_label
 
     denoise = config.get("denoise")
