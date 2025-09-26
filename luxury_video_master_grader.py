@@ -247,16 +247,24 @@ def summarize_probe(data: Dict[str, object]) -> str:
                 video_info += " 16bit"
 
         # Add color metadata if present
-        color_parts = []
-        color_primaries = video.get("color_primaries")
-        color_trc = video.get("color_trc")
-        colorspace = video.get("colorspace")
+        def normalize_color_tag(value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            cleaned = value.strip().lower()
+            if cleaned in {"", "unknown", "unspecified"}:
+                return None
+            return cleaned
 
-        if color_primaries and color_primaries != "unknown":
+        color_parts = []
+        color_primaries = normalize_color_tag(video.get("color_primaries"))
+        color_trc = normalize_color_tag(video.get("color_trc"))
+        colorspace = normalize_color_tag(video.get("colorspace"))
+
+        if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
-        if color_trc and color_trc != "unknown":
+        if color_trc:
             color_parts.append(f"trc={color_trc}")
-        if colorspace and colorspace != "unknown":
+        if colorspace:
             color_parts.append(f"space={colorspace}")
 
         if color_parts:

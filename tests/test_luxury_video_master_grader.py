@@ -23,6 +23,7 @@ build_command = MODULE.build_command
 build_filter_graph = MODULE.build_filter_graph
 determine_color_metadata = MODULE.determine_color_metadata
 plan_tone_mapping = MODULE.plan_tone_mapping
+summarize_probe = MODULE.summarize_probe
 parse_arguments = MODULE.parse_arguments
 
 
@@ -292,6 +293,30 @@ def test_build_command_includes_expected_arguments(tmp_path):
     assert "-vsync" in cmd and "cfr" in cmd
     assert "-color_trc" in cmd and "smpte2084" in cmd
     assert "-colorspace" in cmd and "bt2020nc" in cmd
+
+
+def test_summarize_probe_ignores_non_descriptive_color_tags():
+    probe = {
+        "format": {"duration": "10.0"},
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "prores",
+                "width": 3840,
+                "height": 2160,
+                "avg_frame_rate": "24/1",
+                "color_primaries": "unknown",
+                "color_trc": "unspecified",
+                "colorspace": "BT709",
+            }
+        ],
+    }
+
+    summary = summarize_probe(probe)
+
+    assert "space=bt709" in summary
+    assert "primaries" not in summary
+    assert "trc=" not in summary
 
 
 def test_parse_arguments_requires_input_and_output(capsys):
