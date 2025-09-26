@@ -1,20 +1,20 @@
-# 800 Picacho Lane Professional LUT Collection
+# 800 Picacho Lane — Professional LUT Collection
 
 ## Overview
-A cutting-edge collection of 16 professional color grading LUTs featuring innovative Material Response technology.
+A cutting-edge collection of **16 professional color grading LUTs** featuring innovative **Material Response** technology.
 
 ## Collection Contents
-- **Film Emulation**: Kodak 2393, FilmConvert Nitrate
-- **Location Aesthetic**: Montecito Golden Hour, Spanish Colonial Warm
+- **Film Emulation**: Kodak 2393, FilmConvert Nitrate  
+- **Location Aesthetic**: Montecito Golden Hour, Spanish Colonial Warm  
 - **Material Response**: Revolutionary physics-based surface enhancement
 
 ## Innovation
-Material Response LUTs analyze and enhance how different surfaces interact with light, representing a paradigm shift from traditional color grading.
+**Material Response LUTs** analyze and enhance how different surfaces interact with light—shifting from purely global color transforms to surface-aware rendering that respects highlights, midtones, and micro-contrast differently across materials.
 
 ## Usage
-1. Import into DaVinci Resolve, Premiere Pro, or other color grading software
-2. Apply at 60-80% opacity initially
-3. Stack multiple LUTs for complex material interactions
+1. Import into DaVinci Resolve, Premiere Pro, or other color-grading software.
+2. Apply at **60–80% opacity** initially.
+3. Stack multiple LUTs for complex material interactions.
 
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow
