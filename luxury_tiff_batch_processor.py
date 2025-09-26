@@ -546,19 +546,6 @@ def save_image(
     if arr_out.ndim == 3 and arr_out.shape[2] == 1:
         arr_out = arr_out[:, :, 0]
 
-    image = Image.fromarray(arr_out)
-
-    save_kwargs: Dict[str, Any] = {}
-    if compression:
-        save_kwargs["compression"] = compression
-    if icc_profile is not None:
-        save_kwargs["icc_profile"] = icc_profile
-    if metadata:
-        info = TiffImagePlugin.ImageFileDirectory_v2()
-        for tag, value in metadata.items():
-            info[tag] = value
-        save_kwargs["tiffinfo"] = info
-
     # For floating-point sample formats Pillow may require tifffile for
     # round-tripping metadata. Fall back to tifffile when it is available and
     # better suited for exotic dtypes, otherwise rely on Pillow.
@@ -573,20 +560,44 @@ def save_image(
             tif_kwargs["metadata"] = {"tiff": metadata}
 
         photometric = "rgb"
-        extrasamples: Optional[List[str]] = None
+        extrasamples: Optional[List[Any]] = None
         if arr_out.ndim == 2:
             photometric = "minisblack"
         elif arr_out.ndim == 3:
             if arr_out.shape[2] == 4:
-                extrasamples = ["unassociated"]
+                extrasamples = [2]  # Unassociated alpha channel
             elif arr_out.shape[2] not in (3,):
                 raise ValueError("Unsupported channel count for TIFF output")
         tif_kwargs["photometric"] = photometric
         if extrasamples:
             tif_kwargs["extrasamples"] = extrasamples
 
-        tifffile.imwrite(destination, arr_out, dtype=dtype, **tif_kwargs)
+        try:
+            tifffile.imwrite(destination, arr_out, dtype=dtype, **tif_kwargs)
+        except Exception as exc:
+            if compression_name is not None and "imagecodecs" in str(exc).lower():
+                LOGGER.warning(
+                    "Compression '%s' requires imagecodecs; retrying without compression",
+                    compression_name,
+                )
+                tif_kwargs.pop("compression", None)
+                tifffile.imwrite(destination, arr_out, dtype=dtype, **tif_kwargs)
+            else:
+                raise
         return
+
+    image = Image.fromarray(arr_out)
+
+    save_kwargs: Dict[str, Any] = {}
+    if compression:
+        save_kwargs["compression"] = compression
+    if icc_profile is not None:
+        save_kwargs["icc_profile"] = icc_profile
+    if metadata:
+        info = TiffImagePlugin.ImageFileDirectory_v2()
+        for tag, value in metadata.items():
+            info[tag] = value
+        save_kwargs["tiffinfo"] = info
 
     image.save(destination, **save_kwargs)
 
