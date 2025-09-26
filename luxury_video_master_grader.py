@@ -761,7 +761,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--tone-map-desat",
         type=float,
-        default=0.0,
+        default=0.1,
         help="Desaturation factor for tone-mapping (0.0 retains original chroma).",
     )
     parser.add_argument(
