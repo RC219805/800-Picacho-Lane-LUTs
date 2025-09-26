@@ -256,15 +256,9 @@ def summarize_probe(data: Dict[str, object]) -> str:
             return cleaned
 
         color_parts = []
-        codex/fix-syntax-merge-conflicts-in-code
         color_primaries = normalize_color_tag(video.get("color_primaries"))
         color_trc = normalize_color_tag(video.get("color_trc"))
         colorspace = normalize_color_tag(video.get("colorspace"))
-
-        color_primaries = normalise_color_tag(video.get("color_primaries"))
-        color_trc = normalise_color_tag(video.get("color_trc"))
-        colorspace = normalise_color_tag(video.get("colorspace"))
-        main
 
         if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
