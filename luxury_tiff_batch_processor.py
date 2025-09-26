@@ -235,7 +235,6 @@ def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[n
     return arr_float, arr.dtype, alpha_channel
 
 
-main
 def float_to_dtype_array(
     arr: np.ndarray,
     dtype: np.dtype,
