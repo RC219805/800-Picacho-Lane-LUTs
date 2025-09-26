@@ -306,7 +306,7 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
             if tag in SAFE_TIFF_TAGS:
                 safe[tag] = raw_metadata[tag]
     except Exception:  # pragma: no cover - metadata best effort
-        LOGGER.debug("Unable to sanitise TIFF metadata", exc_info=True)
+        LOGGER.debug("Unable to sanitize TIFF metadata", exc_info=True)
         return None
     return safe or None
 
