@@ -19,13 +19,17 @@ Material Response LUTs analyze and enhance how different surfaces interact with 
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow
 for polishing large-format TIFF photography prior to digital launch. The script preserves
-metadata, honours 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/)
+metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/)
 is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for
 ultra-luxury real-estate storytelling.
 
 ### Requirements
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
+
+> **Note:** Earlier revisions triggered `F821` undefined-name lint errors. Pull the latest
+> main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper
+> that resolves the NumPy dtype handling.
 
 ### Example
 ```bash
@@ -69,6 +73,26 @@ rendering. The script automatically probes the source to surface resolution, fra
 metadata and audio configuration before processing, then monitors for drift or variable
 frame-rate clips. When necessary it conforms delivery to the nearest cinema broadcast
 standard (or a user-specified `--target-fps`) to guarantee smooth, continuous playback.
+
+## HDR Production Pipeline
+
+`hdr_production_pipeline.sh` orchestrates a full HDR finishing pass, combining ACES
+tonemapping, adaptive debanding, and filmic halation for gallery-ready masters.
+
+### Requirements
+- macOS or Linux shell environment
+- FFmpeg with zimg, `ffprobe`, and `python3`
+
+### Example
+```bash
+./hdr_production_pipeline.sh source_hdr.mov out_hdr_master.mov \
+  --aces-odt rec2020-pq --deband medium --halation strong --hdr10-metadata auto
+```
+
+Layer the script after `luxury_video_master_grader.py` to apply bespoke LUTs before the
+HDR-specific finishing tools run. The pipeline preserves Dolby Vision and static HDR10
+metadata where available, while the deband and halation stages default to the Codex branch
+recipes highlighted in the documentation examples.
 
 ## License
 Professional use permitted with attribution.
