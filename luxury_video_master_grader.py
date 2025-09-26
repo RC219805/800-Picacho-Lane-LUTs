@@ -496,21 +496,25 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
     tone_map = config.get("tone_map")
     if tone_map and str(tone_map).lower() != "off":
-        tm_args = [
+        zscale_args = [
             "primaries=bt709",
             "transfer=bt709",
             "matrix=bt709",
             "range=tv",
-            f"tonemap={tone_map}",
         ]
+        new_label = next_label()
+        nodes.append(f"[{current}]zscale={':'.join(zscale_args)}[{new_label}]")
+        current = new_label
+
+        tonemap_args = [f"tonemap={tone_map}"]
         tone_map_peak = config.get("tone_map_peak")
         if tone_map_peak is not None:
-            tm_args.append(f"tonemap_param={float(tone_map_peak):.4f}")
+            tonemap_args.append(f"peak={float(tone_map_peak):.4f}")
         tone_map_desat = config.get("tone_map_desat")
         if tone_map_desat is not None:
-            tm_args.append(f"tonemap_desat={float(tone_map_desat):.4f}")
+            tonemap_args.append(f"desat={float(tone_map_desat):.4f}")
         new_label = next_label()
-        nodes.append(f"[{current}]zscale={':'.join(tm_args)}[{new_label}]")
+        nodes.append(f"[{current}]tonemap={':'.join(tonemap_args)}[{new_label}]")
         current = new_label
 
     denoise = config.get("denoise")
