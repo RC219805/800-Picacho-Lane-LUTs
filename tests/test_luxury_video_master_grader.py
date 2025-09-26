@@ -120,7 +120,10 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
     assert "blend=all_expr='A*(1-0.6000)+B*0.6000'" in graph
     assert "unsharp=luma_msize_x=7" in graph
     assert "noise=alls=3.50:allf=t+u" in graph
-    assert "zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=tv:tonemap=hable:tonemap_param=1200.0000:tonemap_desat=0.2500" in graph
+    assert "zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=tv" in graph
+    assert "tonemap=tonemap=hable:peak=1200.0000:desat=0.2500" in graph
+    assert "tonemap_desat=" not in graph
+    assert "tonemap_param=" not in graph
     assert "gradfun=strength=0.70:radius=16" in graph
     assert "gblur=sigma=20.0000" in graph
     assert "blend=all_mode='screen':all_opacity=0.4000" in graph
