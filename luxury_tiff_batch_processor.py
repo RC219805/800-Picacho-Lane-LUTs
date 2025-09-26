@@ -315,7 +315,7 @@ def save_image(
     destination: Path,
     arr_int: np.ndarray,
     dtype: np.dtype,
-    metadata,
+    metadata: Optional[Any],
     icc_profile: Optional[bytes],
     compression: str,
 ) -> None:
