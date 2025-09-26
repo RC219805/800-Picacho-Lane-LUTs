@@ -248,15 +248,15 @@ def summarize_probe(data: Dict[str, object]) -> str:
 
         # Add color metadata if present
         color_parts = []
-        color_primaries = video.get("color_primaries")
-        color_trc = video.get("color_trc")
-        colorspace = video.get("colorspace")
+        color_primaries = normalise_color_tag(video.get("color_primaries"))
+        color_trc = normalise_color_tag(video.get("color_trc"))
+        colorspace = normalise_color_tag(video.get("colorspace"))
 
-        if color_primaries and color_primaries != "unknown":
+        if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
-        if color_trc and color_trc != "unknown":
+        if color_trc:
             color_parts.append(f"trc={color_trc}")
-        if colorspace and colorspace != "unknown":
+        if colorspace:
             color_parts.append(f"space={colorspace}")
 
         if color_parts:
@@ -281,6 +281,21 @@ def extract_video_stream(probe: Dict[str, object]) -> Dict[str, object]:
 HDR_PRIMARIES = {"bt2020", "smpte432", "smpte431"}
 HDR_TRANSFERS = {"smpte2084", "arib-std-b67", "hlg"}
 HDR_MATRIX = {"bt2020nc", "bt2020ncl"}
+INVALID_COLOR_TAGS = {"unknown", "unspecified", "undefined", "na"}
+
+
+def normalise_color_tag(value: Optional[str]) -> Optional[str]:
+    """Return a cleaned, lower-case color tag or ``None`` when not meaningful."""
+
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if lowered in INVALID_COLOR_TAGS:
+        return None
+    return lowered
 
 
 def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
