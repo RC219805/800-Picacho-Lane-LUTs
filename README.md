@@ -42,6 +42,9 @@ plan without writing files, and `--recursive` to mirror nested shoot-day folders
 `luxury_video_master_grader.py` brings the same curated aesthetic to short-form motion
 content. It wraps FFmpeg with preset-driven LUT application, tasteful denoising, clarity
 and film-grain treatments, then exports a mezzanine-ready Apple ProRes master by default.
+The pipeline now auto-detects HDR transfers and tone-maps them into a refined BT.709
+space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps
+gradient-rich interiors spotless with updated presets.
 
 ### Requirements
 - FFmpeg 6+
@@ -61,14 +64,22 @@ python luxury_video_master_grader.py pool.mp4 pool_preview.mov \
 # Force a master at 23.976fps if the source is variable frame rate
 python luxury_video_master_grader.py drone.mov drone_master.mov \
   --target-fps 23.976 --overwrite
+
+# Manually invoke the advanced finishing pipeline on an HDR master
+python luxury_video_master_grader.py hdr.mov hdr_sdr_master.mov \
+  --tone-map hable --tone-map-peak 1200 --tone-map-desat 0.2 \
+  --deband strong --halation-intensity 0.18 --halation-radius 22
 ```
 
 Use `--custom-lut` to feed bespoke `.cube` files, tweak parameters such as `--contrast`
-or `--grain`, and enable `--dry-run` to inspect the underlying FFmpeg command without
-rendering. The script automatically probes the source to surface resolution, frame-rate
-metadata and audio configuration before processing, then monitors for drift or variable
-frame-rate clips. When necessary it conforms delivery to the nearest cinema broadcast
-standard (or a user-specified `--target-fps`) to guarantee smooth, continuous playback.
+or `--grain`, layer in `--deband` smoothing or halation controls, and enable `--dry-run`
+to inspect the underlying FFmpeg command without rendering. The script automatically
+probes the source to surface resolution, frame-rate metadata and audio configuration
+before processing, then monitors for drift or variable frame-rate clips. When necessary
+it conforms delivery to the nearest cinema broadcast standard (or a user-specified
+`--target-fps`) to guarantee smooth, continuous playback. HDR clips are further analysed
+so the tool can apply tasteful tone mapping automatically, or respect explicit
+`--tone-map` overrides when you need a particular operator.
 
 ## License
 Professional use permitted with attribution.
