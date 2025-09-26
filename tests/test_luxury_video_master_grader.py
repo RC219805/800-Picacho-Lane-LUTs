@@ -23,6 +23,7 @@ build_command = MODULE.build_command
 build_filter_graph = MODULE.build_filter_graph
 determine_color_metadata = MODULE.determine_color_metadata
 plan_tone_mapping = MODULE.plan_tone_mapping
+parse_arguments = MODULE.parse_arguments
 
 
 def test_assess_frame_rate_respects_user_override():
@@ -291,3 +292,23 @@ def test_build_command_includes_expected_arguments(tmp_path):
     assert "-vsync" in cmd and "cfr" in cmd
     assert "-color_trc" in cmd and "smpte2084" in cmd
     assert "-colorspace" in cmd and "bt2020nc" in cmd
+
+
+def test_parse_arguments_requires_input_and_output(capsys):
+    with pytest.raises(SystemExit) as exc:
+        parse_arguments([])
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "the following arguments are required: input_video, output_video" in captured.err
+
+
+def test_parse_arguments_list_presets_exits_early(capsys):
+    with pytest.raises(SystemExit) as exc:
+        parse_arguments(["--list-presets"])
+
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert "Available presets:" in captured.out
+    for preset_key in MODULE.PRESETS:
+        assert f"- {preset_key}:" in captured.out
