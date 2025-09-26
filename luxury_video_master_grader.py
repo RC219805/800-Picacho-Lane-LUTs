@@ -964,7 +964,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         halation_radius = float(config.get("halation_radius", 0.0))
         if halation_radius < 0.0:
             raise ValueError("halation_radius must be non-negative")
-        config["halation_radius"] = clamp(halation_radius, 0.0, 256.0)
+        config["halation_radius"] = clamp(halation_radius, 0.0, 128.0)
     except ValueError as exc:
         print(f"Parameter validation error: {exc}", file=sys.stderr)
         return 7
