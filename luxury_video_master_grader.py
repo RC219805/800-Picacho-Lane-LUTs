@@ -512,21 +512,34 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
     tone_map = config.get("tone_map")
     if tone_map and str(tone_map).lower() != "off":
-        tm_args = [
-            "primaries=bt709",
+        tone_map_peak = config.get("tone_map_peak")
+        tone_map_peak_value = float(tone_map_peak) if tone_map_peak is not None else None
+        tone_map_desat = config.get("tone_map_desat")
+
+        pre_tone_args = ["transfer=linear"]
+        if tone_map_peak_value is not None:
+            pre_tone_args.append(f"npl={tone_map_peak_value:.4f}")
+        new_label = next_label()
+        nodes.append(f"[{current}]zscale={':'.join(pre_tone_args)}[{new_label}]")
+        current = new_label
+
+        tone_filter_args = [f"tonemap={tone_map}"]
+        if tone_map_peak_value is not None:
+            tone_filter_args.append(f"peak={tone_map_peak_value:.4f}")
+        if tone_map_desat is not None:
+            tone_filter_args.append(f"desat={float(tone_map_desat):.4f}")
+        new_label = next_label()
+        nodes.append(f"[{current}]tonemap={':'.join(tone_filter_args)}[{new_label}]")
+        current = new_label
+
+        post_tone_args = [
             "transfer=bt709",
+            "primaries=bt709",
             "matrix=bt709",
             "range=tv",
-            f"tonemap={tone_map}",
         ]
-        tone_map_peak = config.get("tone_map_peak")
-        if tone_map_peak is not None:
-            tm_args.append(f"tonemap_param={float(tone_map_peak):.4f}")
-        tone_map_desat = config.get("tone_map_desat")
-        if tone_map_desat is not None:
-            tm_args.append(f"tonemap_desat={float(tone_map_desat):.4f}")
         new_label = next_label()
-        nodes.append(f"[{current}]zscale={':'.join(tm_args)}[{new_label}]")
+        nodes.append(f"[{current}]zscale={':'.join(post_tone_args)}[{new_label}]")
         current = new_label
 
     denoise = config.get("denoise")
