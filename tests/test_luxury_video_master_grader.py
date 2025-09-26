@@ -22,6 +22,7 @@ assess_frame_rate = MODULE.assess_frame_rate
 build_command = MODULE.build_command
 build_filter_graph = MODULE.build_filter_graph
 determine_color_metadata = MODULE.determine_color_metadata
+plan_tone_mapping = MODULE.plan_tone_mapping
 
 
 def test_assess_frame_rate_respects_user_override():
@@ -101,6 +102,12 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
         "sharpen": "soft",
         "grain": 3.5,
         "target_fps": "24000/1001",
+        "tone_map": "hable",
+        "tone_map_peak": 1200.0,
+        "tone_map_desat": 0.25,
+        "deband": "medium",
+        "halation_intensity": 0.4,
+        "halation_radius": 20.0,
     }
 
     graph, output_label = build_filter_graph(config)
@@ -113,6 +120,10 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
     assert "blend=all_expr='A*(1-0.6000)+B*0.6000'" in graph
     assert "unsharp=luma_msize_x=7" in graph
     assert "noise=alls=3.50:allf=t+u" in graph
+    assert "zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=tv:tonemap=hable:tonemap_param=1200.0000:tonemap_desat=0.2500" in graph
+    assert "gradfun=strength=0.70:radius=16" in graph
+    assert "gblur=sigma=20.0000" in graph
+    assert "blend=all_mode='screen':all_opacity=0.4000" in graph
     assert "fps=fps=24000/1001" in graph
 
 
@@ -127,6 +138,71 @@ def test_build_filter_graph_rejects_unknown_denoise(tmp_path):
 
     with pytest.raises(ValueError):
         build_filter_graph(config)
+
+
+def test_build_filter_graph_rejects_unknown_deband(tmp_path):
+    lut_path = tmp_path / "dummy.cube"
+    lut_path.write_text("# dummy LUT\n")
+
+    config = {
+        "lut": lut_path,
+        "deband": "impossible",
+    }
+
+    with pytest.raises(ValueError):
+        build_filter_graph(config)
+
+
+def make_tone_args(**overrides):
+    defaults = {
+        "tone_map": "auto",
+        "tone_map_peak": 1000.0,
+        "tone_map_desat": 0.1,
+    }
+    defaults.update(overrides)
+    return argparse.Namespace(**defaults)
+
+
+def test_plan_tone_mapping_detects_hdr():
+    args = make_tone_args()
+    probe = {
+        "streams": [
+            {
+                "codec_type": "video",
+                "color_trc": "smpte2084",
+                "color_primaries": "bt2020",
+                "colorspace": "bt2020nc",
+            }
+        ]
+    }
+
+    plan = plan_tone_mapping(args, probe)
+
+    assert plan.enabled
+    assert plan.config["tone_map"] == "hable"
+    assert plan.metadata == ("bt709", "bt709", "bt709")
+    assert "detected" in plan.note
+
+
+def test_plan_tone_mapping_respects_off():
+    args = make_tone_args(tone_map="off")
+    probe = {"streams": [{"codec_type": "video"}]}
+
+    plan = plan_tone_mapping(args, probe)
+
+    assert not plan.enabled
+    assert "disabled" in plan.note.lower()
+
+
+def test_plan_tone_mapping_forced_override_on_sdr():
+    args = make_tone_args(tone_map="mobius", tone_map_peak=1500.0, tone_map_desat=0.2)
+    probe = {"streams": [{"codec_type": "video", "color_trc": "bt709"}]}
+
+    plan = plan_tone_mapping(args, probe)
+
+    assert plan.enabled
+    assert plan.config["tone_map"] == "mobius"
+    assert "forced" in plan.note.lower()
 
 
 def test_determine_color_metadata_prioritises_explicit():
