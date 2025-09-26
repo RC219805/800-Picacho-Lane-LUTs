@@ -322,7 +322,6 @@ def save_image(
     metadata = sanitize_tiff_metadata(metadata)
     dtype_info = np.iinfo(dtype) if np.issubdtype(dtype, np.integer) else None
     bits = dtype_info.bits if dtype_info else 0
-main
 
     if np.issubdtype(np_dtype, np.integer):
         dtype_info = np.iinfo(np_dtype)
