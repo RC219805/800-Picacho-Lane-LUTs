@@ -723,6 +723,28 @@ def build_command(
     return cmd
 
 
+class ListPresetsAction(argparse.Action):
+    """Custom argparse action that prints presets and exits early."""
+
+    def __init__(
+        self,
+        option_strings: List[str],
+        dest: str = argparse.SUPPRESS,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: Optional[str] = None,
+    ) -> None:
+        print("Available presets:\n" + list_presets())
+        parser.exit()
+
+
 def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -730,15 +752,19 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("input_video", type=Path, nargs="?", help="Source video to be mastered.")
-    parser.add_argument("output_video", type=Path, nargs="?", help="Destination path for the master grade.")
+    parser.add_argument("input_video", type=Path, help="Source video to be mastered.")
+    parser.add_argument("output_video", type=Path, help="Destination path for the master grade.")
     parser.add_argument(
         "--preset",
         choices=sorted(PRESETS.keys()),
         default="signature_estate",
         help="Select the baseline grading look to apply.",
     )
-    parser.add_argument("--list-presets", action="store_true", help="Print available presets and exit.")
+    parser.add_argument(
+        "--list-presets",
+        action=ListPresetsAction,
+        help="Print available presets and exit.",
+    )
     parser.add_argument("--custom-lut", type=Path, help="Override the preset LUT with a custom .cube file.")
     parser.add_argument("--lut-strength", type=float, help="Blend the LUT with the original signal (0.0-1.0).")
     parser.add_argument("--denoise", choices=list(HQDN3D_PRESETS) + ["off"], help="Override denoise strength.")
@@ -841,10 +867,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Copy color metadata from source instead of overriding.",
     )
 
-    args = parser.parse_args(list(argv) if argv is not None else None)
-    if not args.list_presets and (args.input_video is None or args.output_video is None):
-        parser.error("input_video and output_video are required unless --list-presets is provided")
-    return args
+    return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def build_config(
@@ -894,10 +917,6 @@ def build_config(
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_arguments(argv)
-
-    if args.list_presets:
-        print("Available presets:\n" + list_presets())
-        return 0
 
     ensure_tools_available()
 
