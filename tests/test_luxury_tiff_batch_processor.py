@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-import numpy as np
-from PIL import Image, TiffImagePlugin
 import pytest
+np = pytest.importorskip("numpy")
+from PIL import Image, TiffImagePlugin
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
