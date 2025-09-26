@@ -244,7 +244,6 @@ def float_to_dtype_array(
 
     arr = np.clip(arr, 0.0, 1.0)
     np_dtype = np.dtype(dtype)
-codex/create-batch-script-for-tiff-image-editing
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
     if dtype_info:
         dtype_max = float(dtype_info.max)
