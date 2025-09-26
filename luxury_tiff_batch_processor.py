@@ -1,4 +1,3 @@
-codex/create-batch-script-for-tiff-image-editing
 """Luxury TIFF batch enhancer.
 
 This script performs batch processing on high-resolution TIFF images to produce
