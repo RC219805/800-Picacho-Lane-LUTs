@@ -15,7 +15,7 @@ import dataclasses
 import logging
 import math
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -243,13 +243,20 @@ def float_to_dtype_array(
     arr = np.clip(arr, 0.0, 1.0)
     np_dtype = np.dtype(dtype)
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
-    dtype_max = float(dtype_info.max) if dtype_info else 1.0
-    arr_int = (arr * dtype_max + 0.5).astype(np_dtype if dtype_info else np.float32)
+    if dtype_info:
+        dtype_max = float(dtype_info.max)
+        arr_int = np.round(arr * dtype_max).astype(np_dtype)
+    else:
+        # Preserve floating-point sample formats (e.g. 32-bit float TIFF)
+        arr_int = arr.astype(np_dtype, copy=False)
 
     if alpha is not None:
-        alpha_int = (np.clip(alpha, 0.0, 1.0) * dtype_max + 0.5).astype(np_dtype if dtype_info else np.float32)
-        alpha_int = alpha_int[:, :, None]
-        arr_int = np.concatenate([arr_int, alpha_int], axis=2)
+        alpha = np.clip(alpha, 0.0, 1.0)
+        if dtype_info:
+            alpha_int = np.round(alpha * dtype_max).astype(np_dtype)
+        else:
+            alpha_int = alpha.astype(np_dtype, copy=False)
+        arr_int = np.concatenate([arr_int, alpha_int[:, :, None]], axis=2)
 
     return np.ascontiguousarray(arr_int)
 
@@ -273,6 +280,35 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
     return mapping.get(comp, comp)
 
 
+SAFE_TIFF_TAGS = {
+    270,  # ImageDescription
+    271,  # Make
+    272,  # Model
+    274,  # Orientation
+    282,  # XResolution
+    283,  # YResolution
+    296,  # ResolutionUnit
+    305,  # Software
+    306,  # DateTime
+    315,  # Artist
+    316,  # HostComputer
+}
+
+
+def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, Any]]:
+    if raw_metadata is None:
+        return None
+    safe: Dict[int, Any] = {}
+    try:
+        for tag in raw_metadata:
+            if tag in SAFE_TIFF_TAGS:
+                safe[tag] = raw_metadata[tag]
+    except Exception:  # pragma: no cover - metadata best effort
+        LOGGER.debug("Unable to sanitise TIFF metadata", exc_info=True)
+        return None
+    return safe or None
+
+
 def save_image(
     destination: Path,
     arr_int: np.ndarray,
@@ -281,6 +317,7 @@ def save_image(
     icc_profile: Optional[bytes],
     compression: str,
 ) -> None:
+    metadata = sanitize_tiff_metadata(metadata)
     dtype_info = np.iinfo(dtype) if np.issubdtype(dtype, np.integer) else None
     bits = dtype_info.bits if dtype_info else 0
 
