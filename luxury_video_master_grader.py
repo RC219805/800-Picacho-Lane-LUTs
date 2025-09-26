@@ -247,18 +247,16 @@ def summarize_probe(data: Dict[str, object]) -> str:
                 video_info += " 16bit"
 
         # Add color metadata if present
-        def normalize_color_tag(value: Optional[str]) -> Optional[str]:
-            if value is None:
-                return None
-            cleaned = value.strip().lower()
-            if cleaned in {"", "unknown", "unspecified"}:
-                return None
-            return cleaned
-
         color_parts = []
+        copilot/fix-acc44894-7440-470d-87ee-38faaa084415
         color_primaries = normalize_color_tag(video.get("color_primaries"))
         color_trc = normalize_color_tag(video.get("color_trc"))
         colorspace = normalize_color_tag(video.get("colorspace"))
+
+        color_primaries = normalise_color_tag(video.get("color_primaries"))
+        color_trc = normalise_color_tag(video.get("color_trc"))
+        colorspace = normalise_color_tag(video.get("colorspace"))
+        main
 
         if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
