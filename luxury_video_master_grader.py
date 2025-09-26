@@ -883,12 +883,7 @@ def build_config(
         config["tone_map_desat"] = args.tone_map_desat
     if target_fps is not None:
         config["target_fps"] = target_fps
-    if tone_map is not None:
-        config["tone_map"] = tone_map
-    if tone_map_peak is not None:
-        config["tone_map_peak"] = tone_map_peak
-    if tone_map_desat is not None:
-        config["tone_map_desat"] = tone_map_desat
+    # Duplicated tone mapping assignments removed (see lines 878-883)
     if tone_map_transfer is not None:
         config["tone_map_transfer"] = tone_map_transfer
     if tone_map_primaries is not None:
