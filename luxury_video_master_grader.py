@@ -281,8 +281,21 @@ def extract_video_stream(probe: Dict[str, object]) -> Dict[str, object]:
 HDR_PRIMARIES = {"bt2020", "smpte432", "smpte431"}
 HDR_TRANSFERS = {"smpte2084", "arib-std-b67", "hlg"}
 HDR_MATRIX = {"bt2020nc", "bt2020ncl"}
-
 INVALID_COLOR_TAGS = {"unknown", "unspecified", "undefined", "na"}
+
+
+def normalise_color_tag(value: Optional[str]) -> Optional[str]:
+    """Return a cleaned, lower-case color tag or ``None`` when not meaningful."""
+
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if lowered in INVALID_COLOR_TAGS:
+        return None
+    return lowered
 
 
 def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
@@ -339,20 +352,6 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
         config=config,
         metadata=metadata,
     )
-
-
-def normalise_color_tag(value: Optional[str]) -> Optional[str]:
-    """Return a cleaned, lower-case color tag or ``None`` when not meaningful."""
-
-    if value is None:
-        return None
-    cleaned = str(value).strip()
-    if not cleaned:
-        return None
-    lowered = cleaned.lower()
-    if lowered in INVALID_COLOR_TAGS:
-        return None
-    return lowered
 
 
 def describe_frame_rates(avg: Optional[str], real: Optional[str]) -> str:
@@ -513,33 +512,31 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     tone_map = config.get("tone_map")
     if tone_map and str(tone_map).lower() != "off":
         tone_map_peak = config.get("tone_map_peak")
-        tone_map_peak_value = float(tone_map_peak) if tone_map_peak is not None else None
+        pre_tonemap_args = ["transfer=linear"]
+        if tone_map_peak is not None:
+            pre_tonemap_args.append(f"npl={float(tone_map_peak):.4f}")
+        new_label = next_label()
+        nodes.append(f"[{current}]zscale={':'.join(pre_tonemap_args)}[{new_label}]")
+        current = new_label
+
+        tonemap_args = [str(tone_map)]
+        if tone_map_peak is not None:
+            tonemap_args.append(f"peak={float(tone_map_peak):.4f}")
         tone_map_desat = config.get("tone_map_desat")
-
-        pre_tone_args = ["transfer=linear"]
-        if tone_map_peak_value is not None:
-            pre_tone_args.append(f"npl={tone_map_peak_value:.4f}")
-        new_label = next_label()
-        nodes.append(f"[{current}]zscale={':'.join(pre_tone_args)}[{new_label}]")
-        current = new_label
-
-        tone_filter_args = [f"tonemap={tone_map}"]
-        if tone_map_peak_value is not None:
-            tone_filter_args.append(f"peak={tone_map_peak_value:.4f}")
         if tone_map_desat is not None:
-            tone_filter_args.append(f"desat={float(tone_map_desat):.4f}")
+            tonemap_args.append(f"desat={float(tone_map_desat):.4f}")
         new_label = next_label()
-        nodes.append(f"[{current}]tonemap={':'.join(tone_filter_args)}[{new_label}]")
+        nodes.append(f"[{current}]tonemap={':'.join(tonemap_args)}[{new_label}]")
         current = new_label
 
-        post_tone_args = [
-            "transfer=bt709",
+        post_tonemap_args = [
             "primaries=bt709",
+            "transfer=bt709",
             "matrix=bt709",
             "range=tv",
         ]
         new_label = next_label()
-        nodes.append(f"[{current}]zscale={':'.join(post_tone_args)}[{new_label}]")
+        nodes.append(f"[{current}]zscale={':'.join(post_tonemap_args)}[{new_label}]")
         current = new_label
 
     denoise = config.get("denoise")
@@ -744,6 +741,28 @@ def build_command(
     return cmd
 
 
+class ListPresetsAction(argparse.Action):
+    """Custom argparse action that prints presets and exits early."""
+
+    def __init__(
+        self,
+        option_strings: List[str],
+        dest: str = argparse.SUPPRESS,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: Optional[str] = None,
+    ) -> None:
+        print("Available presets:\n" + list_presets())
+        parser.exit()
+
+
 def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -751,15 +770,19 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("input_video", type=Path, nargs="?", help="Source video to be mastered.")
-    parser.add_argument("output_video", type=Path, nargs="?", help="Destination path for the master grade.")
+    parser.add_argument("input_video", type=Path, help="Source video to be mastered.")
+    parser.add_argument("output_video", type=Path, help="Destination path for the master grade.")
     parser.add_argument(
         "--preset",
         choices=sorted(PRESETS.keys()),
         default="signature_estate",
         help="Select the baseline grading look to apply.",
     )
-    parser.add_argument("--list-presets", action="store_true", help="Print available presets and exit.")
+    parser.add_argument(
+        "--list-presets",
+        action=ListPresetsAction,
+        help="Print available presets and exit.",
+    )
     parser.add_argument("--custom-lut", type=Path, help="Override the preset LUT with a custom .cube file.")
     parser.add_argument("--lut-strength", type=float, help="Blend the LUT with the original signal (0.0-1.0).")
     parser.add_argument("--denoise", choices=list(HQDN3D_PRESETS) + ["off"], help="Override denoise strength.")
@@ -786,7 +809,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--tone-map-desat",
         type=float,
-        default=0.0,
+        default=0.1,
         help="Desaturation factor for tone-mapping (0.0 retains original chroma).",
     )
     parser.add_argument(
@@ -862,10 +885,7 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Copy color metadata from source instead of overriding.",
     )
 
-    args = parser.parse_args(list(argv) if argv is not None else None)
-    if not args.list_presets and (args.input_video is None or args.output_video is None):
-        parser.error("input_video and output_video are required unless --list-presets is provided")
-    return args
+    return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def build_config(
@@ -915,10 +935,6 @@ def build_config(
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_arguments(argv)
-
-    if args.list_presets:
-        print("Available presets:\n" + list_presets())
-        return 0
 
     ensure_tools_available()
 
@@ -989,7 +1005,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         halation_radius = float(config.get("halation_radius", 0.0))
         if halation_radius < 0.0:
             raise ValueError("halation_radius must be non-negative")
-        config["halation_radius"] = clamp(halation_radius, 0.0, 256.0)
+        config["halation_radius"] = clamp(halation_radius, 0.0, 128.0)
     except ValueError as exc:
         print(f"Parameter validation error: {exc}", file=sys.stderr)
         return 7

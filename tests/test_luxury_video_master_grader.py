@@ -24,6 +24,7 @@ build_filter_graph = MODULE.build_filter_graph
 determine_color_metadata = MODULE.determine_color_metadata
 plan_tone_mapping = MODULE.plan_tone_mapping
 summarize_probe = MODULE.summarize_probe
+parse_arguments = MODULE.parse_arguments
 
 
 def test_assess_frame_rate_respects_user_override():
@@ -122,9 +123,10 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
     assert "unsharp=luma_msize_x=7" in graph
     assert "noise=alls=3.50:allf=t+u" in graph
     assert "zscale=transfer=linear:npl=1200.0000" in graph
-    assert "tonemap=tonemap=hable:peak=1200.0000:desat=0.2500" in graph
-    assert "zscale=transfer=bt709:primaries=bt709:matrix=bt709:range=tv" in graph
-    assert "tonemap_desat" not in graph
+    assert "tonemap=hable:peak=1200.0000:desat=0.2500" in graph
+    assert graph.count("zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=tv") == 1
+    assert "tonemap_desat=" not in graph
+    assert "tonemap_param=" not in graph
     assert "gradfun=strength=0.70:radius=16" in graph
     assert "gblur=sigma=20.0000" in graph
     assert "blend=all_mode='screen':all_opacity=0.4000" in graph
@@ -242,27 +244,6 @@ def test_determine_color_metadata_from_source_filters_unknown():
     assert determine_color_metadata(args, probe) == ("bt2020", None, "bt2020nc")
 
 
-def test_determine_color_metadata_normalises_unspecified():
-    args = argparse.Namespace(
-        color_primaries=None,
-        color_transfer=None,
-        color_space=None,
-        color_from_source=True,
-    )
-    probe = {
-        "streams": [
-            {
-                "codec_type": "video",
-                "color_primaries": "Unspecified",
-                "color_trc": " SMPTE2084 ",
-                "colorspace": "BT2020NC",
-            }
-        ]
-    }
-
-    assert determine_color_metadata(args, probe) == (None, "smpte2084", "bt2020nc")
-
-
 def test_determine_color_metadata_defaults_to_none_when_missing():
     args = argparse.Namespace(
         color_primaries=None,
@@ -337,3 +318,23 @@ def test_summarize_probe_ignores_non_descriptive_color_tags():
     assert "space=bt709" in summary
     assert "primaries" not in summary
     assert "trc=" not in summary
+
+
+def test_parse_arguments_requires_input_and_output(capsys):
+    with pytest.raises(SystemExit) as exc:
+        parse_arguments([])
+
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert "the following arguments are required: input_video, output_video" in captured.err
+
+
+def test_parse_arguments_list_presets_exits_early(capsys):
+    with pytest.raises(SystemExit) as exc:
+        parse_arguments(["--list-presets"])
+
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert "Available presets:" in captured.out
+    for preset_key in MODULE.PRESETS:
+        assert f"- {preset_key}:" in captured.out

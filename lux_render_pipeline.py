@@ -33,7 +33,7 @@ from __future__ import annotations
 import os, math, glob, random
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -76,11 +76,11 @@ def seed_all(seed: int) -> Generator:
         torch.cuda.manual_seed_all(seed)
     return Generator(device="cuda" if torch.cuda.is_available() else "cpu").manual_seed(seed)
 
-def load_image(path: str | Path) -> Image.Image:
+def load_image(path: Union[str, Path]) -> Image.Image:
     img = Image.open(path).convert("RGB")
     return img
 
-def save_image(img: Image.Image, path: str | Path) -> None:
+def save_image(img: Image.Image, path: Union[str, Path]) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
 
@@ -95,7 +95,11 @@ def np_to_pil(arr: np.ndarray) -> Image.Image:
     arr = (arr * 255.0 + 0.5).astype(np.uint8)
     return Image.fromarray(arr)
 
-def resize_to_multiple(img: Image.Image, mult: int = 8, target: Tuple[int,int] | None = None) -> Image.Image:
+def resize_to_multiple(
+    img: Image.Image,
+    mult: int = 8,
+    target: Optional[Tuple[int, int]] = None,
+) -> Image.Image:
     if target is None:
         w, h = img.size
     else:
