@@ -568,13 +568,16 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     if not math.isclose(brightness, 0.0, abs_tol=1e-4):
         eq_parts.append(f"brightness={brightness:.4f}")
 
+    post_eq_label = current
     if eq_parts:
         new_label = next_label()
         nodes.append(f"[{current}]eq={':'.join(eq_parts)}[{new_label}]")
         current = new_label
+    post_eq_label = current
 
     warmth = float(config.get("warmth", 0.0))
     cool = float(config.get("cool", 0.0))
+    post_color_label = post_eq_label
     if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(cool, 0.0, abs_tol=1e-4):
         new_label = next_label()
         # Clamp values to [-0.5, 0.5] to stay within tasteful limits.
@@ -584,8 +587,11 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
             f"[{current}]colorbalance=rm={warmth_c:.4f}:gm=0.0000:bm={cool_c:.4f}[{new_label}]"
         )
         current = new_label
+        post_color_label = current
+    else:
+        current = post_color_label
 
-    pre_lut_label = current
+    pre_lut_label = post_color_label
 
     lut_path: Path = Path(config["lut"]).resolve()
     if not lut_path.exists():
