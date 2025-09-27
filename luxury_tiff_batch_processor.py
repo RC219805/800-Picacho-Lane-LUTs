@@ -213,6 +213,89 @@ def ensure_output_path(input_root: Path, output_root: Path, source: Path, suffix
     return destination.with_name(new_name)
 
 
+def _normalise_to_unit_range(array: np.ndarray) -> np.ndarray:
+    """Normalise an array to the ``[0, 1]`` range as ``float32``."""
+
+    if array.dtype == np.bool_:
+        return array.astype(np.float32)
+
+    if np.issubdtype(array.dtype, np.integer):
+        dtype_info = np.iinfo(array.dtype)
+        scale = float(dtype_info.max - dtype_info.min)
+        if scale == 0:
+            return np.zeros(array.shape, dtype=np.float32)
+        array32 = array.astype(np.float32)
+        normalised = (array32 - dtype_info.min) / scale
+        return np.clip(normalised, 0.0, 1.0)
+
+    if np.issubdtype(array.dtype, np.floating):
+        return np.clip(array.astype(np.float32), 0.0, 1.0)
+
+    raise TypeError(f"Unsupported dtype for normalisation: {array.dtype}")
+
+
+def _extrasamples_for_channels(num_channels: int) -> Optional[Iterable[str]]:
+    if num_channels in (2, 4):
+        return ["UNASSALPHA"]
+    if num_channels > 4:
+        return ["UNASSALPHA"] * (num_channels - 3)
+    return None
+
+
+def _prepare_tifffile_image(array: np.ndarray) -> Tuple[np.ndarray, str, Optional[Iterable[str]]]:
+    if array.ndim == 2:
+        return array, "minisblack", None
+    if array.ndim == 3:
+        channels = array.shape[2]
+        if channels == 1:
+            return array[:, :, 0], "minisblack", None
+        return array, "rgb", _extrasamples_for_channels(channels)
+    raise ValueError("Unexpected array shape for image data")
+
+
+def _split_alpha_channel(array: np.ndarray) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    if array.ndim != 3:
+        return array, None
+    channels = array.shape[2]
+    if channels == 2:
+        return array[:, :, :1], array[:, :, 1]
+    if channels >= 4:
+        return array[:, :, :3], array[:, :, 3]
+    return array, None
+
+
+def _write_with_tifffile(
+    destination: Path,
+    array: np.ndarray,
+    metadata: Optional[Dict[int, Any]],
+    icc_profile: Optional[bytes],
+    compression: str,
+) -> None:
+    array_for_write, photometric, extrasamples = _prepare_tifffile_image(array)
+    tiff_kwargs: Dict[str, Any] = {
+        "photometric": photometric,
+        "compression": compression_for_tifffile(compression),
+        "metadata": None,
+    }
+
+    if extrasamples:
+        tiff_kwargs["extrasamples"] = extrasamples
+
+    extratags = []
+    if icc_profile:
+        extratags.append((34675, "B", len(icc_profile), icc_profile, False))
+
+    if metadata:
+        # tifffile expects JSON-serialisable metadata; sanitised metadata already
+        # contains primitive types so we can pass it through.
+        tiff_kwargs["metadata"] = {tag: metadata[tag] for tag in metadata}
+
+    if extratags:
+        tiff_kwargs["extratags"] = extratags
+
+    tifffile.imwrite(destination, array_for_write, **tiff_kwargs)
+
+
 def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int]:
     """Convert a PIL image into a float representation in the 0-1 range."""
 
@@ -243,28 +326,12 @@ def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[n
 
     base_dtype = base.dtype
 
-    if np.issubdtype(base_dtype, np.integer):
-        info = np.iinfo(base_dtype)
-        scale = float(info.max - info.min) or 1.0
-        base_float = (base.astype(np.float32) - info.min) / scale
-    elif np.issubdtype(base_dtype, np.bool_):
-        base_float = base.astype(np.float32)
-    else:
-        base_float = np.clip(base.astype(np.float32), 0.0, 1.0)
-
-    if base_float.shape[2] == 1:
+    base_float = _normalise_to_unit_range(base)
+    if base_float.ndim == 3 and base_float.shape[2] == 1:
         base_float = np.repeat(base_float, 3, axis=2)
 
     if alpha_channel is not None:
-        alpha_dtype = alpha_channel.dtype
-        if np.issubdtype(alpha_dtype, np.integer):
-            info = np.iinfo(alpha_dtype)
-            scale = float(info.max - info.min) or 1.0
-            alpha_float = (alpha_channel.astype(np.float32) - info.min) / scale
-        elif np.issubdtype(alpha_dtype, np.bool_):
-            alpha_float = alpha_channel.astype(np.float32)
-        else:
-            alpha_float = np.clip(alpha_channel.astype(np.float32), 0.0, 1.0)
+        alpha_float = _normalise_to_unit_range(alpha_channel)
     else:
         alpha_float = None
 
@@ -290,11 +357,13 @@ def float_to_dtype_array(
         result = arr.astype(target_dtype, copy=False)
     elif np.issubdtype(target_dtype, np.integer):
         info = np.iinfo(target_dtype)
+        normalised = np.clip(arr, 0.0, 1.0)
         if info.min < 0:
-            scaled = arr * (info.max - info.min) + info.min
+            scaled = normalised * (info.max - info.min) + info.min
         else:
-            scaled = arr * info.max
-        result = np.clip(np.floor(scaled + 0.5), info.min, info.max).astype(target_dtype)
+            scaled = normalised * info.max
+        scaled = np.clip(scaled, info.min, info.max)
+        result = np.floor(scaled + 0.5, dtype=np.float64).astype(target_dtype)
     elif np.issubdtype(target_dtype, np.bool_):
         result = arr >= 0.5
     else:
@@ -311,7 +380,8 @@ def float_to_dtype_array(
                 alpha_scaled = alpha * (info.max - info.min) + info.min
             else:
                 alpha_scaled = alpha * info.max
-            alpha_int = np.clip(np.floor(alpha_scaled + 0.5), info.min, info.max).astype(target_dtype)
+            alpha_scaled = np.clip(alpha_scaled, info.min, info.max)
+            alpha_int = np.floor(alpha_scaled + 0.5, dtype=np.float64).astype(target_dtype)
         elif np.issubdtype(target_dtype, np.floating):
             alpha_int = alpha.astype(target_dtype, copy=False)
         elif np.issubdtype(target_dtype, np.bool_):
@@ -605,45 +675,43 @@ def save_image(
     if arr_out.ndim == 3 and arr_out.shape[2] == 1:
         arr_out = arr_out[:, :, 0]
 
-    # For floating-point sample formats Pillow may require tifffile for
-    # round-tripping metadata. Fall back to tifffile when it is available and
-    # better suited for exotic dtypes, otherwise rely on Pillow.
-    if tifffile is not None and dtype.kind == "f":
-        tif_kwargs: Dict[str, Any] = {}
-        compression_name = compression_for_tifffile(compression)
-        if compression_name is not None:
-            tif_kwargs["compression"] = compression_name
-        if icc_profile is not None:
-            tif_kwargs["iccprofile"] = icc_profile
-        if metadata:
-            tif_kwargs["metadata"] = {"tiff": metadata}
+    # Prefer tifffile for high bit-depth or floating point data when available so
+    # we can retain metadata and compression support.
+    use_tifffile = False
+    if tifffile is not None:
+        if dtype.kind == "f":
+            use_tifffile = True
+        elif np.issubdtype(dtype, np.integer):
+            try:
+                info = np.iinfo(dtype)
+            except ValueError:
+                info = None
+            else:
+                use_tifffile = info.bits > 8
 
-        photometric = "rgb"
-        extrasamples: Optional[List[Any]] = None
-        if arr_out.ndim == 2:
-            photometric = "minisblack"
-        elif arr_out.ndim == 3:
-            if arr_out.shape[2] == 4:
-                extrasamples = [2]  # Unassociated alpha channel
-            elif arr_out.shape[2] not in (3,):
-                raise ValueError("Unsupported channel count for TIFF output")
-        tif_kwargs["photometric"] = photometric
-        if extrasamples:
-            tif_kwargs["extrasamples"] = extrasamples
-
+    if use_tifffile and tifffile is not None:
         try:
-            tifffile.imwrite(destination, arr_out, dtype=dtype, **tif_kwargs)
+            _write_with_tifffile(destination, arr_out, metadata, icc_profile, compression)
         except Exception as exc:
-            if compression_name is not None and "imagecodecs" in str(exc).lower():
+            if "imagecodecs" in str(exc).lower() and compression_for_tifffile(compression) is not None:
                 LOGGER.warning(
                     "Compression '%s' requires imagecodecs; retrying without compression",
-                    compression_name,
+                    compression,
                 )
-                tif_kwargs.pop("compression", None)
-                tifffile.imwrite(destination, arr_out, dtype=dtype, **tif_kwargs)
+                _write_with_tifffile(destination, arr_out, metadata, icc_profile, "tiff_none")
             else:
                 raise
         return
+
+    if dtype.kind == "f" and tifffile is None:
+        LOGGER.warning(
+            "Saving floating point TIFF without 'tifffile'; converting to 16-bit before writing with Pillow."
+        )
+        base, alpha_channel = _split_alpha_channel(arr_out)
+        base_float = base.astype(np.float32, copy=False)
+        alpha_float = alpha_channel.astype(np.float32, copy=False) if alpha_channel is not None else None
+        base_channel_count = 1 if base_float.ndim == 2 else base_float.shape[2]
+        arr_out = float_to_dtype_array(base_float, np.uint16, alpha_float, base_channel_count)
 
     image = Image.fromarray(arr_out)
 
