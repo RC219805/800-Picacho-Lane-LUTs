@@ -129,8 +129,11 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
     assert "tonemap_desat=" not in graph
     assert "tonemap_param=" not in graph
     assert "gradfun=strength=0.70:radius=16" in graph
-    assert "gblur=sigma=20.0000" in graph
-    assert "blend=all_mode='screen':all_opacity=0.4000" in graph
+    assert "split=2" in graph
+    assert "colorlevels=rimin=0.600:gimin=0.600:bimin=0.600" in graph
+    assert "gblur=sigma=20.00:steps=2" in graph
+    assert "colorbalance=rm=0.2200:gm=0.1000:bm=-0.0600" in graph
+    assert "blend=all_expr='A+(0.400*B)'" in graph
     assert "fps=fps=24000/1001" in graph
 
 

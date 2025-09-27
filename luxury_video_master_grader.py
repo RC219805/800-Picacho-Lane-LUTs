@@ -48,6 +48,7 @@ class GradePreset:
     deband: Optional[str] = None
     halation_intensity: float = 0.0
     halation_radius: float = 18.0
+    halation_threshold: float = 0.6
 
     def to_dict(self) -> Dict[str, object]:
         """Return a mutable dictionary representation for override merging."""
@@ -67,6 +68,7 @@ class GradePreset:
             "deband": self.deband,
             "halation_intensity": self.halation_intensity,
             "halation_radius": self.halation_radius,
+            "halation_threshold": self.halation_threshold,
         }
         return data
 
@@ -86,6 +88,10 @@ PRESETS: Dict[str, GradePreset] = {
         cool=-0.010,
         sharpen="medium",
         grain=6.0,
+        deband="fine",
+        halation_intensity=0.14,
+        halation_radius=20.0,
+        halation_threshold=0.52,
         notes="Primary hero look for exterior fly-throughs and architectural establishing shots.",
     ),
     "golden_hour_courtyard": GradePreset(
@@ -105,6 +111,9 @@ PRESETS: Dict[str, GradePreset] = {
         cool=-0.015,
         sharpen="soft",
         grain=4.0,
+        halation_intensity=0.10,
+        halation_radius=18.0,
+        halation_threshold=0.50,
         notes="Use for west-facing terraces, pool decks and garden lifestyle coverage.",
     ),
     "interior_neutral_luxe": GradePreset(
@@ -124,6 +133,8 @@ PRESETS: Dict[str, GradePreset] = {
         cool=0.0,
         sharpen="strong",
         grain=0.0,
+        deband="fine",
+        halation_threshold=0.60,
         notes="Ideal for natural light interiors where texture detail and neutrality are paramount.",
     ),
 }
@@ -637,16 +648,32 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     halation_intensity = float(config.get("halation_intensity", 0.0))
-    halation_radius = float(config.get("halation_radius", 0.0))
-    if halation_intensity > 0.0 and halation_radius > 0.0:
-        halation_intensity = clamp(halation_intensity, 0.0, 1.0)
-        halation_radius = clamp(halation_radius, 0.0, 128.0)
-        base_label = current
+    if halation_intensity > 0.0:
+        intensity = clamp(halation_intensity, 0.0, 1.0)
+        radius = clamp(float(config.get("halation_radius", 18.0)), 0.0, 128.0)
+        radius = max(radius, 1.0)
+        threshold = clamp(float(config.get("halation_threshold", 0.6)), 0.0, 1.0)
+
+        base_label = next_label()
+        halo_label = next_label()
+        nodes.append(f"[{current}]split=2[{base_label}][{halo_label}]")
+
+        highlight_label = next_label()
+        nodes.append(
+            f"[{halo_label}]colorlevels=rimin={threshold:.3f}:gimin={threshold:.3f}:bimin={threshold:.3f}[{highlight_label}]"
+        )
+
         blur_label = next_label()
-        nodes.append(f"[{base_label}]gblur=sigma={halation_radius:.4f}[{blur_label}]")
+        nodes.append(f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]")
+
+        tint_label = next_label()
+        nodes.append(
+            f"[{blur_label}]colorbalance=rm={intensity * 0.55:.4f}:gm={intensity * 0.25:.4f}:bm={-intensity * 0.15:.4f}[{tint_label}]"
+        )
+
         blend_label = next_label()
         nodes.append(
-            f"[{base_label}][{blur_label}]blend=all_mode='screen':all_opacity={halation_intensity:.4f}[{blend_label}]"
+            f"[{base_label}][{tint_label}]blend=all_expr='A+({intensity:.3f}*B)'[{blend_label}]"
         )
         current = blend_label
 
@@ -837,6 +864,11 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default=18.0,
         help="Radius of the halation blur kernel when enabled.",
     )
+    parser.add_argument(
+        "--halation-threshold",
+        type=float,
+        help="Luminance threshold (0-1) before highlights feed the halation pass.",
+    )
     parser.add_argument("--video-codec", default="prores_ks", help="Video mezzanine codec to use.")
     parser.add_argument(
         "--prores-profile",
@@ -932,6 +964,8 @@ def build_config(
         config["halation_intensity"] = args.halation_intensity
     if args.halation_radius is not None:
         config["halation_radius"] = args.halation_radius
+    if args.halation_threshold is not None:
+        config["halation_threshold"] = args.halation_threshold
     if target_fps is not None:
         config["target_fps"] = target_fps
     if tone_map_plan and tone_map_plan.enabled:
@@ -1013,6 +1047,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         if halation_radius < 0.0:
             raise ValueError("halation_radius must be non-negative")
         config["halation_radius"] = clamp(halation_radius, 0.0, 128.0)
+        threshold_value = float(config.get("halation_threshold", 0.6))
+        if not 0.0 <= threshold_value <= 1.0:
+            raise ValueError("halation_threshold must be within [0.0, 1.0]")
+        config["halation_threshold"] = clamp(threshold_value, 0.0, 1.0)
     except ValueError as exc:
         print(f"Parameter validation error: {exc}", file=sys.stderr)
         return 7
