@@ -1,5 +1,6 @@
 import argparse
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -157,6 +158,38 @@ def test_build_filter_graph_rejects_unknown_deband(tmp_path):
 
     with pytest.raises(ValueError):
         build_filter_graph(config)
+
+
+def test_build_filter_graph_blends_post_eq_when_lut_strength_lt_one(tmp_path):
+    lut_path = tmp_path / "dummy.cube"
+    lut_path.write_text("# dummy LUT\n")
+
+    config = {
+        "lut": lut_path,
+        "contrast": 1.1,
+        "saturation": 0.9,
+        "gamma": 0.95,
+        "brightness": 0.02,
+        "warmth": 0.1,
+        "cool": -0.05,
+        "lut_strength": 0.5,
+    }
+
+    graph, _ = build_filter_graph(config)
+    nodes = graph.split(";")
+
+    lut_node = next(node for node in nodes if "lut3d=" in node)
+    lut_input_match = re.search(r"\[(v\d+)\]lut3d", lut_node)
+    assert lut_input_match, "Failed to parse LUT input label"
+    pre_lut_label = lut_input_match.group(1)
+
+    blend_node = next(node for node in nodes if "blend=all_expr" in node)
+    blend_match = re.search(r"^\[(v\d+)\]\[(v\d+)\]blend=all_expr", blend_node)
+    assert blend_match, "Failed to parse blend node"
+
+    assert (
+        blend_match.group(1) == pre_lut_label
+    ), "Blend should use the post-EQ label as the base input"
 
 
 def make_tone_args(**overrides):
