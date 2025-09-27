@@ -82,16 +82,17 @@ probes the source to surface resolution, frame-rate metadata and audio configura
 before processing, then monitors for drift or variable frame-rate clips. When necessary
 it conforms delivery to the nearest cinema broadcast standard (or a user-specified
 `--target-fps`) to guarantee smooth, continuous playback. HDR clips are further analysed
-so the tool can apply tasteful tone mapping automatically, or respect explicit
-`--tone-map` overrides when you need a particular operator.
+so the tool can apply tasteful tone mapping automatically, while explicit
+`--tone-map` overrides give you authoritative control whenever a specific operator is
+required.
 
 ## HDR Production Pipeline
 
 `hdr_production_pipeline.sh` orchestrates a full HDR finishing pass, combining ACES
 tonemapping, adaptive debanding, and filmic halation for gallery-ready masters. The
-script mirrors the conflict resolution between the Codex automation branch and the main
-documentation thread by retaining the bespoke HDR steps alongside the broader pipeline
-overview introduced on main.
+workflow harmonises the bespoke Codex automation steps with the broader pipeline
+overview introduced on main so teams can reference a single, unified set of HDR
+finishing instructions.
 
 ### Highlights
 - ACES output transform selection with Dolby Vision and HDR10 metadata preservation
