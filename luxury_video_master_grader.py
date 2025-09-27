@@ -665,13 +665,9 @@ def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object])
         streams = probe.get("streams", [])
         video = next((s for s in streams if s.get("codec_type") == "video"), {})
         if video:
-            primaries = video.get("color_primaries")
-            transfer = video.get("color_trc")
-            space = video.get("colorspace")
-            # Only use if not "unknown"
-            primaries = primaries if primaries and primaries != "unknown" else None
-            transfer = transfer if transfer and transfer != "unknown" else None
-            space = space if space and space != "unknown" else None
+            primaries = normalise_color_tag(video.get("color_primaries"))
+            transfer = normalise_color_tag(video.get("color_trc"))
+            space = normalise_color_tag(video.get("colorspace"))
             return primaries, transfer, space
 
     # Priority 3: None (default behavior - no color tags set)
