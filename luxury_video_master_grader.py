@@ -552,7 +552,6 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     new_label = next_label()
     nodes.append(f"[{current}]format=gbrpf32le[{new_label}]")
     current = new_label
-    pre_grade_label = current
 
     eq_parts: List[str] = []
     contrast = float(config.get("contrast", 1.0))
@@ -586,6 +585,8 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         )
         current = new_label
 
+    pre_lut_label = current
+
     lut_path: Path = Path(config["lut"]).resolve()
     if not lut_path.exists():
         raise FileNotFoundError(f"LUT file not found: {lut_path}")
@@ -601,7 +602,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     if lut_strength < 0.999:
         blend_label = next_label()
         nodes.append(
-            f"[{pre_grade_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
+            f"[{pre_lut_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
         )
         current = blend_label
 
