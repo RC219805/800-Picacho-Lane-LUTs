@@ -88,7 +88,15 @@ so the tool can apply tasteful tone mapping automatically, or respect explicit
 ## HDR Production Pipeline
 
 `hdr_production_pipeline.sh` orchestrates a full HDR finishing pass, combining ACES
-tonemapping, adaptive debanding, and filmic halation for gallery-ready masters.
+tonemapping, adaptive debanding, and filmic halation for gallery-ready masters. The
+script mirrors the conflict resolution between the Codex automation branch and the main
+documentation thread by retaining the bespoke HDR steps alongside the broader pipeline
+overview introduced on main.
+
+### Highlights
+- ACES output transform selection with Dolby Vision and HDR10 metadata preservation
+- Adaptive debanding tuned to Codex reference recipes
+- Filmic halation and finishing touches that complement the luxury master grader
 
 ### Requirements
 - macOS or Linux shell environment
