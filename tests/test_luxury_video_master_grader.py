@@ -129,8 +129,11 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
     assert "tonemap_desat=" not in graph
     assert "tonemap_param=" not in graph
     assert "gradfun=strength=0.70:radius=16" in graph
-    assert "gblur=sigma=20.0000" in graph
-    assert "blend=all_mode='screen':all_opacity=0.4000" in graph
+    assert "split=2" in graph
+    assert "colorlevels=rimin=0.600:gimin=0.600:bimin=0.600" in graph
+    assert "gblur=sigma=20.00:steps=2" in graph
+    assert "colorbalance=rm=0.2200:gm=0.1000:bm=-0.0600" in graph
+    assert "blend=all_expr='A+(0.400*B)'" in graph
     assert "fps=fps=24000/1001" in graph
 
 
@@ -178,10 +181,25 @@ def test_build_filter_graph_blends_post_eq_when_lut_strength_lt_one(tmp_path):
     graph, _ = build_filter_graph(config)
     nodes = graph.split(";")
 
+    eq_node = next(node for node in nodes if "eq=" in node)
+    eq_match = re.search(r"^\[(v\d+)\]eq=[^\[]+\[(v\d+)\]$", eq_node)
+    assert eq_match, "Failed to parse EQ node"
+    pre_eq_label, post_eq_label = eq_match.groups()
+
+    color_node = next((node for node in nodes if "colorbalance=" in node), None)
+    if color_node:
+        color_match = re.search(r"^\[(v\d+)\]colorbalance=[^\[]+\[(v\d+)\]$", color_node)
+        assert color_match, "Failed to parse color balance node"
+        assert color_match.group(1) == post_eq_label
+        post_grade_label = color_match.group(2)
+    else:
+        post_grade_label = post_eq_label
+
     lut_node = next(node for node in nodes if "lut3d=" in node)
     lut_input_match = re.search(r"\[(v\d+)\]lut3d", lut_node)
     assert lut_input_match, "Failed to parse LUT input label"
     pre_lut_label = lut_input_match.group(1)
+    assert pre_lut_label == post_grade_label
 
     blend_node = next(node for node in nodes if "blend=all_expr" in node)
     blend_match = re.search(r"^\[(v\d+)\]\[(v\d+)\]blend=all_expr", blend_node)
@@ -190,6 +208,9 @@ def test_build_filter_graph_blends_post_eq_when_lut_strength_lt_one(tmp_path):
     assert (
         blend_match.group(1) == pre_lut_label
     ), "Blend should use the post-EQ label as the base input"
+    assert (
+        blend_match.group(1) != pre_eq_label
+    ), "Blend should not use the pre-EQ label as the base input"
 
 
 def make_tone_args(**overrides):
