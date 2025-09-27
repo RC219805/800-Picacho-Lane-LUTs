@@ -213,60 +213,119 @@ def ensure_output_path(input_root: Path, output_root: Path, source: Path, suffix
     return destination.with_name(new_name)
 
 
-def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[np.ndarray]]:
-    """Converts a PIL image to an RGB float32 array in the 0-1 range."""
+def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int]:
+    """Convert a PIL image into a float representation in the 0-1 range."""
 
-    if image.mode not in {"RGB", "RGBA", "I;16", "I;16L", "I;16B", "I;16S", "L"}:
+    if image.mode not in {"RGB", "RGBA", "I", "I;16", "I;16L", "I;16B", "I;16S", "L", "LA"}:
         image = image.convert("RGBA" if "A" in image.mode else "RGB")
 
     arr = np.array(image)
+    base_channels = 3
     alpha_channel: Optional[np.ndarray] = None
 
     if arr.ndim == 2:
-        arr = np.stack([arr] * 3, axis=-1)
-    elif arr.shape[2] == 4:
-        alpha_channel = arr[:, :, 3]
-        arr = arr[:, :, :3]
+        base_channels = 1
+        base = arr[:, :, None]
+    else:
+        channels = arr.shape[2]
+        if channels == 1:
+            base_channels = 1
+            base = arr
+        elif channels == 2:
+            base_channels = 1
+            base = arr[:, :, :1]
+            alpha_channel = arr[:, :, 1]
+        else:
+            base_channels = min(3, channels)
+            base = arr[:, :, :base_channels]
+            if channels > base_channels:
+                alpha_channel = arr[:, :, base_channels]
 
-    dtype_max = float(np.iinfo(arr.dtype).max) if arr.dtype.kind in {"u", "i"} else 1.0
-    arr_float = arr.astype(np.float32) / dtype_max
+    base_dtype = base.dtype
+
+    if np.issubdtype(base_dtype, np.integer):
+        info = np.iinfo(base_dtype)
+        scale = float(info.max - info.min) or 1.0
+        base_float = (base.astype(np.float32) - info.min) / scale
+    elif np.issubdtype(base_dtype, np.bool_):
+        base_float = base.astype(np.float32)
+    else:
+        base_float = np.clip(base.astype(np.float32), 0.0, 1.0)
+
+    if base_float.shape[2] == 1:
+        base_float = np.repeat(base_float, 3, axis=2)
 
     if alpha_channel is not None:
-        alpha_channel = alpha_channel.astype(np.float32) / dtype_max
+        alpha_dtype = alpha_channel.dtype
+        if np.issubdtype(alpha_dtype, np.integer):
+            info = np.iinfo(alpha_dtype)
+            scale = float(info.max - info.min) or 1.0
+            alpha_float = (alpha_channel.astype(np.float32) - info.min) / scale
+        elif np.issubdtype(alpha_dtype, np.bool_):
+            alpha_float = alpha_channel.astype(np.float32)
+        else:
+            alpha_float = np.clip(alpha_channel.astype(np.float32), 0.0, 1.0)
+    else:
+        alpha_float = None
 
-    return arr_float, arr.dtype, alpha_channel
+    return base_float.astype(np.float32, copy=False), base_dtype, alpha_float, base_channels
 
 
 def float_to_dtype_array(
     arr: np.ndarray,
     dtype: np.dtype,
     alpha: Optional[np.ndarray],
+
+    base_channels: int,
 ) -> np.ndarray:
-    """Convert a float array back to the original image dtype without bias."""
+    """Convert a float array back to the requested dtype, restoring alpha."""
 
     arr = np.clip(arr, 0.0, 1.0)
     target_dtype = np.dtype(dtype)
 
-    dtype_info: Optional[Any] = None
-    dtype_max: Optional[float] = None
-    if np.issubdtype(target_dtype, np.integer):
-        dtype_info = np.iinfo(target_dtype)
-        dtype_max = float(dtype_info.max)
-        arr_int = np.round(arr * dtype_max).astype(target_dtype)
+    if base_channels == 1 and arr.ndim == 3:
+        arr = arr[:, :, :1]
+
+    if np.issubdtype(target_dtype, np.floating):
+        result = arr.astype(target_dtype, copy=False)
+    elif np.issubdtype(target_dtype, np.integer):
+        info = np.iinfo(target_dtype)
+        if info.min < 0:
+            scaled = arr * (info.max - info.min) + info.min
+        else:
+            scaled = arr * info.max
+        result = np.clip(np.floor(scaled + 0.5), info.min, info.max).astype(target_dtype)
+    elif np.issubdtype(target_dtype, np.bool_):
+        result = arr >= 0.5
     else:
-        # Preserve floating-point sample formats (e.g. 32-bit float TIFF) or
-        # fall back to the requested dtype for exotic sample types.
-        arr_int = arr.astype(target_dtype, copy=False)
+        raise TypeError(f"Unsupported dtype for conversion: {target_dtype}")
+
+    if result.ndim == 3 and result.shape[2] == 1:
+        result = result[:, :, 0]
 
     if alpha is not None:
         alpha = np.clip(alpha, 0.0, 1.0)
-        if dtype_info is not None and dtype_max is not None:
-            alpha_int = np.round(alpha * dtype_max).astype(target_dtype)
-        else:
+        if np.issubdtype(target_dtype, np.integer):
+            info = np.iinfo(target_dtype)
+            if info.min < 0:
+                alpha_scaled = alpha * (info.max - info.min) + info.min
+            else:
+                alpha_scaled = alpha * info.max
+            alpha_int = np.clip(np.floor(alpha_scaled + 0.5), info.min, info.max).astype(target_dtype)
+        elif np.issubdtype(target_dtype, np.floating):
             alpha_int = alpha.astype(target_dtype, copy=False)
-        arr_int = np.concatenate([arr_int, alpha_int[:, :, None]], axis=2)
+        elif np.issubdtype(target_dtype, np.bool_):
+            alpha_int = alpha >= 0.5
+        else:
+            raise TypeError(f"Unsupported dtype for alpha conversion: {target_dtype}")
 
-    return np.ascontiguousarray(arr_int)
+        if result.ndim == 2:
+            result = result[:, :, None]
+        if alpha_int.ndim == 2:
+            alpha_int = alpha_int[:, :, None]
+        result = np.concatenate([result, alpha_int], axis=2)
+
+    return np.ascontiguousarray(result)
 
 
 def compression_for_tifffile(compression: str) -> Optional[str]:
@@ -622,9 +681,9 @@ def process_single_image(
 
         image = resize_image(image, resize_long_edge)
 
-        arr_float, dtype, alpha = image_to_float(image)
+        arr_float, dtype, alpha, base_channels = image_to_float(image)
         adjusted = apply_adjustments(arr_float, adjustments)
-        arr_int = float_to_dtype_array(adjusted, dtype, alpha)
+        arr_int = float_to_dtype_array(adjusted, dtype, alpha, base_channels)
 
     save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
 
