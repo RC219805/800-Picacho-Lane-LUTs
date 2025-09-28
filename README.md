@@ -1,33 +1,40 @@
 # 800 Picacho Lane Professional LUT Collection
 
 ## Overview
+
 A cutting-edge collection of 16 professional color grading LUTs featuring innovative Material Response technology.
 
 ## Collection Contents
+
 - **Film Emulation**: Kodak 2393, FilmConvert Nitrate
 - **Location Aesthetic**: Montecito Golden Hour, Spanish Colonial Warm
 - **Material Response**: Revolutionary physics-based surface enhancement
 
 ## Innovation
+
 Material Response LUTs analyze and enhance how different surfaces interact with light, representing a paradigm shift from traditional color grading.
 
 ## Usage
+
 1. Import into DaVinci Resolve, Premiere Pro, or other color grading software
 2. Apply at 60-80% opacity initially
 3. Stack multiple LUTs for complex material interactions
 
 ## Luxury TIFF Batch Processor
+
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow
 for polishing large-format TIFF photography prior to digital launch. The script preserves
 metadata, honours 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/)
 is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for
 ultra-luxury real-estate storytelling.
 
-### Requirements
+### TIFF Processor Requirements
+
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
 
 ### Example
+
 ```bash
 python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
@@ -46,10 +53,12 @@ The pipeline now auto-detects HDR transfers and tone-maps them into a refined BT
 space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps
 gradient-rich interiors spotless with updated presets.
 
-### Requirements
+### Video Grader Requirements
+
 - FFmpeg 6+
 
 ### Examples
+
 ```bash
 # Inspect available looks and recipes
 python luxury_video_master_grader.py --list-presets
@@ -82,4 +91,5 @@ HDR clips are further analysed so the tool can apply tasteful tone mapping autom
 or respect explicit `--tone-map` overrides when you need a particular operator.
 
 ## License
+
 Professional use permitted with attribution.
