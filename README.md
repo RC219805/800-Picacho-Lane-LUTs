@@ -4,24 +4,25 @@
 A cutting-edge collection of **16 professional color grading LUTs** featuring innovative **Material Response** technology.
 
 ## Table of Contents
+- [Overview](#overview)
 - [Collection Contents](#collection-contents)
 - [Innovation](#innovation)
 - [Usage](#usage)
 - [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
-  - [Requirements](#requirements)
-  - [Example](#example)
+    - [TIFF Batch Processor Requirements](#tiff-batch-processor-requirements)
+    - [TIFF Batch Processor Example](#tiff-batch-processor-example)
 - [Luxury Video Master Grader](#luxury-video-master-grader)
-  - [Requirements](#requirements-1)
-  - [Examples](#examples)
+    - [Luxury Video Master Grader Requirements](#luxury-video-master-grader-requirements)
+    - [Luxury Video Master Grader Examples](#luxury-video-master-grader-examples)
 - [HDR Production Pipeline](#hdr-production-pipeline)
-  - [Highlights](#highlights)
-  - [Requirements](#requirements-2)
-  - [Example](#example-1)
+    - [HDR Production Pipeline Highlights](#hdr-production-pipeline-highlights)
+    - [HDR Production Pipeline Requirements](#hdr-production-pipeline-requirements)
+    - [HDR Production Pipeline Example](#hdr-production-pipeline-example)
 - [License](#license)
 
 ## Collection Contents
-- **Film Emulation**: Kodak 2393, FilmConvert Nitrate  
-- **Location Aesthetic**: Montecito Golden Hour, Spanish Colonial Warm  
+- **Film Emulation**: Kodak 2393, FilmConvert Nitrate
+- **Location Aesthetic**: Montecito Golden Hour, Spanish Colonial Warm
 - **Material Response**: Revolutionary physics-based surface enhancement
 
 ## Innovation
@@ -42,7 +43,7 @@ The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch w
 - Supports per-run overrides for exposure, midtone contrast, vibrance, clarity, glow, and more to accommodate creative direction.
 - Provides non-destructive previews with `--dry-run` and mirrors directory trees with `--recursive` for large productions.
 
-### Requirements
+### TIFF Batch Processor Requirements
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
 
@@ -50,7 +51,7 @@ The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch w
 > main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper
 > that resolves the NumPy dtype handling.
 
-### Example
+### TIFF Batch Processor Example
 ```bash
 python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
@@ -62,7 +63,7 @@ plan without writing files, and `--recursive` to mirror nested shoot-day folders
 
 ## Luxury Video Master Grader
 
-`luxury_video_master_grader.py` brings the same curated aesthetic to short-form motion content. It wraps FFmpeg with preset-driven LUT application, tasteful denoising, clarity and film-grain treatments, then exports a mezzanine-ready Apple ProRes master by default. The pipeline now auto-detects HDR transfers and tone-maps them into a refined BT.709 space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps gradient-rich interiors spotless with updated presets.
+`luxury_video_master_grader.py` brings the same curated aesthetic to short-form motion content. It wraps FFmpeg with preset-driven LUT application, tasteful denoising, clarity and film-grain treatments, then exports a mezzanine-ready Apple ProRes master by default. The pipeline now auto-detects HDR transfers and tone maps them into a refined BT.709 space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps gradient-rich interiors spotless with updated presets.
 
 ### Key Features
 - Intelligent source analysis that detects resolution, frame rate, HDR transfer characteristics, and audio layout before rendering.
@@ -71,10 +72,10 @@ plan without writing files, and `--recursive` to mirror nested shoot-day folders
 - Flexible output targets including mezzanine-grade ProRes profiles and user-defined frame rates via `--target-fps`.
 - Dry-run inspection that prints the underlying FFmpeg command for validation before committing to long renders.
 
-### Requirements
+### Luxury Video Master Grader Requirements
 - FFmpeg 6+
 
-### Examples
+### Luxury Video Master Grader Examples
 ```bash
 # Inspect available looks and recipes
 python luxury_video_master_grader.py --list-presets
@@ -109,16 +110,16 @@ Use `--custom-lut` to feed bespoke `.cube` files, tweak parameters such as `--co
 - Optional tone-mapping operator selection (`--tone-map`) for precise control over HDR-to-SDR conversions.
 - Designed to slot after `luxury_video_master_grader.py` so teams can reuse LUT-driven looks while finishing in HDR.
 
-### Highlights
+### HDR Production Pipeline Highlights
 - Consolidates automation steps from the Codex finishing toolkit into a single, reproducible command sequence.
 - Documents the hand-off from the LUT-driven grade to HDR-specific finishing so teams can collaborate without guesswork.
 - Provides defaults that mirror the examples in this README, making it simple to reproduce the reference masters.
 
-### Requirements
+### HDR Production Pipeline Requirements
 - macOS or Linux shell environment
 - FFmpeg with zimg, `ffprobe`, and `python3`
 
-### Example
+### HDR Production Pipeline Example
 ```bash
 ./hdr_production_pipeline.sh source_hdr.mov out_hdr_master.mov \
   --aces-odt rec2020-pq --deband medium --halation strong --hdr10-metadata auto
