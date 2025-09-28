@@ -9,15 +9,15 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 - [Innovation](#innovation)
 - [Usage](#usage)
 - [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
-  - [TIFF Batch Processor Requirements](#tiff-batch-processor-requirements)
-  - [TIFF Batch Processor Example](#tiff-batch-processor-example)
+    - [TIFF Batch Processor Requirements](#tiff-batch-processor-requirements)
+    - [TIFF Batch Processor Example](#tiff-batch-processor-example)
 - [Luxury Video Master Grader](#luxury-video-master-grader)
-  - [Luxury Video Master Grader Requirements](#luxury-video-master-grader-requirements)
-  - [Luxury Video Master Grader Examples](#luxury-video-master-grader-examples)
+    - [Luxury Video Master Grader Requirements](#luxury-video-master-grader-requirements)
+    - [Luxury Video Master Grader Examples](#luxury-video-master-grader-examples)
 - [HDR Production Pipeline](#hdr-production-pipeline)
-  - [HDR Production Pipeline Highlights](#hdr-production-pipeline-highlights)
-  - [HDR Production Pipeline Requirements](#hdr-production-pipeline-requirements)
-  - [HDR Production Pipeline Example](#hdr-production-pipeline-example)
+    - [HDR Production Pipeline Highlights](#hdr-production-pipeline-highlights)
+    - [HDR Production Pipeline Requirements](#hdr-production-pipeline-requirements)
+    - [HDR Production Pipeline Example](#hdr-production-pipeline-example)
 - [License](#license)
 
 ## Collection Contents
@@ -63,7 +63,7 @@ plan without writing files, and `--recursive` to mirror nested shoot-day folders
 `luxury_video_master_grader.py` brings the same curated aesthetic to short-form motion
 content. It wraps FFmpeg with preset-driven LUT application, tasteful denoising, clarity
 and film-grain treatments, then exports a mezzanine-ready Apple ProRes master by default.
-The pipeline now auto-detects HDR transfers and tone-maps them into a refined BT.709
+The pipeline now auto-detects HDR transfers and tone maps them into a refined BT.709
 space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps
 gradient-rich interiors spotless with updated presets.
 
