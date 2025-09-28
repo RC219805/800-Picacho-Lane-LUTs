@@ -44,9 +44,7 @@ ultra-luxury real-estate storytelling.
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
 
-> **Note:** Earlier revisions triggered `F821` undefined-name lint errors. Pull the latest
-> main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper
-> that resolves the NumPy dtype handling.
+> **Note:** Earlier revisions triggered `F821` undefined-name lint errors. Pull the latest main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper that resolves the NumPy dtype handling.
 
 ### Example (TIFF Batch Processor)
 ```bash
