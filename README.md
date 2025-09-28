@@ -4,19 +4,20 @@
 A cutting-edge collection of **16 professional color grading LUTs** featuring innovative **Material Response** technology.
 
 ## Table of Contents
+- [Overview](#overview)
 - [Collection Contents](#collection-contents)
 - [Innovation](#innovation)
 - [Usage](#usage)
 - [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
-  - [Requirements](#requirements)
-  - [Example](#example)
+  - [Requirements](#requirements-tiff-batch-processor)
+  - [Example](#example-tiff-batch-processor)
 - [Luxury Video Master Grader](#luxury-video-master-grader)
-  - [Requirements](#requirements-1)
-  - [Examples](#examples)
+  - [Requirements](#requirements-luxury-video-master-grader)
+  - [Examples](#examples-luxury-video-master-grader)
 - [HDR Production Pipeline](#hdr-production-pipeline)
-  - [Highlights](#highlights)
-  - [Requirements](#requirements-2)
-  - [Example](#example-1)
+  - [Highlights](#highlights-hdr-production-pipeline)
+  - [Requirements](#requirements-hdr-production-pipeline)
+  - [Example](#example-hdr-production-pipeline)
 - [License](#license)
 
 ## Collection Contents
@@ -39,7 +40,7 @@ metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/
 is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for
 ultra-luxury real-estate storytelling.
 
-### Requirements
+### Requirements (TIFF Batch Processor)
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
 
@@ -47,7 +48,7 @@ ultra-luxury real-estate storytelling.
 > main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper
 > that resolves the NumPy dtype handling.
 
-### Example
+### Example (TIFF Batch Processor)
 ```bash
 python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
@@ -66,10 +67,10 @@ The pipeline now auto-detects HDR transfers and tone-maps them into a refined BT
 space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps
 gradient-rich interiors spotless with updated presets.
 
-### Requirements
+### Requirements (Luxury Video Master Grader)
 - FFmpeg 6+
 
-### Examples
+### Examples (Luxury Video Master Grader)
 ```bash
 # Inspect available looks and recipes
 python luxury_video_master_grader.py --list-presets
@@ -110,16 +111,16 @@ workflow harmonizes the bespoke Codex automation steps with the broader pipeline
 overview introduced on main so teams can reference a single, unified set of HDR
 finishing instructions.
 
-### Highlights
+### Highlights (HDR Production Pipeline)
 - ACES output transform selection with Dolby Vision and HDR10 metadata preservation
 - Adaptive debanding tuned to Codex reference recipes
 - Filmic halation and finishing touches that complement the luxury master grader
 
-### Requirements
+### Requirements (HDR Production Pipeline)
 - macOS or Linux shell environment
 - FFmpeg with zimg, `ffprobe`, and `python3`
 
-### Example
+### Example (HDR Production Pipeline)
 ```bash
 ./hdr_production_pipeline.sh source_hdr.mov out_hdr_master.mov \
   --aces-odt rec2020-pq --deband medium --halation strong --hdr10-metadata auto
