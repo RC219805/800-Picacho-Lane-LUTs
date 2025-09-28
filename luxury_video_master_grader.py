@@ -947,7 +947,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     try:
         filter_graph, filter_output = build_filter_graph(config)
-    except Exception as exc:  # pylint: disable=broad-except
+    except (ValueError, FileNotFoundError) as exc:
         print(f"Failed to build filter graph: {exc}", file=sys.stderr)
         return 5
 
