@@ -887,7 +887,6 @@ def build_config(
         config["tone_map_transfer"] = tone_map_transfer
     if tone_map_primaries is not None:
         config["tone_map_primaries"] = tone_map_primaries
-    
     return config
 
 
