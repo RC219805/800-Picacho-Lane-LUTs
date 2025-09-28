@@ -17,7 +17,7 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 - [HDR Production Pipeline](#hdr-production-pipeline)
   - [Highlights](#highlights-hdr-production-pipeline)
   - [Requirements](#requirements-hdr-production-pipeline)
-  - [Example](#example-hdr-production-pipeline)
+  - [Example (HDR Production Pipeline)](#example-hdr-production-pipeline)
 - [License](#license)
 
 ## Collection Contents
