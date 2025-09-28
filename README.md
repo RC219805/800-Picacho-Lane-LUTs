@@ -1,9 +1,11 @@
 # 800 Picacho Lane — Professional LUT Collection
 
 ## Overview
+
 A cutting-edge collection of **16 professional color grading LUTs** featuring innovative **Material Response** technology.
 
 ## Table of Contents
+
 - [Overview](#overview)
 - [Collection Contents](#collection-contents)
 - [Innovation](#innovation)
@@ -21,19 +23,23 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 - [License](#license)
 
 ## Collection Contents
+
 - **Film Emulation**: Kodak 2393, FilmConvert Nitrate
 - **Location Aesthetic**: Montecito Golden Hour, Spanish Colonial Warm
 - **Material Response**: Revolutionary physics-based surface enhancement
 
 ## Innovation
+
 **Material Response LUTs** analyze and enhance how different surfaces interact with light—shifting from purely global color transforms to surface-aware rendering that respects highlights, midtones, and micro-contrast differently across materials.
 
 ## Usage
+
 1. Import into DaVinci Resolve, Premiere Pro, or other color-grading software.
 2. Apply at **60–80% opacity** initially.
 3. Stack multiple LUTs for complex material interactions.
 
 ## Luxury TIFF Batch Processor
+
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow
 for polishing large-format TIFF photography prior to digital launch. The script preserves
 metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/)
@@ -41,12 +47,14 @@ is available, and layers tonal, chroma, clarity, and diffusion refinements tuned
 ultra-luxury real-estate storytelling.
 
 ### Requirements (TIFF Batch Processor)
+
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
 
 > **Note:** Earlier revisions triggered `F821` undefined-name lint errors. Pull the latest main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper that resolves the NumPy dtype handling.
 
 ### Example (TIFF Batch Processor)
+
 ```bash
 python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
@@ -66,9 +74,11 @@ space, optionally adds ultra-fine debanding and cinematic halation bloom, and ke
 gradient-rich interiors spotless with updated presets.
 
 ### Requirements (Luxury Video Master Grader)
+
 - FFmpeg 6+
 
 ### Examples (Luxury Video Master Grader)
+
 ```bash
 # Inspect available looks and recipes
 python luxury_video_master_grader.py --list-presets
@@ -110,15 +120,18 @@ overview introduced on main so teams can reference a single, unified set of HDR
 finishing instructions.
 
 ### Highlights (HDR Production Pipeline)
+
 - ACES output transform selection with Dolby Vision and HDR10 metadata preservation
 - Adaptive debanding tuned to Codex reference recipes
 - Filmic halation and finishing touches that complement the luxury master grader
 
 ### Requirements (HDR Production Pipeline)
+
 - macOS or Linux shell environment
 - FFmpeg with zimg, `ffprobe`, and `python3`
 
 ### Example (HDR Production Pipeline)
+
 ```bash
 ./hdr_production_pipeline.sh source_hdr.mov out_hdr_master.mov \
   --aces-odt rec2020-pq --deband medium --halation strong --hdr10-metadata auto
@@ -130,4 +143,5 @@ metadata where available, while the deband and halation stages default to the Co
 recipes highlighted in the documentation examples.
 
 ## License
+
 Professional use permitted with attribution.
