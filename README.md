@@ -63,7 +63,7 @@ plan without writing files, and `--recursive` to mirror nested shoot-day folders
 `luxury_video_master_grader.py` brings the same curated aesthetic to short-form motion
 content. It wraps FFmpeg with preset-driven LUT application, tasteful denoising, clarity
 and film-grain treatments, then exports a mezzanine-ready Apple ProRes master by default.
-The pipeline now auto-detects HDR transfers and tone maps them into a refined BT.709
+The pipeline now auto-detects HDR transfers and performs tone mapping to convert them into a refined BT.709
 space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps
 gradient-rich interiors spotless with updated presets.
 
