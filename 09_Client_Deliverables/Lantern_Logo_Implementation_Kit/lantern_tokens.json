@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "tokens": {
+    "color": {
+      "brand": {
+        "navy": { "value": "#0B1220" },
+        "cyan": { "value": "#2AC7FF" },
+        "azure": { "value": "#56CCF2" },
+        "ice": { "value": "#E5F6FF" },
+        "white": { "value": "#FFFFFF" }
+      }
+    },
+    "gradient": {
+      "brand": {
+        "primary": {
+          "value": {
+            "type": "linear",
+            "rotation": 160,
+            "stops": [
+              { "position": 0, "color": "#3AE0FF" },
+              { "position": 1, "color": "#0784D9" }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
