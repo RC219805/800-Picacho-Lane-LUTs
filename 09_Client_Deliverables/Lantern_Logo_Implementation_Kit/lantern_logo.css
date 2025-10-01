@@ -11,6 +11,8 @@
   );
   --lantern-stroke: var(--brand-cyan);
   --lantern-hover-glow: 0 0 24px rgba(42, 199, 255, 0.45);
+  --lantern-reveal-duration: 150ms;
+  --lantern-reveal-easing: ease;
 }
 
 body {
@@ -33,7 +35,9 @@ body {
   width: 100%;
   height: auto;
   stroke: var(--lantern-stroke, currentColor);
-  transition: stroke 150ms ease, filter 200ms ease;
+  transition:
+    stroke var(--lantern-reveal-duration, 150ms) var(--lantern-reveal-easing, ease),
+    filter var(--lantern-reveal-duration, 150ms) var(--lantern-reveal-easing, ease);
 }
 
 .lantern-logo[data-variant="glyph"] {
