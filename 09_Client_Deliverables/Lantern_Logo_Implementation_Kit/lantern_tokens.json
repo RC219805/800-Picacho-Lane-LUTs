@@ -17,8 +17,8 @@
             "type": "linear",
             "rotation": 160,
             "stops": [
-              { "position": 0, "color": "#3AE0FF" },
-              { "position": 1, "color": "#0784D9" }
+              { "position": 0, "color": "{color.brand.azure}" },
+              { "position": 1, "color": "{color.brand.cyan}" }
             ]
           }
         }
