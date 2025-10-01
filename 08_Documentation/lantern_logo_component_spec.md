@@ -29,7 +29,7 @@ Primitive brand tokens are defined in [`lantern_tokens.json`](../09_Client_Deliv
 | `color.brand.azure` | `#56CCF2` | Gradient highlight stop. |
 | `color.brand.ice` | `#E5F6FF` | Glyph background and elevated surfaces. |
 | `color.brand.white` | `#FFFFFF` | Neutral content surface. |
-| `gradient.brand.primary` | Linear, 160°, stops at `#3AE0FF` → `#0784D9` | Applied on interaction hover/focus states and motion trails. |
+| `gradient.brand.primary` | Linear, 160°, stops reference `color.brand.azure` → `color.brand.cyan` | Applied on interaction hover/focus states and motion trails; update primitive stops first to cascade changes. |
 
 Semantic variables (e.g., `--lantern-stroke`, `--lantern-hover-glow`) must be derived from these primitives to maintain cross-platform parity.
 
