@@ -7,6 +7,8 @@ from types import ModuleType
 
 import pytest
 
+from .documentation import documents
+
 
 def load_module() -> ModuleType:
     module_path = Path(__file__).resolve().parent.parent / "luxury_video_master_grader.py"
@@ -28,6 +30,7 @@ summarize_probe = MODULE.summarize_probe
 parse_arguments = MODULE.parse_arguments
 
 
+@documents("Operator judgment can override sensing when continuity demands")
 def test_assess_frame_rate_respects_user_override():
     probe = {"streams": [{"codec_type": "video"}]}
 
@@ -37,6 +40,7 @@ def test_assess_frame_rate_respects_user_override():
     assert "override" in plan.note
 
 
+@documents("Frame cadence analysis flags variability before delivery")
 def test_assess_frame_rate_detects_vfr():
     probe = {
         "streams": [
@@ -54,6 +58,7 @@ def test_assess_frame_rate_detects_vfr():
     assert "variable frame-rate" in plan.note
 
 
+@documents("System normalizes near-standards for interchange resilience")
 def test_assess_frame_rate_conforms_off_standard():
     probe = {
         "streams": [
@@ -71,6 +76,7 @@ def test_assess_frame_rate_conforms_off_standard():
     assert "off-standard" in plan.note
 
 
+@documents("Small deviations stay untouched to honor original motion")
 def test_assess_frame_rate_preserves_within_tolerance():
     probe = {
         "streams": [
@@ -88,6 +94,7 @@ def test_assess_frame_rate_preserves_within_tolerance():
     assert "preserving timing" in plan.note
 
 
+@documents("Filter graph composes cinematic treatments modularly")
 def test_build_filter_graph_includes_optional_nodes(tmp_path):
     lut_path = tmp_path / "dummy.cube"
     lut_path.write_text("# dummy LUT\n")
@@ -137,6 +144,7 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
     assert "fps=fps=24000/1001" in graph
 
 
+@documents("Invalid recipe ingredients are rejected before encoding")
 def test_build_filter_graph_rejects_unknown_denoise(tmp_path):
     lut_path = tmp_path / "dummy.cube"
     lut_path.write_text("# dummy LUT\n")
@@ -150,6 +158,7 @@ def test_build_filter_graph_rejects_unknown_denoise(tmp_path):
         build_filter_graph(config)
 
 
+@documents("Tone pipeline only accepts curated debanding dialects")
 def test_build_filter_graph_rejects_unknown_deband(tmp_path):
     lut_path = tmp_path / "dummy.cube"
     lut_path.write_text("# dummy LUT\n")
@@ -163,6 +172,7 @@ def test_build_filter_graph_rejects_unknown_deband(tmp_path):
         build_filter_graph(config)
 
 
+@documents("Blend logic respects grading order when attenuating LUT influence")
 def test_build_filter_graph_blends_post_eq_when_lut_strength_lt_one(tmp_path):
     lut_path = tmp_path / "dummy.cube"
     lut_path.write_text("# dummy LUT\n")
@@ -223,6 +233,7 @@ def make_tone_args(**overrides):
     return argparse.Namespace(**defaults)
 
 
+@documents("Tone mapping activates when HDR metadata signals spectral risk")
 def test_plan_tone_mapping_detects_hdr():
     args = make_tone_args()
     probe = {
@@ -244,6 +255,7 @@ def test_plan_tone_mapping_detects_hdr():
     assert "detected" in plan.note
 
 
+@documents("Explicit opt-out disables automated tone orchestration")
 def test_plan_tone_mapping_respects_off():
     args = make_tone_args(tone_map="off")
     probe = {"streams": [{"codec_type": "video"}]}
@@ -254,6 +266,7 @@ def test_plan_tone_mapping_respects_off():
     assert "disabled" in plan.note.lower()
 
 
+@documents("Creative overrides can force tone strategy even on SDR footage")
 def test_plan_tone_mapping_forced_override_on_sdr():
     args = make_tone_args(tone_map="mobius", tone_map_peak=1500.0, tone_map_desat=0.2)
     probe = {"streams": [{"codec_type": "video", "color_trc": "bt709"}]}
@@ -265,6 +278,7 @@ def test_plan_tone_mapping_forced_override_on_sdr():
     assert "forced" in plan.note.lower()
 
 
+@documents("Explicit color metadata takes precedence over detection")
 def test_determine_color_metadata_prioritises_explicit():
     args = argparse.Namespace(
         color_primaries="bt709",
@@ -277,6 +291,7 @@ def test_determine_color_metadata_prioritises_explicit():
     assert determine_color_metadata(args, probe) == ("bt709", "smpte2084", "bt2020nc")
 
 
+@documents("Source metadata is trusted selectively, filtering unknown entries")
 def test_determine_color_metadata_from_source_filters_unknown():
     args = argparse.Namespace(
         color_primaries=None,
@@ -298,6 +313,7 @@ def test_determine_color_metadata_from_source_filters_unknown():
     assert determine_color_metadata(args, probe) == ("bt2020", None, "bt2020nc")
 
 
+@documents("Absent metadata yields neutral defaults for pipeline safety")
 def test_determine_color_metadata_defaults_to_none_when_missing():
     args = argparse.Namespace(
         color_primaries=None,
@@ -310,6 +326,7 @@ def test_determine_color_metadata_defaults_to_none_when_missing():
     assert determine_color_metadata(args, probe) == (None, None, None)
 
 
+@documents("Command builder emits ffmpeg contract with color guarantees")
 def test_build_command_includes_expected_arguments(tmp_path):
     input_path = tmp_path / "input.mov"
     output_path = tmp_path / "output.mov"
@@ -350,6 +367,7 @@ def test_build_command_includes_expected_arguments(tmp_path):
     assert "-colorspace" in cmd and "bt2020nc" in cmd
 
 
+@documents("Summaries omit meaningless tags to highlight actionable data")
 def test_summarize_probe_ignores_non_descriptive_color_tags():
     probe = {
         "format": {"duration": "10.0"},
@@ -374,6 +392,7 @@ def test_summarize_probe_ignores_non_descriptive_color_tags():
     assert "trc=" not in summary
 
 
+@documents("CLI enforces required IO to prevent silent misfires")
 def test_parse_arguments_requires_input_and_output(capsys):
     with pytest.raises(SystemExit) as exc:
         parse_arguments([])
@@ -383,6 +402,7 @@ def test_parse_arguments_requires_input_and_output(capsys):
     assert "the following arguments are required: input_video, output_video" in captured.err
 
 
+@documents("Preset catalog can be listed without invoking processing")
 def test_parse_arguments_list_presets_exits_early(capsys):
     with pytest.raises(SystemExit) as exc:
         parse_arguments(["--list-presets"])
