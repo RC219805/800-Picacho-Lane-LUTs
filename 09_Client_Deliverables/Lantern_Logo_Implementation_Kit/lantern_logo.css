@@ -4,7 +4,11 @@
   --brand-azure: #56CCF2;
   --brand-ice: #E5F6FF;
   --brand-white: #FFFFFF;
-  --brand-gradient: linear-gradient(160deg, #3AE0FF 0%, #0784D9 100%);
+  --brand-gradient: linear-gradient(
+    160deg,
+    var(--brand-azure) 0%,
+    var(--brand-cyan) 100%
+  );
   --lantern-stroke: var(--brand-cyan);
   --lantern-hover-glow: 0 0 24px rgba(42, 199, 255, 0.45);
 }
