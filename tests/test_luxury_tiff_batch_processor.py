@@ -5,6 +5,8 @@ import sys
 
 import pytest
 
+from .documentation import documents
+
 np = pytest.importorskip("numpy")
 pytest.importorskip("PIL.Image")
 pytest.importorskip("PIL.TiffImagePlugin")
@@ -21,6 +23,7 @@ def _saturation(rgb: np.ndarray) -> np.ndarray:
     return maxc - minc
 
 
+@documents("Material Response honors surface physics, not global transforms")
 def test_apply_adjustments_respects_exposure_clamp():
     arr = np.full((4, 4, 3), 0.25, dtype=np.float32)
     settings = ltiff.AdjustmentSettings(exposure=2.0)
@@ -31,6 +34,7 @@ def test_apply_adjustments_respects_exposure_clamp():
     assert np.allclose(out, 1.0, atol=1e-4)
 
 
+@documents("Token system allows composition without prescription")
 def test_apply_adjustments_vibrance_boosts_muted_colors_more():
     neutral = np.full((1, 1, 3), 0.5, dtype=np.float32)
     muted = np.array([[[0.5, 0.35, 0.3]]], dtype=np.float32)
@@ -51,6 +55,7 @@ def test_apply_adjustments_vibrance_boosts_muted_colors_more():
     assert muted_gain > saturated_gain
 
 
+@documents("Pipeline preserves authored intent while optimizing logistics")
 def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
     source_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -86,6 +91,7 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
         assert np.array(processed).dtype == np.uint8
 
 
+@documents("Dry runs provide planning insight without side effects")
 def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     input_dir = tmp_path / "in"
     output_dir = tmp_path / "out"
@@ -109,6 +115,7 @@ def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     assert not any(output_dir.rglob("*.tif"))
 
 
+@documents("Filesystem discovery respects operator scope selections")
 def test_collect_images_handles_recursive(tmp_path):
     input_root = tmp_path
     (input_root / "top.tif").write_bytes(b"top")
@@ -132,6 +139,7 @@ def test_collect_images_handles_recursive(tmp_path):
     ]
 
 
+@documents("User overrides cascade atop curated presets without drift")
 def test_build_adjustments_applies_overrides(tmp_path):
     args = ltiff.parse_args(
         [
@@ -157,6 +165,7 @@ def test_build_adjustments_applies_overrides(tmp_path):
     assert adjustments.shadow_lift == ltiff.LUXURY_PRESETS["signature"].shadow_lift
 
 
+@documents("Platform intelligence supersedes forced uniformity")
 def test_image_roundtrip_uint16_with_alpha():
     data = np.array(
         [

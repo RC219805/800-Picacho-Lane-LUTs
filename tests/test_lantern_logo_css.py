@@ -4,22 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-from typing import Callable, TypeVar
 
 ROOT = Path(__file__).resolve().parent.parent
 CSS_PATH = ROOT / "09_Client_Deliverables" / "Lantern_Logo_Implementation_Kit" / "lantern_logo.css"
 
-F = TypeVar("F", bound=Callable[..., object])
-
-
-def documents(note: str) -> Callable[[F], F]:
-    """Annotate a test with the documentation note it enforces."""
-
-    def decorator(func: F) -> F:
-        func.__doc__ = note if func.__doc__ is None else f"{note}\n{func.__doc__}"
-        return func
-
-    return decorator
+from .documentation import documents
 
 
 def _extract_hover_block(css: str) -> str:
