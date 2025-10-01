@@ -23,6 +23,14 @@
           }
         }
       }
+    },
+    "interaction": {
+      "reveal": {
+        "type": { "value": "transition" },
+        "trigger": { "value": "hover" },
+        "duration": { "value": "150ms" },
+        "easing": { "value": "ease" }
+      }
     }
   }
 }
