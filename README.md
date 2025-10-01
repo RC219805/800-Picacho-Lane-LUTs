@@ -18,6 +18,7 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
     - [HDR Production Pipeline Highlights](#hdr-production-pipeline-highlights)
     - [HDR Production Pipeline Requirements](#hdr-production-pipeline-requirements)
     - [HDR Production Pipeline Example](#hdr-production-pipeline-example)
+- [Decision Decay Dashboard](#decision-decay-dashboard)
 - [License](#license)
 
 ## Collection Contents
@@ -129,6 +130,21 @@ Layer the script after `luxury_video_master_grader.py` to apply bespoke LUTs bef
 HDR-specific finishing tools run. The pipeline preserves Dolby Vision and static HDR10
 metadata where available, while the deband and halation stages default to the Codex branch
 recipes highlighted in the documentation examples.
+
+## Decision Decay Dashboard
+
+`decision_decay_dashboard.py` surfaces temporal contracts, codebase philosophy violations, and brand color token drift in a single terminal dashboard.
+It cross-references `tests/` for `@valid_until` decorators, audits Python sources with `CodebasePhilosophyAuditor`, and highlights unused color tokens
+from the Lantern logo deliverables so teams know what requires attention next.
+
+### Running the dashboard
+```bash
+python decision_decay_dashboard.py
+```
+
+Use `--root` to audit a different project tree, `--tests` or `--tokens` to point at alternate assets, and `--json <path>` to export the findings for downstream
+automation. Near-term `valid_until` expirations are flagged in yellow when `rich` is installed (or with a `!` prefix in plain text). Philosophy violations are
+aggregated by principle with example file locations, while the color section lists which brand hex values are still unused in CSS/JS deliverables.
 
 ## License
 Professional use permitted with attribution.
