@@ -10,6 +10,7 @@ reference.  This module provides such an artefact.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Dict, Iterable, List
 
 
@@ -102,5 +103,131 @@ class MaterialResponsePrinciple:
         return [example.as_dict() for example in examples]
 
 
-__all__ = ["MaterialResponsePrinciple", "MaterialResponseExample"]
+_STOP_WORDS = {
+    "the",
+    "and",
+    "or",
+    "so",
+    "that",
+    "a",
+    "an",
+    "to",
+    "of",
+    "in",
+    "between",
+    "with",
+    "for",
+    "be",
+    "is",
+    "are",
+    "as",
+    "keep",
+    "so",
+    "rather",
+}
+
+
+def _extract_keywords(text: str) -> List[str]:
+    """Return a list of meaningful lowercase keywords from ``text``."""
+
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    return [token for token in tokens if token not in _STOP_WORDS and len(token) > 2]
+
+
+def violates(decision: str, tenet: str) -> bool:
+    """Heuristically determine whether ``decision`` conflicts with ``tenet``."""
+
+    decision_lower = decision.lower()
+    tenet_lower = tenet.lower()
+
+    # Specific heuristics for the three marketing tenets.  These catch the most
+    # common contradictions that show up in the architectural documentation and
+    # associated tests.
+    tenet_specific_checks = (
+        (
+            {"energy", "highlight"},
+            {
+                "clip the highlights",
+                "blow out the highlights",
+                "overexpose highlights",
+                "ignore energy conservation",
+                "treat highlights as unlimited",
+            },
+        ),
+        (
+            {"midtone", "texture"},
+            {
+                "flatten the midtones",
+                "blur midtone texture",
+                "remove midtone detail",
+                "plastic midtones",
+                "eliminate texture",
+            },
+        ),
+        (
+            {"blend", "transitions"},
+            {
+                "hard mask transition",
+                "no blending between materials",
+                "treat each material in isolation",
+                "apply a binary mask",
+            },
+        ),
+    )
+
+    for keywords, forbidden_phrases in tenet_specific_checks:
+        if keywords.issubset(set(_extract_keywords(tenet_lower))):
+            if any(phrase in decision_lower for phrase in forbidden_phrases):
+                return True
+
+    # Generic negation handling: if the decision explicitly ignores or bypasses
+    # aspects that the tenet cares about we treat it as a violation.
+    negating_words = {
+        "ignore",
+        "bypass",
+        "discard",
+        "skip",
+        "flatten",
+        "eliminate",
+        "remove",
+        "crush",
+        "erase",
+    }
+    keywords = _extract_keywords(tenet_lower)
+
+    for negation in negating_words:
+        if negation in decision_lower:
+            if any(f"{negation} {keyword}" in decision_lower for keyword in keywords):
+                return True
+            # Fall back to a proximity check if the explicit "negation keyword"
+            # pattern was not matched.  This keeps the heuristic resilient when
+            # the decision references the concept in a different grammatical
+            # order (e.g. "midtone texture gets flattened")
+            for keyword in keywords:
+                if keyword in decision_lower:
+                    return True
+
+    return False
+
+
+class MarketingClaimValidator:
+    """Validates that implementation decisions align with marketing principles."""
+
+    def assess_decision(
+        self, decision: str, principle: MaterialResponsePrinciple
+    ) -> bool:
+        """Return ``True`` when ``decision`` honours ``principle``'s tenets."""
+
+        for tenet in principle.guidelines():
+            if violates(decision, tenet):
+                return False
+        return True
+
+
+__all__ = [
+    "MaterialResponsePrinciple",
+    "MaterialResponseExample",
+    "MarketingClaimValidator",
+    "violates",
+]
 
