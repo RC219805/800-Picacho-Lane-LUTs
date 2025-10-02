@@ -9,11 +9,157 @@ reference.  This module provides such an artefact.
 
 from __future__ import annotations
 
+from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
+import math
 import re
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, Iterable, List, Sequence, Tuple
 
-import numpy as np
+
+def _is_sequence(value: object) -> bool:
+    """Return ``True`` when ``value`` should be treated as a sequence."""
+
+    return isinstance(value, SequenceABC) and not isinstance(value, (str, bytes, bytearray))
+
+
+def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
+    """Convert ``data`` into a rectangular list-of-lists of floats."""
+
+    if not _is_sequence(data):
+        raise TypeError("material data must be a sequence")
+
+    if len(data) == 0:
+        raise ValueError("material data cannot be empty")
+
+    if _is_sequence(data[0]):
+        rows = []
+        row_length = None
+        for row in data:
+            if not _is_sequence(row):
+                raise TypeError("material rows must be sequences")
+            coerced_row = [float(value) for value in row]
+            if row_length is None:
+                row_length = len(coerced_row)
+                if row_length == 0:
+                    raise ValueError("material rows cannot be empty")
+            elif len(coerced_row) != row_length:
+                raise ValueError("material data must form a rectangular grid")
+            rows.append(coerced_row)
+        return rows
+
+    coerced = [float(value) for value in data]
+    if len(coerced) == 0:
+        raise ValueError("material data cannot be empty")
+    return [coerced]
+
+
+def _flatten(matrix: Sequence[Sequence[float]]) -> List[float]:
+    """Return a flattened representation of ``matrix``."""
+
+    return [value for row in matrix for value in row]
+
+
+def _median(values: Sequence[float]) -> float:
+    """Compute the median of ``values``."""
+
+    ordered = sorted(values)
+    length = len(ordered)
+    if length == 0:
+        raise ValueError("median of empty sequence is undefined")
+    middle = length // 2
+    if length % 2 == 0:
+        return (ordered[middle - 1] + ordered[middle]) / 2.0
+    return ordered[middle]
+
+
+def _fft_frequency(index: int, size: int) -> float:
+    """Return the normalised FFT frequency for ``index``."""
+
+    if size <= 0:
+        raise ValueError("size must be positive")
+    half = size // 2
+    if index <= half:
+        return index / size
+    return (index - size) / size
+
+
+def _dft2(matrix: Sequence[Sequence[float]]) -> List[List[complex]]:
+    """Compute the 2D discrete Fourier transform for ``matrix``."""
+
+    rows = len(matrix)
+    cols = len(matrix[0])
+    result = [[0j for _ in range(cols)] for _ in range(rows)]
+
+    for u in range(rows):
+        for v in range(cols):
+            total = 0j
+            for x in range(rows):
+                for y in range(cols):
+                    angle = -2.0 * math.pi * ((u * x / rows) + (v * y / cols))
+                    total += matrix[x][y] * complex(math.cos(angle), math.sin(angle))
+            result[u][v] = total
+
+    return result
+
+
+def _energy_by_band(
+    dft: Sequence[Sequence[complex]],
+    band: str,
+    cutoff: float,
+    radii: Sequence[Sequence[float]],
+) -> float:
+    """Return the total squared magnitude energy for the requested band."""
+
+    total = 0.0
+    rows = len(dft)
+    cols = len(dft[0])
+
+    for u in range(rows):
+        for v in range(cols):
+            radius = radii[u][v]
+            in_band = radius >= cutoff if band == "high" else radius <= cutoff
+            if in_band:
+                coefficient = dft[u][v]
+                total += (coefficient.real ** 2) + (coefficient.imag ** 2)
+
+    return total
+
+
+def _radial_frequency_grid(shape: Tuple[int, int]) -> List[List[float]]:
+    """Return the radial frequency grid for ``shape``."""
+
+    rows, cols = shape
+    grid = []
+    for u in range(rows):
+        row = []
+        freq_u = _fft_frequency(u, rows)
+        for v in range(cols):
+            freq_v = _fft_frequency(v, cols)
+            row.append(math.hypot(freq_u, freq_v))
+        grid.append(row)
+    return grid
+
+
+def _linear_regression(xs: Sequence[float], ys: Sequence[float]) -> Tuple[float, float]:
+    """Return the slope and intercept for ``xs``/``ys``."""
+
+    if len(xs) != len(ys):
+        raise ValueError("xs and ys must have matching lengths")
+    n = len(xs)
+    if n == 0:
+        raise ValueError("linear regression requires data")
+
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    denominator = sum((x - mean_x) ** 2 for x in xs)
+
+    if math.isclose(denominator, 0.0):
+        return 0.0, mean_y
+
+    numerator = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    slope = numerator / denominator
+    intercept = mean_y - slope * mean_x
+    return slope, intercept
 
 
 @dataclass(frozen=True)
@@ -238,8 +384,8 @@ __all__ = [
 class MaterialResponseValidator:
     """Quantitative heuristics for validating material treatments.
 
-    The validator deliberately keeps the implementations lightweight and
-    dependency-free beyond :mod:`numpy`.  The goal is to surface signal that is
+    The validator deliberately keeps the implementations lightweight and free of
+    heavy numerical dependencies.  The goal is to surface signal that is
     directionally correct for tests rather than to provide production-grade
     analysis of BRDFs or fractal geometry.
     """
@@ -250,8 +396,8 @@ class MaterialResponseValidator:
         """Return the energy ratio for the high-frequency Fourier band.
 
         ``before`` and ``after`` are expected to be array-like objects that can
-        be coerced into :class:`numpy.ndarray` instances.  The method computes the
-        sum of squared magnitudes in the high-frequency region of the Fourier
+        be coerced into rectangular grids of floats.  The method computes the sum
+        of squared magnitudes in the high-frequency region of the Fourier
         spectrum and reports ``after / before``.  When the reference energy is
         zero the ratio gracefully falls back to ``1.0`` so tests can reason about
         a neutral baseline.
@@ -286,110 +432,99 @@ class MaterialResponseValidator:
         if band not in {"high", "low"}:
             raise ValueError("band must be 'high' or 'low'")
 
-        before_arr = np.asarray(before, dtype=float)
-        after_arr = np.asarray(after, dtype=float)
+        before_matrix = _coerce_matrix(before)
+        after_matrix = _coerce_matrix(after)
 
-        if before_arr.shape != after_arr.shape:
+        if len(before_matrix) != len(after_matrix) or len(before_matrix[0]) != len(after_matrix[0]):
             raise ValueError("before and after arrays must share the same shape")
 
-        fft_before = np.fft.fftn(before_arr)
-        fft_after = np.fft.fftn(after_arr)
+        dft_before = _dft2(before_matrix)
+        dft_after = _dft2(after_matrix)
 
-        band_mask = MaterialResponseValidator._frequency_band_mask(fft_before.shape, band)
+        radii = _radial_frequency_grid((len(before_matrix), len(before_matrix[0])))
+        cutoff = _median(_flatten(radii))
 
-        energy_before = np.sum(np.abs(fft_before) ** 2 * band_mask)
-        energy_after = np.sum(np.abs(fft_after) ** 2 * band_mask)
+        energy_before = _energy_by_band(dft_before, band, cutoff, radii)
+        energy_after = _energy_by_band(dft_after, band, cutoff, radii)
 
-        if np.isclose(energy_before, 0.0):
-            if np.isclose(energy_after, 0.0):
+        if math.isclose(energy_before, 0.0, rel_tol=1e-9, abs_tol=1e-12):
+            if math.isclose(energy_after, 0.0, rel_tol=1e-9, abs_tol=1e-12):
                 return 1.0
-            else:
-                raise ValueError(
-                    "Cannot compute Fourier energy ratio: energy_before is zero but energy_after is not. "
-                    f"energy_before={energy_before}, energy_after={energy_after}, band={band}"
-                )
+            raise ValueError(
+                "Cannot compute Fourier energy ratio: energy_before is zero but energy_after is not. "
+                f"energy_before={energy_before}, energy_after={energy_after}, band={band}"
+            )
 
         return float(energy_after / energy_before)
-
-    @staticmethod
-    def _frequency_band_mask(
-        shape: Sequence[int], 
-        band: str, 
-        cutoff: float = None
-    ) -> np.ndarray:
-        """
-        Return a boolean mask isolating the requested frequency band.
-
-        By default, the median radial frequency is used as the cutoff to separate
-        high and low frequency bands. This provides a balanced split for typical
-        material textures, but can be overridden by specifying the `cutoff`
-        parameter.
-        """
-
-        grids = np.meshgrid(
-            *[np.fft.fftfreq(n, d=1.0) for n in shape],
-            indexing="ij",
-        )
-        radial_freq = np.sqrt(np.sum(np.square(grids), axis=0))
-        if cutoff is None:
-            cutoff = np.median(radial_freq)
-
-        if band == "high":
-            return radial_freq >= cutoff
-        return radial_freq <= cutoff
 
     @staticmethod
     def _calculate_hausdorff_dimension(surface: Sequence[Sequence[float]]) -> float:
         """Estimate fractal dimension using a simple box-counting approach."""
 
-        data = np.asarray(surface, dtype=float)
-        if data.ndim == 1:
-            # Promote 1D signals to 2D by treating them as a single-row image.
-            data = data[np.newaxis, :]
-        elif data.ndim != 2:
-            raise ValueError("surface must be 1D or 2D array-like")
+        matrix = _coerce_matrix(surface)
+        if len(matrix) == 0 or len(matrix[0]) == 0:
+            raise ValueError("surface must contain data")
 
-        data = data - np.min(data)
-        max_val = np.max(data)
-        if not np.isclose(max_val, 0.0):
-            data = data / max_val
+        min_value = min(_flatten(matrix))
+        normalised = [[value - min_value for value in row] for row in matrix]
 
-        # Binarise around the median to highlight structure while reducing
-        # sensitivity to absolute intensity.
-        threshold = np.median(data)
-        binary = data > threshold
+        max_value = max(_flatten(normalised))
+        if not math.isclose(max_value, 0.0, rel_tol=1e-9, abs_tol=1e-12):
+            normalised = [[value / max_value for value in row] for row in normalised]
 
-        # Determine box sizes as powers of two that fit the smallest dimension.
-        min_dim = min(binary.shape)
-        max_exponent = int(np.floor(np.log2(min_dim)))
+        threshold = _median(_flatten(normalised))
+        binary = [[value > threshold for value in row] for row in normalised]
+
+        rows = len(binary)
+        cols = len(binary[0])
+        min_dim = min(rows, cols)
+        if min_dim <= 0:
+            raise ValueError("surface must contain data")
+
+        max_exponent = int(math.floor(math.log2(min_dim)))
         if max_exponent <= 1:
-            # If the grid is extremely small the slope degenerates; return a
-            # neutral dimension of 1.0 to keep tests stable.
             return 1.0
 
-        sizes = 2 ** np.arange(1, max_exponent)
-        counts = []
+        sizes = [2 ** exponent for exponent in range(1, max_exponent)]
+        counts = [MaterialResponseValidator._boxcount(binary, size) for size in sizes]
 
-        for size in sizes:
-            counts.append(MaterialResponseValidator._boxcount(binary, size))
-
-        # Perform linear regression in log-log space.  A tiny epsilon guards
-        # against logarithms of zero when synthetic fixtures have no structure.
         eps = 1e-9
-        coeffs = np.polyfit(np.log(sizes + eps), np.log(np.asarray(counts) + eps), 1)
-        dimension = -coeffs[0]
-        return float(max(dimension, 0.0))
+        xs = [math.log(size + eps) for size in sizes]
+        ys = [math.log(count + eps) for count in counts]
+        slope, _ = _linear_regression(xs, ys)
+        dimension = max(-slope, 0.0)
+        return float(dimension)
 
     @staticmethod
-    def _boxcount(binary: np.ndarray, size: int) -> int:
+    def _boxcount(binary: Sequence[Sequence[bool]], size: int) -> int:
         """Count non-empty boxes of the given ``size`` for ``binary`` data."""
 
-        shape = binary.shape
-        new_shape = (shape[0] // size, size, shape[1] // size, size)
-        trimmed = binary[: new_shape[0] * size, : new_shape[2] * size]
-        reshaped = trimmed.reshape(new_shape)
-        # Collapse the size axes and count how many boxes contain at least one
-        # "True" cell.
-        occupied = reshaped.any(axis=(1, 3))
-        return int(np.count_nonzero(occupied))
+        if size <= 0:
+            raise ValueError("size must be positive")
+
+        rows = len(binary)
+        cols = len(binary[0]) if rows else 0
+        if rows == 0 or cols == 0:
+            return 0
+
+        trimmed_rows = rows - (rows % size)
+        trimmed_cols = cols - (cols % size)
+        if trimmed_rows == 0 or trimmed_cols == 0:
+            return 0
+
+        count = 0
+        for row in range(0, trimmed_rows, size):
+            for col in range(0, trimmed_cols, size):
+                occupied = False
+                for dr in range(size):
+                    if occupied:
+                        break
+                    for dc in range(size):
+                        if binary[row + dr][col + dc]:
+                            occupied = True
+                            break
+                if occupied:
+                    count += 1
+
+        return count
 
