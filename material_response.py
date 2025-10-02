@@ -312,15 +312,27 @@ class MaterialResponseValidator:
         return float(energy_after / energy_before)
 
     @staticmethod
-    def _frequency_band_mask(shape: Sequence[int], band: str) -> np.ndarray:
-        """Return a boolean mask isolating the requested frequency band."""
+    def _frequency_band_mask(
+        shape: Sequence[int], 
+        band: str, 
+        cutoff: float = None
+    ) -> np.ndarray:
+        """
+        Return a boolean mask isolating the requested frequency band.
+
+        By default, the median radial frequency is used as the cutoff to separate
+        high and low frequency bands. This provides a balanced split for typical
+        material textures, but can be overridden by specifying the `cutoff`
+        parameter.
+        """
 
         grids = np.meshgrid(
             *[np.fft.fftfreq(n, d=1.0) for n in shape],
             indexing="ij",
         )
         radial_freq = np.sqrt(np.sum(np.square(grids), axis=0))
-        cutoff = np.median(radial_freq)
+        if cutoff is None:
+            cutoff = np.median(radial_freq)
 
         if band == "high":
             return radial_freq >= cutoff
