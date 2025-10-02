@@ -386,7 +386,8 @@ class CognitiveMaterialResponse:
     ) -> Dict[str, object]:
         """Return a holistic appraisal of the material treatment."""
 
-        # Not just physics - but psychophysics
+        # Model the viewer's emotional (limbic) response to material and lighting,
+        # integrating psychophysical principles to account for perception and cultural context.
         emotional_resonance = self.perception_model.predict_limbic_response(
             material.texture,
             lighting.warmth,
