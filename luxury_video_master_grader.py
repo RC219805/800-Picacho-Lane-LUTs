@@ -229,7 +229,6 @@ def summarize_probe(data: Dict[str, object]) -> str:
     audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
     pieces = []
     if duration:
-        numeric_duration: Optional[float]
         try:
             numeric_duration = float(duration)
         except (TypeError, ValueError):
