@@ -43,10 +43,21 @@ class ProcessingCapabilities:
         return True
 
     def assert_luxury_grade(self) -> None:
+        """
+        Validates that the processing environment meets luxury-grade requirements:
+        - 16-bit precision
+        - HDR capability
+        Raises LuxuryGradeException if requirements are not met.
+        """
         if self.bit_depth < 16:
             raise LuxuryGradeException(
                 "Material Response requires 16-bit precision. "
-                "Install tifffile for 16-bit TIFF processing support."
+                "Install tifffile to unlock quantum color depth."
+            )
+        if not self.hdr_capable:
+            raise LuxuryGradeException(
+                "Luxury-grade processing requires HDR capability. "
+                "Install tifffile or ensure your environment supports HDR."
             )
 
 
