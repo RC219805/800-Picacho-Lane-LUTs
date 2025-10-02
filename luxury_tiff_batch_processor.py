@@ -46,7 +46,7 @@ class ProcessingCapabilities:
         if self.bit_depth < 16:
             raise LuxuryGradeException(
                 "Material Response requires 16-bit precision. "
-                "Install tifffile to unlock quantum color depth."
+                "Install tifffile for 16-bit TIFF processing support."
             )
 
 
