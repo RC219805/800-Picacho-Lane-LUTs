@@ -301,7 +301,13 @@ class MaterialResponseValidator:
         energy_after = np.sum(np.abs(fft_after) ** 2 * band_mask)
 
         if np.isclose(energy_before, 0.0):
-            return 1.0 if np.isclose(energy_after, 0.0) else float("inf")
+            if np.isclose(energy_after, 0.0):
+                return 1.0
+            else:
+                raise ValueError(
+                    "Cannot compute Fourier energy ratio: energy_before is zero but energy_after is not. "
+                    f"energy_before={energy_before}, energy_after={energy_after}, band={band}"
+                )
 
         return float(energy_after / energy_before)
 
