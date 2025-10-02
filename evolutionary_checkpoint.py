@@ -24,7 +24,7 @@ class EvolutionaryCheckpoint:
     horizon: date
     mutation_path: str
 
-    def evolve_or_alert(self, *, today: Optional[date] = None) -> str:
+    def evolve_or_alert(self, *, today: date | None = None) -> str:
         """Return guidance about whether evolution is required.
 
         Parameters
