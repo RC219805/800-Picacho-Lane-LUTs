@@ -229,7 +229,12 @@ def summarize_probe(data: Dict[str, object]) -> str:
     audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
     pieces = []
     if duration:
-        pieces.append(f"duration {float(duration):.2f}s")
+        try:
+            numeric_duration = float(duration)
+        except (TypeError, ValueError):
+            numeric_duration = None
+        if numeric_duration is not None and math.isfinite(numeric_duration):
+            pieces.append(f"duration {numeric_duration:.2f}s")
     if video:
         w = video.get("width")
         h = video.get("height")
