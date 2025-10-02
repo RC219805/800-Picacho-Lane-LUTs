@@ -10,9 +10,10 @@ reference.  This module provides such an artefact.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
 import re
-from typing import Dict, Iterable, List, Mapping, Sequence
+from typing import Dict, Iterable, List, Sequence
+
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -135,326 +136,6 @@ def _extract_keywords(text: str) -> List[str]:
     return [token for token in tokens if token not in _STOP_WORDS and len(token) > 2]
 
 
-def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
-    """Return ``value`` limited to the inclusive ``[minimum, maximum]`` range."""
-
-    return max(minimum, min(maximum, value))
-
-
-@dataclass(frozen=True)
-class MaterialAestheticProfile:
-    """Structured description of how a material should be perceived."""
-
-    name: str
-    texture: str
-    rarity: float
-    craftsmanship: float
-    innovation: float
-
-    def __post_init__(self) -> None:
-        for attribute in ("rarity", "craftsmanship", "innovation"):
-            value = getattr(self, attribute)
-            if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
-
-
-@dataclass(frozen=True)
-class LightingProfile:
-    """Simplified representation of the lighting environment."""
-
-    warmth: float
-    intensity: float
-    diffusion: float
-
-    def __post_init__(self) -> None:
-        for attribute in ("warmth", "intensity", "diffusion"):
-            value = getattr(self, attribute)
-            if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
-
-
-@dataclass(frozen=True)
-class ViewerProfile:
-    """Describes the viewer in terms of aesthetic preferences."""
-
-    cultural_background: str
-    novelty_preference: float
-    heritage_affinity: float
-
-    def __post_init__(self) -> None:
-        for attribute in ("novelty_preference", "heritage_affinity"):
-            value = getattr(self, attribute)
-            if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
-
-        if not self.cultural_background:
-            raise ValueError("cultural_background must be a non-empty string")
-
-
-@dataclass(frozen=True)
-class EmotionalResonance:
-    """Container capturing the viewer's predicted emotional response."""
-
-    awe: float
-    comfort: float
-    focus: float
-    cultural_background: str
-
-    def __post_init__(self) -> None:
-        for attribute in ("awe", "comfort", "focus"):
-            value = getattr(self, attribute)
-            if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"{attribute} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
-
-        if not self.cultural_background:
-            raise ValueError("cultural_background must be a non-empty string")
-
-    def as_dict(self) -> Dict[str, float]:
-        """Return the resonance as a serialisable mapping."""
-
-        return {
-            "awe": self.awe,
-            "comfort": self.comfort,
-            "focus": self.focus,
-            "cultural_background": self.cultural_background,
-        }
-
-
-@dataclass(frozen=True)
-class ContextualResonance:
-    """Emotion scores contextualised for a cultural narrative."""
-
-    scores: Dict[str, float]
-    narrative: str
-
-    def __post_init__(self) -> None:
-        required_keys = {"awe", "comfort", "focus"}
-        missing = required_keys.difference(self.scores)
-        if missing:
-            raise ValueError(
-                f"scores must include {sorted(required_keys)}; missing keys: {sorted(missing)}"
-            )
-
-        for key, value in self.scores.items():
-            if not 0.0 <= value <= 1.0:
-                raise ValueError(
-                    f"Score {key!r} must be between 0.0 and 1.0 inclusive; received {value!r}"
-                )
-
-        if not self.narrative:
-            raise ValueError("narrative must be a non-empty string")
-
-
-class NeuroAestheticEngine:
-    """Lightweight psychophysical model for interpreting material descriptors."""
-
-    _TEXTURE_AFFECTIONS: Mapping[str, Mapping[str, float]] = {
-        "velvet": {"comfort": 0.18, "awe": 0.07},
-        "marble": {"awe": 0.2, "focus": 0.08},
-        "brushed": {"focus": 0.12, "awe": 0.04},
-        "polished": {"awe": 0.15},
-        "matte": {"focus": -0.05, "comfort": 0.05},
-        "handcrafted": {"comfort": 0.12, "awe": 0.05},
-        "organic": {"comfort": 0.1},
-        "lacquer": {"awe": 0.06, "focus": 0.05},
-    }
-
-    def predict_limbic_response(
-        self, texture: str, warmth: float, cultural_background: str
-    ) -> EmotionalResonance:
-        """Return an :class:`EmotionalResonance` derived from qualitative inputs."""
-
-        if not 0.0 <= warmth <= 1.0:
-            raise ValueError("warmth must be between 0.0 and 1.0 inclusive")
-
-        tokens = re.findall(r"[a-z]+", texture.lower())
-        awe = 0.45
-        comfort = 0.45
-        focus = 0.45
-
-        for token in tokens:
-            if token in self._TEXTURE_AFFECTIONS:
-                weights = self._TEXTURE_AFFECTIONS[token]
-                awe += weights.get("awe", 0.0)
-                comfort += weights.get("comfort", 0.0)
-                focus += weights.get("focus", 0.0)
-
-        # Warmth emphasises comfort, whereas cooler setups heighten focus.
-        comfort += 0.2 * (1.0 - abs(warmth - 0.6))
-        focus += 0.18 * (0.5 - abs(warmth - 0.4))
-        awe += 0.15 * warmth
-
-        # Cultural familiarity slightly reinforces comfort and awe.
-        cultural_modifier = 0.02 if cultural_background else 0.0
-        comfort += cultural_modifier
-        awe += cultural_modifier
-
-        return EmotionalResonance(
-            awe=_clamp(awe),
-            comfort=_clamp(comfort),
-            focus=_clamp(focus),
-            cultural_background=cultural_background.lower(),
-        )
-
-
-class GlobalLuxurySemantics:
-    """Contextualises emotion scores for regional expectations of luxury."""
-
-    _CULTURAL_WEIGHTS: Mapping[str, Mapping[str, float]] = {
-        "mediterranean": {"comfort": 0.06, "awe": 0.05},
-        "scandinavian": {"comfort": 0.08, "focus": 0.07, "awe": -0.03},
-        "japanese": {"focus": 0.09, "comfort": -0.02, "awe": 0.04},
-        "middle eastern": {"awe": 0.08, "comfort": 0.04},
-        "american": {"focus": 0.03, "comfort": 0.02},
-    }
-
-    def recontextualize(
-        self, material: MaterialAestheticProfile, resonance: EmotionalResonance
-    ) -> ContextualResonance:
-        """Return resonance tuned to cultural and material narratives."""
-
-        background = resonance.cultural_background.lower()
-        weights = self._CULTURAL_WEIGHTS.get(background, {})
-
-        awe = _clamp(resonance.awe + weights.get("awe", 0.0) + 0.12 * material.rarity)
-        comfort = _clamp(
-            resonance.comfort
-            + weights.get("comfort", 0.0)
-            + 0.1 * material.craftsmanship
-        )
-        focus = _clamp(
-            resonance.focus
-            + weights.get("focus", 0.0)
-            + 0.08 * (1.0 - material.innovation)
-        )
-
-        narrative = (
-            f"{material.name} channels a {background or 'global'} sensibility by "
-            f"balancing awe ({awe:.2f}), comfort ({comfort:.2f}) and focus ({focus:.2f})."
-        )
-
-        return ContextualResonance(scores={"awe": awe, "comfort": comfort, "focus": focus}, narrative=narrative)
-
-
-class FutureStatePredictor:
-    """Projects how a material treatment will age alongside design trends."""
-
-    def project(
-        self, material: MaterialAestheticProfile, resonance: ContextualResonance
-    ) -> float:
-        """Return a 0-1 score indicating forward-looking relevance."""
-
-        awe = resonance.scores["awe"]
-        focus = resonance.scores["focus"]
-
-        rarity_weight = 0.35 * material.rarity
-        innovation_weight = 0.4 * material.innovation
-        emotional_weight = 0.25 * (0.6 * awe + 0.4 * focus)
-
-        projection = rarity_weight + innovation_weight + emotional_weight
-        return _clamp(projection)
-
-
-class CognitiveMaterialResponse:
-    """High-level facade orchestrating the psychophysical subsystems."""
-
-    def __init__(self) -> None:
-        self.perception_model = NeuroAestheticEngine()
-        self.cultural_context = GlobalLuxurySemantics()
-        self.temporal_relevance = FutureStatePredictor()
-
-    def process(
-        self,
-        material: MaterialAestheticProfile,
-        lighting: LightingProfile,
-        viewer_profile: ViewerProfile,
-    ) -> Dict[str, object]:
-        """Return a holistic appraisal of the material treatment."""
-
-        # Not just physics - but psychophysics
-        emotional_resonance = self.perception_model.predict_limbic_response(
-            material.texture,
-            lighting.warmth,
-            viewer_profile.cultural_background,
-        )
-
-        return self.optimize_for_consciousness(material, emotional_resonance)
-
-    def optimize_for_consciousness(
-        self, material: MaterialAestheticProfile, emotional_resonance: EmotionalResonance
-    ) -> Dict[str, object]:
-        """Blend cultural and temporal heuristics into actionable guidance."""
-
-        contextualized = self.cultural_context.recontextualize(material, emotional_resonance)
-        future_alignment = self.temporal_relevance.project(material, contextualized)
-        luxury_index = self._composite_index(material, contextualized, future_alignment)
-
-        recommendations = self._recommendations(material, contextualized)
-
-        return {
-            "material": material.name,
-            "texture": material.texture,
-            "emotional_resonance": contextualized.scores,
-            "narrative": contextualized.narrative,
-            "luxury_index": luxury_index,
-            "future_alignment": future_alignment,
-            "recommendations": recommendations,
-        }
-
-    @staticmethod
-    def _composite_index(
-        material: MaterialAestheticProfile,
-        resonance: ContextualResonance,
-        future_alignment: float,
-    ) -> float:
-        craftsmanship_weight = 0.35 * material.craftsmanship
-        rarity_weight = 0.25 * material.rarity
-        emotional_weight = 0.25 * (0.5 * resonance.scores["awe"] + 0.5 * resonance.scores["comfort"])
-        future_weight = 0.15 * future_alignment
-
-        return _clamp(craftsmanship_weight + rarity_weight + emotional_weight + future_weight)
-
-    @staticmethod
-    def _recommendations(
-        material: MaterialAestheticProfile, resonance: ContextualResonance
-    ) -> List[str]:
-        recommendations: List[str] = []
-        awe = resonance.scores["awe"]
-        comfort = resonance.scores["comfort"]
-        focus = resonance.scores["focus"]
-
-        if awe < 0.6:
-            recommendations.append(
-                "Introduce controlled specular accents to elevate perceived grandeur."
-            )
-        if comfort < 0.55:
-            recommendations.append(
-                "Blend warmer fill lighting or tactile styling to soften the presentation."
-            )
-        if focus < 0.5:
-            recommendations.append(
-                "Shape negative space to emphasise the material's structural rhythm."
-            )
-
-        if material.innovation > 0.65 and awe >= 0.6:
-            recommendations.append(
-                "Document the treatment narrative for launch collateral while momentum is high."
-            )
-
-        if not recommendations:
-            recommendations.append("Maintain current treatment; responses align with luxury objectives.")
-
-        return recommendations
-
-
 def violates(decision: str, tenet: str) -> bool:
     """Heuristically determine whether ``decision`` conflicts with ``tenet``."""
 
@@ -548,15 +229,6 @@ class MarketingClaimValidator:
 __all__ = [
     "MaterialResponsePrinciple",
     "MaterialResponseExample",
-    "MaterialAestheticProfile",
-    "LightingProfile",
-    "ViewerProfile",
-    "EmotionalResonance",
-    "ContextualResonance",
-    "NeuroAestheticEngine",
-    "GlobalLuxurySemantics",
-    "FutureStatePredictor",
-    "CognitiveMaterialResponse",
     "MarketingClaimValidator",
     "MaterialResponseValidator",
     "violates",
@@ -566,105 +238,158 @@ __all__ = [
 class MaterialResponseValidator:
     """Quantitative heuristics for validating material treatments.
 
-    The validator remains lightweight and free from optional third-party
-    dependencies so the surrounding test-suite runs in constrained execution
-    environments.  The heuristics are intentionally approximate – they provide
-    directional signal about textural preservation without aiming to reproduce
-    a full scientific analysis of spatial frequency content.
+    The validator deliberately keeps the implementations lightweight and
+    dependency-free beyond :mod:`numpy`.  The goal is to surface signal that is
+    directionally correct for tests rather than to provide production-grade
+    analysis of BRDFs or fractal geometry.
     """
 
     def measure_specular_preservation(
         self, before: Sequence[Sequence[float]], after: Sequence[Sequence[float]]
     ) -> float:
-        """Return the ratio of high-frequency energy between ``after`` and ``before``.
+        """Return the energy ratio for the high-frequency Fourier band.
 
-        High-frequency structure is approximated through local gradients rather
-        than a discrete Fourier transform so the metric does not require
-        :mod:`numpy`.  When the reference energy is effectively zero the method
-        returns ``1.0`` to represent a neutral change; if ``after`` contains
-        energy where the reference does not, a :class:`ValueError` is raised to
-        signal the inconsistency.
+        ``before`` and ``after`` are expected to be array-like objects that can
+        be coerced into :class:`numpy.ndarray` instances.  The method computes the
+        sum of squared magnitudes in the high-frequency region of the Fourier
+        spectrum and reports ``after / before``.  When the reference energy is
+        zero the ratio gracefully falls back to ``1.0`` so tests can reason about
+        a neutral baseline.
         """
 
-        before_matrix = self._coerce_matrix(before)
-        after_matrix = self._coerce_matrix(after)
-
-        if len(before_matrix) != len(after_matrix) or (
-            before_matrix and after_matrix and len(before_matrix[0]) != len(after_matrix[0])
-        ):
-            raise ValueError("before and after arrays must share the same shape")
-
-        energy_before = self._gradient_energy(before_matrix)
-        energy_after = self._gradient_energy(after_matrix)
-
-        if math.isclose(energy_before, 0.0, abs_tol=1e-9):
-            if math.isclose(energy_after, 0.0, abs_tol=1e-9):
-                return 1.0
-            raise ValueError(
-                "Cannot compute energy ratio: reference gradient energy is zero while transformed energy is non-zero."
-            )
-
-        return float(energy_after / energy_before)
+        return self._fourier_energy_ratio(before, after, band="high")
 
     def measure_texture_dimensionality(
         self, surface: Sequence[Sequence[float]]
     ) -> float:
-        """Return a proxy for fractal dimensionality based on gradient richness."""
+        """Approximate the fractal (Hausdorff) dimension via box counting."""
 
-        matrix = self._coerce_matrix(surface)
-        if not matrix:
-            return 1.0
-
-        energy = self._gradient_energy(matrix)
-        rows = len(matrix)
-        cols = len(matrix[0]) if rows else 0
-        if rows == 0 or cols == 0:
-            return 1.0
-
-        # Normalise by the maximum number of gradient comparisons to keep the
-        # metric bounded within ``[1.0, 2.0]``.
-        comparisons = float(rows * (cols - 1) + (rows - 1) * cols)
-        if comparisons <= 0:
-            return 1.0
-
-        normalised = min(1.0, energy / (comparisons + 1e-9))
-        return 1.0 + normalised
+        return self._calculate_hausdorff_dimension(surface)
 
     # ------------------------------------------------------------------
     # Internal helpers
 
     @staticmethod
-    def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
-        if not isinstance(data, Sequence):
-            return [[float(data)]]
+    def _fourier_energy_ratio(
+        before: Sequence[Sequence[float]],
+        after: Sequence[Sequence[float]],
+        *,
+        band: str,
+    ) -> float:
+        """Return the ratio of Fourier-band energy between ``after`` and ``before``.
 
-        if not data:
-            return []
+        The helper performs minimal validation and defaults to returning ``1.0``
+        if the reference energy is zero to keep the metric stable for synthetic
+        fixtures used in the tests.
+        """
 
-        first = data[0]
-        if isinstance(first, Sequence) and not isinstance(first, (str, bytes)):
-            return [[float(value) for value in row] for row in data]  # type: ignore[arg-type]
+        if band not in {"high", "low"}:
+            raise ValueError("band must be 'high' or 'low'")
 
-        return [[float(value) for value in data]]  # type: ignore[arg-type]
+        before_arr = np.asarray(before, dtype=float)
+        after_arr = np.asarray(after, dtype=float)
+
+        if before_arr.shape != after_arr.shape:
+            raise ValueError("before and after arrays must share the same shape")
+
+        fft_before = np.fft.fftn(before_arr)
+        fft_after = np.fft.fftn(after_arr)
+
+        band_mask = MaterialResponseValidator._frequency_band_mask(fft_before.shape, band)
+
+        energy_before = np.sum(np.abs(fft_before) ** 2 * band_mask)
+        energy_after = np.sum(np.abs(fft_after) ** 2 * band_mask)
+
+        if np.isclose(energy_before, 0.0):
+            if np.isclose(energy_after, 0.0):
+                return 1.0
+            else:
+                raise ValueError(
+                    "Cannot compute Fourier energy ratio: energy_before is zero but energy_after is not. "
+                    f"energy_before={energy_before}, energy_after={energy_after}, band={band}"
+                )
+
+        return float(energy_after / energy_before)
 
     @staticmethod
-    def _gradient_energy(matrix: List[List[float]]) -> float:
-        rows = len(matrix)
-        if rows == 0:
-            return 0.0
-        cols = len(matrix[0]) if matrix[0] else 0
-        if cols == 0:
-            return 0.0
+    def _frequency_band_mask(
+        shape: Sequence[int], 
+        band: str, 
+        cutoff: float = None
+    ) -> np.ndarray:
+        """
+        Return a boolean mask isolating the requested frequency band.
 
-        energy = 0.0
-        for r in range(rows):
-            for c in range(cols):
-                value = matrix[r][c]
-                if c + 1 < cols:
-                    diff = matrix[r][c + 1] - value
-                    energy += diff * diff
-                if r + 1 < rows:
-                    diff = matrix[r + 1][c] - value
-                    energy += diff * diff
-        return energy
+        By default, the median radial frequency is used as the cutoff to separate
+        high and low frequency bands. This provides a balanced split for typical
+        material textures, but can be overridden by specifying the `cutoff`
+        parameter.
+        """
+
+        grids = np.meshgrid(
+            *[np.fft.fftfreq(n, d=1.0) for n in shape],
+            indexing="ij",
+        )
+        radial_freq = np.sqrt(np.sum(np.square(grids), axis=0))
+        if cutoff is None:
+            cutoff = np.median(radial_freq)
+
+        if band == "high":
+            return radial_freq >= cutoff
+        return radial_freq <= cutoff
+
+    @staticmethod
+    def _calculate_hausdorff_dimension(surface: Sequence[Sequence[float]]) -> float:
+        """Estimate fractal dimension using a simple box-counting approach."""
+
+        data = np.asarray(surface, dtype=float)
+        if data.ndim == 1:
+            # Promote 1D signals to 2D by treating them as a single-row image.
+            data = data[np.newaxis, :]
+        elif data.ndim != 2:
+            raise ValueError("surface must be 1D or 2D array-like")
+
+        data = data - np.min(data)
+        max_val = np.max(data)
+        if not np.isclose(max_val, 0.0):
+            data = data / max_val
+
+        # Binarise around the median to highlight structure while reducing
+        # sensitivity to absolute intensity.
+        threshold = np.median(data)
+        binary = data > threshold
+
+        # Determine box sizes as powers of two that fit the smallest dimension.
+        min_dim = min(binary.shape)
+        max_exponent = int(np.floor(np.log2(min_dim)))
+        if max_exponent <= 1:
+            # If the grid is extremely small the slope degenerates; return a
+            # neutral dimension of 1.0 to keep tests stable.
+            return 1.0
+
+        sizes = 2 ** np.arange(1, max_exponent)
+        counts = []
+
+        for size in sizes:
+            counts.append(MaterialResponseValidator._boxcount(binary, size))
+
+        # Perform linear regression in log-log space.  A tiny epsilon guards
+        # against logarithms of zero when synthetic fixtures have no structure.
+        eps = 1e-9
+        coeffs = np.polyfit(np.log(sizes + eps), np.log(np.asarray(counts) + eps), 1)
+        dimension = -coeffs[0]
+        return float(max(dimension, 0.0))
+
+    @staticmethod
+    def _boxcount(binary: np.ndarray, size: int) -> int:
+        """Count non-empty boxes of the given ``size`` for ``binary`` data."""
+
+        shape = binary.shape
+        new_shape = (shape[0] // size, size, shape[1] // size, size)
+        trimmed = binary[: new_shape[0] * size, : new_shape[2] * size]
+        reshaped = trimmed.reshape(new_shape)
+        # Collapse the size axes and count how many boxes contain at least one
+        # "True" cell.
+        occupied = reshaped.any(axis=(1, 3))
+        return int(np.count_nonzero(occupied))
 
