@@ -331,7 +331,7 @@ class GlobalLuxurySemantics:
             + 0.1 * material.craftsmanship
         )
         focus = _clamp(
-            resonance.focus
+            resonance.            resonance.focus
             + weights.get("focus", 0.0)
             + 0.08 * (1.0 - material.innovation)
         )
