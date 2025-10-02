@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Sequence
+
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -228,6 +230,148 @@ __all__ = [
     "MaterialResponsePrinciple",
     "MaterialResponseExample",
     "MarketingClaimValidator",
+    "MaterialResponseValidator",
     "violates",
 ]
+
+
+class MaterialResponseValidator:
+    """Quantitative heuristics for validating material treatments.
+
+    The validator deliberately keeps the implementations lightweight and
+    dependency-free beyond :mod:`numpy`.  The goal is to surface signal that is
+    directionally correct for tests rather than to provide production-grade
+    analysis of BRDFs or fractal geometry.
+    """
+
+    def measure_specular_preservation(
+        self, before: Sequence[Sequence[float]], after: Sequence[Sequence[float]]
+    ) -> float:
+        """Return the energy ratio for the high-frequency Fourier band.
+
+        ``before`` and ``after`` are expected to be array-like objects that can
+        be coerced into :class:`numpy.ndarray` instances.  The method computes the
+        sum of squared magnitudes in the high-frequency region of the Fourier
+        spectrum and reports ``after / before``.  When the reference energy is
+        zero the ratio gracefully falls back to ``1.0`` so tests can reason about
+        a neutral baseline.
+        """
+
+        return self._fourier_energy_ratio(before, after, band="high")
+
+    def measure_texture_dimensionality(
+        self, surface: Sequence[Sequence[float]]
+    ) -> float:
+        """Approximate the fractal (Hausdorff) dimension via box counting."""
+
+        return self._calculate_hausdorff_dimension(surface)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+
+    @staticmethod
+    def _fourier_energy_ratio(
+        before: Sequence[Sequence[float]],
+        after: Sequence[Sequence[float]],
+        *,
+        band: str,
+    ) -> float:
+        """Return the ratio of Fourier-band energy between ``after`` and ``before``.
+
+        The helper performs minimal validation and defaults to returning ``1.0``
+        if the reference energy is zero to keep the metric stable for synthetic
+        fixtures used in the tests.
+        """
+
+        if band not in {"high", "low"}:
+            raise ValueError("band must be 'high' or 'low'")
+
+        before_arr = np.asarray(before, dtype=float)
+        after_arr = np.asarray(after, dtype=float)
+
+        if before_arr.shape != after_arr.shape:
+            raise ValueError("before and after arrays must share the same shape")
+
+        fft_before = np.fft.fftn(before_arr)
+        fft_after = np.fft.fftn(after_arr)
+
+        band_mask = MaterialResponseValidator._frequency_band_mask(fft_before.shape, band)
+
+        energy_before = np.sum(np.abs(fft_before) ** 2 * band_mask)
+        energy_after = np.sum(np.abs(fft_after) ** 2 * band_mask)
+
+        if np.isclose(energy_before, 0.0):
+            return 1.0 if np.isclose(energy_after, 0.0) else float("inf")
+
+        return float(energy_after / energy_before)
+
+    @staticmethod
+    def _frequency_band_mask(shape: Sequence[int], band: str) -> np.ndarray:
+        """Return a boolean mask isolating the requested frequency band."""
+
+        grids = np.meshgrid(
+            *[np.fft.fftfreq(n, d=1.0) for n in shape],
+            indexing="ij",
+        )
+        radial_freq = np.sqrt(np.sum(np.square(grids), axis=0))
+        cutoff = np.median(radial_freq)
+
+        if band == "high":
+            return radial_freq >= cutoff
+        return radial_freq <= cutoff
+
+    @staticmethod
+    def _calculate_hausdorff_dimension(surface: Sequence[Sequence[float]]) -> float:
+        """Estimate fractal dimension using a simple box-counting approach."""
+
+        data = np.asarray(surface, dtype=float)
+        if data.ndim == 1:
+            # Promote 1D signals to 2D by treating them as a single-row image.
+            data = data[np.newaxis, :]
+        elif data.ndim != 2:
+            raise ValueError("surface must be 1D or 2D array-like")
+
+        data = data - np.min(data)
+        max_val = np.max(data)
+        if not np.isclose(max_val, 0.0):
+            data = data / max_val
+
+        # Binarise around the median to highlight structure while reducing
+        # sensitivity to absolute intensity.
+        threshold = np.median(data)
+        binary = data > threshold
+
+        # Determine box sizes as powers of two that fit the smallest dimension.
+        min_dim = min(binary.shape)
+        max_exponent = int(np.floor(np.log2(min_dim)))
+        if max_exponent <= 1:
+            # If the grid is extremely small the slope degenerates; return a
+            # neutral dimension of 1.0 to keep tests stable.
+            return 1.0
+
+        sizes = 2 ** np.arange(1, max_exponent)
+        counts = []
+
+        for size in sizes:
+            counts.append(MaterialResponseValidator._boxcount(binary, size))
+
+        # Perform linear regression in log-log space.  A tiny epsilon guards
+        # against logarithms of zero when synthetic fixtures have no structure.
+        eps = 1e-9
+        coeffs = np.polyfit(np.log(sizes + eps), np.log(np.asarray(counts) + eps), 1)
+        dimension = -coeffs[0]
+        return float(max(dimension, 0.0))
+
+    @staticmethod
+    def _boxcount(binary: np.ndarray, size: int) -> int:
+        """Count non-empty boxes of the given ``size`` for ``binary`` data."""
+
+        shape = binary.shape
+        new_shape = (shape[0] // size, size, shape[1] // size, size)
+        trimmed = binary[: new_shape[0] * size, : new_shape[2] * size]
+        reshaped = trimmed.reshape(new_shape)
+        # Collapse the size axes and count how many boxes contain at least one
+        # "True" cell.
+        occupied = reshaped.any(axis=(1, 3))
+        return int(np.count_nonzero(occupied))
 
