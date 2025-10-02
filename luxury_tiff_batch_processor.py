@@ -26,6 +26,41 @@ except Exception:  # pragma: no cover - optional dependency
     tifffile = None
 
 
+class LuxuryGradeException(RuntimeError):
+    """Raised when the processing environment cannot meet luxury standards."""
+
+
+class ProcessingCapabilities:
+    def __init__(self) -> None:
+        self.bit_depth = 16 if tifffile else 8
+        self.hdr_capable = self._detect_hdr_support()
+
+    def _detect_hdr_support(self) -> bool:
+        """Best-effort check for HDR support given optional dependencies."""
+
+        if not tifffile:
+            return False
+        return True
+
+    def assert_luxury_grade(self) -> None:
+        """
+        Validates that the processing environment meets luxury-grade requirements:
+        - 16-bit precision
+        - HDR capability
+        Raises LuxuryGradeException if requirements are not met.
+        """
+        if self.bit_depth < 16:
+            raise LuxuryGradeException(
+                "Material Response requires 16-bit precision. "
+                "Install tifffile to unlock quantum color depth."
+            )
+        if not self.hdr_capable:
+            raise LuxuryGradeException(
+                "Luxury-grade processing requires HDR capability. "
+                "Install tifffile or ensure your environment supports HDR."
+            )
+
+
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
 RESAMPLING_LANCZOS = getattr(Image, "Resampling", Image).LANCZOS
