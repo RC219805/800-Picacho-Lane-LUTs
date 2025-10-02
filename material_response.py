@@ -225,7 +225,6 @@ class EmotionalResonance:
             "awe": self.awe,
             "comfort": self.comfort,
             "focus": self.focus,
-            "cultural_background": self.cultural_background,
         }
 
 
