@@ -219,7 +219,7 @@ class EmotionalResonance:
             raise ValueError("cultural_background must be a non-empty string")
 
     def as_dict(self) -> Dict[str, float]:
-        """Return the resonance as a serialisable mapping."""
+        """Return the resonance as a serializable mapping."""
 
         return {
             "awe": self.awe,
