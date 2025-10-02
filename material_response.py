@@ -341,7 +341,14 @@ class GlobalLuxurySemantics:
             f"balancing awe ({awe:.2f}), comfort ({comfort:.2f}) and focus ({focus:.2f})."
         )
 
-        return ContextualResonance(scores={"awe": awe, "comfort": comfort, "focus": focus}, narrative=narrative)
+        return ContextualResonance(
+            scores={
+                "awe": awe,
+                "comfort": comfort,
+                "focus": focus,
+            },
+            narrative=narrative,
+        )
 
 
 class FutureStatePredictor:
