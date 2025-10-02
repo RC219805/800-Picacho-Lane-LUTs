@@ -392,6 +392,28 @@ def test_summarize_probe_ignores_non_descriptive_color_tags():
     assert "trc=" not in summary
 
 
+@documents("Metadata summaries gracefully skip unusable duration fields")
+def test_summarize_probe_skips_non_numeric_duration():
+    probe = {
+        "format": {"duration": "N/A"},
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "30000/1001",
+                "r_frame_rate": "30000/1001",
+            }
+        ],
+    }
+
+    summary = summarize_probe(probe)
+
+    assert "duration" not in summary
+    assert "video h264 1920x1080" in summary
+
+
 @documents("CLI enforces required IO to prevent silent misfires")
 def test_parse_arguments_requires_input_and_output(capsys):
     with pytest.raises(SystemExit) as exc:
