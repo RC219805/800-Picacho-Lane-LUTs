@@ -62,7 +62,7 @@ class ProcessingCapabilities:
         try:
             return bool(supports_hdr)
         except Exception:  # pragma: no cover - defensive fallback
-            return True
+            return False
 
     def assert_luxury_grade(self) -> None:
         """
