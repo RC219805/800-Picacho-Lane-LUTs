@@ -47,7 +47,7 @@ class FilterNode:
     """Represent a single FFmpeg filter node with validated syntax."""
 
     operation: str
-    parameters: Dict[str, str]
+    parameters: Dict[str, str]  # Sanitized; constructor accepts Mapping[str, Any]
 
     def __init__(self, operation: str, parameters: Mapping[str, Any] | None = None):
         if not isinstance(operation, str) or not operation:
