@@ -15,7 +15,12 @@ import dataclasses
 import logging
 import math
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any as _Any
+from typing import Dict as _Dict
+from typing import Iterable, Iterator, List, Optional, Tuple
+
+Any = _Any
+Dict = _Dict
 
 import numpy as np
 from PIL import Image, TiffImagePlugin
