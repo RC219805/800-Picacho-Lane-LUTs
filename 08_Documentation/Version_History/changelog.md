@@ -1,7 +1,9 @@
 # Changelog
 
 ## 2025-07-02
+
 - Added integrated comprehensive dataset for Picacho Lane project under Client Deliverables.
 
 ## 2025-07-03
+
 - Standardized README section headings and fixed table of contents navigation links.
