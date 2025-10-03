@@ -258,7 +258,7 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
 def default_output_folder(input_folder: Path) -> Path:
     """Return the default output folder for a given input directory."""
 
-    input_folder = Path(input_folder)
+    # input_folder is already a Path object
     if input_folder.name:
         return input_folder.parent / f"{input_folder.name}_lux"
     return input_folder / "luxury_output"
