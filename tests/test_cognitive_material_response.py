@@ -49,6 +49,28 @@ def test_global_luxury_semantics_reacts_to_culture() -> None:
     assert "scandinavian" in contextualized.narrative
 
 
+def test_global_luxury_semantics_alias_normalization() -> None:
+    material = MaterialAestheticProfile(
+        name="Lacquered Shoji",
+        texture="lacquer and rice paper",
+        rarity=0.65,
+        craftsmanship=0.85,
+        innovation=0.42,
+    )
+    resonance = EmotionalResonance(
+        awe=0.62,
+        comfort=0.51,
+        focus=0.58,
+        cultural_background="Nordic",
+    )
+
+    semantics = GlobalLuxurySemantics()
+    contextualized = semantics.recontextualize(material, resonance)
+
+    assert "scandinavian" in contextualized.narrative
+    assert contextualized.scores["focus"] >= contextualized.scores["comfort"]
+
+
 def test_cognitive_material_response_pipeline() -> None:
     material = MaterialAestheticProfile(
         name="Midnight Velvet Chaise",
