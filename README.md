@@ -52,6 +52,19 @@ The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch w
 > main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper
 > that resolves the NumPy dtype handling.
 
+### Staying Synchronized With `main`
+To keep feature branches review-ready, regularly reconcile them with the newest
+`main` history:
+
+1. `git fetch origin`
+2. `git checkout main`
+3. `git pull`
+4. `git checkout <your-branch>`
+5. `git merge origin/main` *(or `git rebase origin/main` if you prefer a linear history)*
+
+Resolve any conflicts, rerun your tests, then push the refreshed branch. GitHub
+will report `behind 0` once these steps are complete.
+
 ### TIFF Batch Processor Example
 ```bash
 python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
