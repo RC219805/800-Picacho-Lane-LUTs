@@ -22,7 +22,6 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
     - [HDR Production Pipeline Requirements](#hdr-production-pipeline-requirements)
     - [HDR Production Pipeline Example](#hdr-production-pipeline-example)
 - [Decision Decay Dashboard](#decision-decay-dashboard)
-    - [Running the dashboard](#running-the-dashboard)
 - [License](#license)
 
 ## Collection Contents
