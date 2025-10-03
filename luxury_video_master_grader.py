@@ -221,6 +221,20 @@ def probe_source(path: Path) -> Dict[str, object]:
         raise RuntimeError("Unable to parse ffprobe output") from exc
 
 
+def _parse_probe_duration(raw: object) -> Optional[float]:
+    """Return a finite float duration from ffprobe metadata when possible."""
+
+    if raw in (None, ""):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
 def summarize_probe(data: Dict[str, object]) -> str:
     fmt = data.get("format", {})
     duration = fmt.get("duration")
@@ -228,8 +242,9 @@ def summarize_probe(data: Dict[str, object]) -> str:
     video = next((s for s in streams if s.get("codec_type") == "video"), {})
     audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
     pieces = []
-    if duration:
-        pieces.append(f"duration {float(duration):.2f}s")
+    numeric_duration = _parse_probe_duration(duration)
+    if numeric_duration is not None:
+        pieces.append(f"duration {numeric_duration:.2f}s")
     if video:
         w = video.get("width")
         h = video.get("height")
