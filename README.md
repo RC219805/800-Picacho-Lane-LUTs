@@ -9,12 +9,15 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 - [Innovation](#innovation)
 - [Usage](#usage)
 - [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
+    - [TIFF Batch Processor Key Features](#tiff-batch-processor-key-features)
     - [TIFF Batch Processor Requirements](#tiff-batch-processor-requirements)
     - [TIFF Batch Processor Example](#tiff-batch-processor-example)
 - [Luxury Video Master Grader](#luxury-video-master-grader)
+    - [Luxury Video Master Grader Key Features](#luxury-video-master-grader-key-features)
     - [Luxury Video Master Grader Requirements](#luxury-video-master-grader-requirements)
     - [Luxury Video Master Grader Examples](#luxury-video-master-grader-examples)
 - [HDR Production Pipeline](#hdr-production-pipeline)
+    - [HDR Production Pipeline Key Features](#hdr-production-pipeline-key-features)
     - [HDR Production Pipeline Highlights](#hdr-production-pipeline-highlights)
     - [HDR Production Pipeline Requirements](#hdr-production-pipeline-requirements)
     - [HDR Production Pipeline Example](#hdr-production-pipeline-example)
@@ -37,7 +40,7 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow for polishing large-format TIFF photography prior to digital launch. The script preserves metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/) is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for ultra-luxury real-estate storytelling.
 
-### Key Features
+### TIFF Batch Processor Key Features
 - Automatically reads and writes IPTC/XMP metadata so campaign details remain intact across exports.
 - Maintains 16-bit precision whenever the optional `tifffile` dependency is installed and falls back to Pillow for 8-bit output.
 - Offers presets that mirror the LUT families (Signature, Golden Hour, Heritage, etc.) for rapid client alignment.
@@ -79,7 +82,7 @@ plan without writing files, and `--recursive` to mirror nested shoot-day folders
 
 `luxury_video_master_grader.py` brings the same curated aesthetic to short-form motion content. It wraps FFmpeg with preset-driven LUT application, tasteful denoising, clarity and film-grain treatments, then exports a mezzanine-ready Apple ProRes master by default. The pipeline now auto-detects HDR transfers and tone maps them into a refined BT.709 space, optionally adds ultra-fine debanding and cinematic halation bloom, and keeps gradient-rich interiors spotless with updated presets.
 
-### Key Features
+### Luxury Video Master Grader Key Features
 - Intelligent source analysis that detects resolution, frame rate, HDR transfer characteristics, and audio layout before rendering.
 - Preset-driven workflows that blend LUT application with spatial/temporal filtering tailored to luxury real-estate cinematography.
 - Advanced finishing controls for debanding, halation, clarity, grain, and tone mapping to deliver cinematic masters out of the box.
@@ -117,7 +120,7 @@ Use `--custom-lut` to feed bespoke `.cube` files, tweak parameters such as `--co
 
 `hdr_production_pipeline.sh` orchestrates a full HDR finishing pass, combining ACES tone mapping, adaptive debanding, and filmic halation for gallery-ready masters. The workflow harmonizes the bespoke Codex automation steps with the broader pipeline overview introduced on main so teams can reference a single, unified set of HDR finishing instructions.
 
-### Key Features
+### HDR Production Pipeline Key Features
 - ACES Output Device Transform (ODT) selection, Dolby Vision metadata pass-through, and HDR10 mastering options for broadcast compliance.
 - Adaptive debanding tuned to Codex reference recipes to protect smooth gradients in modern architectural interiors.
 - Filmic halation and bloom controls that layer naturally over the LUT aesthetic without introducing color drift.
