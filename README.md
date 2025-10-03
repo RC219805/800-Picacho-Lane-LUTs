@@ -76,8 +76,9 @@ python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
 
 For coastal twilight exteriors that need richer terracotta, nuanced lawn depth, and
 Pacific color separation, start from the new **Golden Hour Courtyard** preset and layer in
-the creative overrides recommended by the Material Response team:
+the creative overrides recommended by the Material Response team.
 
+> **Note:** Although the preset is named "Golden Hour Courtyard," it has been optimized to work well for coastal twilight exteriors when combined with the recommended creative overrides below. This approach leverages the preset's material response characteristics to achieve the desired look in twilight conditions.
 ```bash
 python luxury_tiff_batch_processor.py input_folder output_folder \
   --preset golden_hour_courtyard \
