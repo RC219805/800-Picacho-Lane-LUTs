@@ -9,6 +9,50 @@ This repository contains a professional LUT (Look-Up Table) collection and video
 - **Shell Scripts**: HDR production pipeline for broadcast-ready masters
 - **Machine Learning Pipeline**: AI-powered render refinement using Stable Diffusion and ControlNet
 
+## Repository Structure
+
+```
+.
+├── 01_Film_Emulation/          # Kodak and FilmConvert LUT emulations
+├── 02_Location_Aesthetic/      # Location-specific color profiles
+├── 03_Material_Response/       # Physics-based surface enhancement LUTs
+├── 08_Documentation/           # Version history and technical guides
+├── 09_Client_Deliverables/     # Brand assets and production deliverables
+├── tests/                      # pytest test suite (70+ tests)
+├── luxury_tiff_batch_processor.py    # TIFF batch processing CLI
+├── luxury_video_master_grader.py     # Video grading with FFmpeg
+├── lux_render_pipeline.py            # AI-powered render refinement
+├── hdr_production_pipeline.sh        # HDR finishing workflow
+├── codebase_philosophy_auditor.py    # Code quality auditing tool
+└── decision_decay_dashboard.py       # Temporal contract monitoring
+```
+
+## Getting Started
+
+### Prerequisites
+- Python 3.11+ (CI tests on 3.10)
+- FFmpeg 6+ (for video processing)
+- Git
+
+### Setup
+```bash
+# Clone and navigate to repository
+git clone https://github.com/RC219805/800-Picacho-Lane-LUTs.git
+cd 800-Picacho-Lane-LUTs
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Install development dependencies
+pip install pytest flake8
+
+# Run tests to verify setup
+pytest
+
+# Run linting
+flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+```
+
 ## Tech Stack
 
 - **Languages**: Python 3.11+, Shell (Bash)
@@ -133,3 +177,80 @@ This repository contains a professional LUT (Look-Up Table) collection and video
 4. **Consider backward compatibility**: Existing scripts may be in production use
 5. **Update documentation**: Keep README and examples current
 6. **Preserve metadata**: IPTC, XMP, and GPS data should survive processing
+
+## Troubleshooting
+
+### Common Issues
+
+**Import Errors**
+- Ensure all dependencies are installed: `pip install -r requirements.txt`
+- For ML pipeline: `pip install torch diffusers transformers`
+- For 16-bit TIFF: `pip install tifffile`
+
+**Test Failures**
+- Run individual test files to isolate issues: `pytest tests/test_<module>.py -v`
+- Check that FFmpeg is available: `ffmpeg -version`
+- Verify Python version: `python --version` (requires 3.10+)
+
+**Linting Errors**
+- Fix automatically when possible: `autopep8 --in-place --max-line-length=127 <file.py>`
+- Check line length: Maximum 127 characters (CI enforced)
+- Verify imports are used: flake8 will flag unused imports
+
+**FFmpeg Processing Issues**
+- Use `--dry-run` to inspect commands before execution
+- Check source file compatibility: `ffprobe <input_file>`
+- Verify LUT file paths are correct and `.cube` files exist
+- For HDR issues, ensure zimg support: `ffmpeg -filters | grep zscale`
+
+## Additional Resources
+
+- **LUT Documentation**: See `03_Material_Response/_Material_Response_Technical_Guide.md`
+- **Version History**: Track changes in `08_Documentation/Version_History/changelog.md`
+- **Test Status**: Current test coverage in `tests/TEST_STATUS.md`
+- **Brand Assets**: Logo and color tokens in `09_Client_Deliverables/Lantern_Logo_Implementation_Kit/`
+
+## Code Examples
+
+### Adding a New LUT Preset
+```python
+# In luxury_video_master_grader.py or luxury_tiff_batch_processor.py
+PRESETS = {
+    "my_new_preset": PresetConfig(
+        name="My New Preset",
+        lut="01_Film_Emulation/Kodak_2393.cube",
+        notes="Custom look for specific project",
+        # Adjustments
+        exposure=0.0,
+        contrast=1.08,
+        saturation=1.05,
+        # Optional enhancements
+        clarity=0.15,
+        grain=0.012,
+    ),
+}
+```
+
+### Running Tests for Specific Module
+```bash
+# Test a single module
+pytest tests/test_luxury_video_master_grader.py -v
+
+# Test with coverage
+pytest --cov=luxury_video_master_grader tests/test_luxury_video_master_grader.py
+
+# Run specific test
+pytest tests/test_luxury_video_master_grader.py::test_assess_frame_rate_detects_vfr -v
+```
+
+### Using Decision Annotations
+```python
+# Document intentional deviations from coding standards
+# Decision: allow_wildcard_import - tight integration with plugin API
+from plugin_api import *  # noqa: F403
+
+# Decision: undocumented_public_api - docstring inherited from base class
+class CustomProcessor:
+    def process(self):
+        pass
+```
