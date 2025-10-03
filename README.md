@@ -74,6 +74,15 @@ python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
 ```
 
+When an explicit output folder is not provided the processor now creates a sibling
+directory named after the input with a `_lux` suffix. For example, running:
+
+```bash
+python luxury_tiff_batch_processor.py /Users/rc/Downloads/Montecito-Shores-2/SV-Stills
+```
+
+will mirror the processed files in `/Users/rc/Downloads/Montecito-Shores-2/SV-Stills_lux`.
+
 Override any preset control (exposure, midtone contrast, vibrance, clarity, glow, etc.)
 by providing the corresponding command-line flag. Use `--dry-run` to audit the processing
 plan without writing files, and `--recursive` to mirror nested shoot-day folders.
