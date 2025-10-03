@@ -74,6 +74,18 @@ python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
 ```
 
+For coastal twilight exteriors that need richer terracotta, nuanced lawn depth, and
+Pacific color separation, start from the new **Golden Hour Courtyard** preset and layer in
+the creative overrides recommended by the Material Response team:
+
+```bash
+python luxury_tiff_batch_processor.py input_folder output_folder \
+  --preset golden_hour_courtyard \
+  --exposure 0.08 --shadow-lift 0.24 --highlight-recovery 0.18 \
+  --vibrance 0.28 --clarity 0.20 --luxury-glow 0.12 --white-balance-temp 5600 \
+  --midtone-contrast 0.10
+```
+
 When an explicit output folder is not provided the processor now creates a sibling
 directory named after the input with a `_lux` suffix. For example, running:
 
