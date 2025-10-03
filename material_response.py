@@ -462,13 +462,24 @@ class GlobalLuxurySemantics:
         "middle eastern": {"awe": 0.08, "comfort": 0.04},
         "american": {"focus": 0.03, "comfort": 0.02},
     }
+    _CULTURAL_ALIAS_MAP: Mapping[str, str] = {
+        "med": "mediterranean",
+        "mediterranean coast": "mediterranean",
+        "scandi": "scandinavian",
+        "nordic": "scandinavian",
+        "jp": "japanese",
+        "levantine": "middle eastern",
+        "us": "american",
+        "usa": "american",
+    }
 
     def recontextualize(
         self, material: MaterialAestheticProfile, resonance: EmotionalResonance
     ) -> ContextualResonance:
         """Return resonance tuned to cultural and material narratives."""
 
-        background = resonance.cultural_background.lower()
+        background_key = resonance.cultural_background.strip().lower()
+        background = self._CULTURAL_ALIAS_MAP.get(background_key, background_key)
         weights = self._CULTURAL_WEIGHTS.get(background, {})
 
         awe = _clamp(resonance.awe + weights.get("awe", 0.0) + 0.12 * material.rarity)
