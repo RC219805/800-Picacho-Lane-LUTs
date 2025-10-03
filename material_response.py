@@ -13,7 +13,7 @@ from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
 import re
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
 
 def _is_sequence(value: object) -> bool:
