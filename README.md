@@ -145,4 +145,5 @@ metadata where available, while the deband and halation stages default to the Co
 recipes highlighted in the documentation examples.
 
 ## License
+
 Professional use permitted with attribution.
