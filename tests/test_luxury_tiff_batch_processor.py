@@ -200,6 +200,20 @@ def test_build_adjustments_applies_overrides(tmp_path):
     assert adjustments.shadow_lift == ltiff.LUXURY_PRESETS["signature"].shadow_lift
 
 
+@documents("Golden Hour Courtyard preset translates coastal warm scene guidance into defaults")
+def test_golden_hour_courtyard_preset_matches_material_response_brief():
+    preset = ltiff.LUXURY_PRESETS["golden_hour_courtyard"]
+
+    assert preset.exposure == pytest.approx(0.08)
+    assert preset.white_balance_temp == pytest.approx(5600)
+    assert preset.shadow_lift == pytest.approx(0.24)
+    assert preset.highlight_recovery == pytest.approx(0.18)
+    assert preset.midtone_contrast == pytest.approx(0.10)
+    assert preset.vibrance == pytest.approx(0.28)
+    assert preset.clarity == pytest.approx(0.20)
+    assert preset.glow == pytest.approx(0.12)
+
+
 @documents("Platform intelligence supersedes forced uniformity")
 def test_image_roundtrip_uint16_with_alpha():
     data = np.array(
