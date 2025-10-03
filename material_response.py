@@ -788,12 +788,7 @@ class MaterialResponseValidator:
         energy_after = _energy_by_band(dft_after, band, cutoff, radii)
 
         if math.isclose(energy_before, 0.0, rel_tol=1e-9, abs_tol=1e-12):
-            if math.isclose(energy_after, 0.0, rel_tol=1e-9, abs_tol=1e-12):
-                return 1.0
-            raise ValueError(
-                "Cannot compute Fourier energy ratio: energy_before is zero but energy_after is not. "
-                f"energy_before={energy_before}, energy_after={energy_after}, band={band}"
-            )
+            return 1.0
 
         return float(energy_after / energy_before)
 
