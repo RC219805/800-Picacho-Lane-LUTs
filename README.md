@@ -76,8 +76,9 @@ python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
 
 For coastal twilight exteriors that need richer terracotta, nuanced lawn depth, and
 Pacific color separation, start from the new **Golden Hour Courtyard** preset and layer in
-the creative overrides recommended by the Material Response team:
+the creative overrides recommended by the Material Response team.
 
+> **Note:** Although the preset is named "Golden Hour Courtyard," it has been optimized to work well for coastal twilight exteriors when combined with the recommended creative overrides below. This approach leverages the preset's material response characteristics to achieve the desired look in twilight conditions.
 ```bash
 python luxury_tiff_batch_processor.py input_folder output_folder \
   --preset golden_hour_courtyard \
@@ -85,18 +86,6 @@ python luxury_tiff_batch_processor.py input_folder output_folder \
   --vibrance 0.28 --clarity 0.20 --luxury-glow 0.12 --white-balance-temp 5600 \
   --midtone-contrast 0.10
 ```
-
-Automation stacks that prefer Python can call the same recipe directly via
-``golden_hour_courtyard_workflow.process_courtyard_scene``:
-
-```python
-from golden_hour_courtyard_workflow import process_courtyard_scene
-
-process_courtyard_scene("input_folder", "output_folder", overwrite=True)
-```
-
-Use the ``overrides`` mapping to adjust individual controls while preserving
-the rest of the Golden Hour defaults.
 
 When an explicit output folder is not provided the processor now creates a sibling
 directory named after the input with a `_lux` suffix. For example, running:
