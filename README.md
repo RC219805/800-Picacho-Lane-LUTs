@@ -11,7 +11,6 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 - [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
     - [TIFF Batch Processor Key Features](#tiff-batch-processor-key-features)
     - [TIFF Batch Processor Requirements](#tiff-batch-processor-requirements)
-    - [Staying Synchronized With `main`](#staying-synchronized-with-main)
     - [TIFF Batch Processor Example](#tiff-batch-processor-example)
 - [Luxury Video Master Grader](#luxury-video-master-grader)
     - [Luxury Video Master Grader Key Features](#luxury-video-master-grader-key-features)
