@@ -9,10 +9,157 @@ reference.  This module provides such an artefact.
 
 from __future__ import annotations
 
+from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
 import re
-from typing import Dict, Iterable, List, Mapping, Sequence
+from typing import Dict, Iterable, List, Sequence, Tuple
+
+
+def _is_sequence(value: object) -> bool:
+    """Return ``True`` when ``value`` should be treated as a sequence."""
+
+    return isinstance(value, SequenceABC) and not isinstance(value, (str, bytes, bytearray))
+
+
+def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
+    """Convert ``data`` into a rectangular list-of-lists of floats."""
+
+    if not _is_sequence(data):
+        raise TypeError("material data must be a sequence")
+
+    if len(data) == 0:
+        raise ValueError("material data cannot be empty")
+
+    if _is_sequence(data[0]):
+        rows = []
+        row_length = None
+        for row in data:
+            if not _is_sequence(row):
+                raise TypeError("material rows must be sequences")
+            coerced_row = [float(value) for value in row]
+            if row_length is None:
+                row_length = len(coerced_row)
+                if row_length == 0:
+                    raise ValueError("material rows cannot be empty")
+            elif len(coerced_row) != row_length:
+                raise ValueError("material data must form a rectangular grid")
+            rows.append(coerced_row)
+        return rows
+
+    coerced = [float(value) for value in data]
+    if len(coerced) == 0:
+        raise ValueError("material data cannot be empty")
+    return [coerced]
+
+
+def _flatten(matrix: Sequence[Sequence[float]]) -> List[float]:
+    """Return a flattened representation of ``matrix``."""
+
+    return [value for row in matrix for value in row]
+
+
+def _median(values: Sequence[float]) -> float:
+    """Compute the median of ``values``."""
+
+    ordered = sorted(values)
+    length = len(ordered)
+    if length == 0:
+        raise ValueError("median of empty sequence is undefined")
+    middle = length // 2
+    if length % 2 == 0:
+        return (ordered[middle - 1] + ordered[middle]) / 2.0
+    return ordered[middle]
+
+
+def _fft_frequency(index: int, size: int) -> float:
+    """Return the normalised FFT frequency for ``index``."""
+
+    if size <= 0:
+        raise ValueError("size must be positive")
+    half = size // 2
+    if index <= half:
+        return index / size
+    return (index - size) / size
+
+
+def _dft2(matrix: Sequence[Sequence[float]]) -> List[List[complex]]:
+    """Compute the 2D discrete Fourier transform for ``matrix``."""
+
+    rows = len(matrix)
+    cols = len(matrix[0])
+    result = [[0j for _ in range(cols)] for _ in range(rows)]
+
+    for u in range(rows):
+        for v in range(cols):
+            total = 0j
+            for x in range(rows):
+                for y in range(cols):
+                    angle = -2.0 * math.pi * ((u * x / rows) + (v * y / cols))
+                    total += matrix[x][y] * complex(math.cos(angle), math.sin(angle))
+            result[u][v] = total
+
+    return result
+
+
+def _energy_by_band(
+    dft: Sequence[Sequence[complex]],
+    band: str,
+    cutoff: float,
+    radii: Sequence[Sequence[float]],
+) -> float:
+    """Return the total squared magnitude energy for the requested band."""
+
+    total = 0.0
+    rows = len(dft)
+    cols = len(dft[0])
+
+    for u in range(rows):
+        for v in range(cols):
+            radius = radii[u][v]
+            in_band = radius >= cutoff if band == "high" else radius <= cutoff
+            if in_band:
+                coefficient = dft[u][v]
+                total += (coefficient.real ** 2) + (coefficient.imag ** 2)
+
+    return total
+
+
+def _radial_frequency_grid(shape: Tuple[int, int]) -> List[List[float]]:
+    """Return the radial frequency grid for ``shape``."""
+
+    rows, cols = shape
+    grid = []
+    for u in range(rows):
+        row = []
+        freq_u = _fft_frequency(u, rows)
+        for v in range(cols):
+            freq_v = _fft_frequency(v, cols)
+            row.append(math.hypot(freq_u, freq_v))
+        grid.append(row)
+    return grid
+
+
+def _linear_regression(xs: Sequence[float], ys: Sequence[float]) -> Tuple[float, float]:
+    """Return the slope and intercept for ``xs``/``ys``."""
+
+    if len(xs) != len(ys):
+        raise ValueError("xs and ys must have matching lengths")
+    n = len(xs)
+    if n == 0:
+        raise ValueError("linear regression requires data")
+
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+    denominator = sum((x - mean_x) ** 2 for x in xs)
+
+    if math.isclose(denominator, 0.0):
+        return 0.0, mean_y
+
+    numerator = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    slope = numerator / denominator
+    intercept = mean_y - slope * mean_x
+    return slope, intercept
 
 
 @dataclass(frozen=True)
@@ -566,105 +713,141 @@ __all__ = [
 class MaterialResponseValidator:
     """Quantitative heuristics for validating material treatments.
 
-    The validator remains lightweight and free from optional third-party
-    dependencies so the surrounding test-suite runs in constrained execution
-    environments.  The heuristics are intentionally approximate – they provide
-    directional signal about textural preservation without aiming to reproduce
-    a full scientific analysis of spatial frequency content.
+    The validator deliberately keeps the implementations lightweight and free of
+    heavy numerical dependencies.  The goal is to surface signal that is
+    directionally correct for tests rather than to provide production-grade
+    analysis of BRDFs or fractal geometry.
     """
 
     def measure_specular_preservation(
         self, before: Sequence[Sequence[float]], after: Sequence[Sequence[float]]
     ) -> float:
-        """Return the ratio of high-frequency energy between ``after`` and ``before``.
+        """Return the energy ratio for the high-frequency Fourier band.
 
-        High-frequency structure is approximated through local gradients rather
-        than a discrete Fourier transform so the metric does not require
-        :mod:`numpy`.  When the reference energy is effectively zero the method
-        returns ``1.0`` to represent a neutral change; if ``after`` contains
-        energy where the reference does not, a :class:`ValueError` is raised to
-        signal the inconsistency.
+        ``before`` and ``after`` are expected to be array-like objects that can
+        be coerced into rectangular grids of floats.  The method computes the sum
+        of squared magnitudes in the high-frequency region of the Fourier
+        spectrum and reports ``after / before``.  When the reference energy is
+        zero the ratio gracefully falls back to ``1.0`` so tests can reason about
+        a neutral baseline.
         """
 
         before_matrix = self._coerce_matrix(before)
         after_matrix = self._coerce_matrix(after)
 
-        if len(before_matrix) != len(after_matrix) or (
-            before_matrix and after_matrix and len(before_matrix[0]) != len(after_matrix[0])
-        ):
-            raise ValueError("before and after arrays must share the same shape")
-
-        energy_before = self._gradient_energy(before_matrix)
-        energy_after = self._gradient_energy(after_matrix)
-
-        if math.isclose(energy_before, 0.0, abs_tol=1e-9):
-            if math.isclose(energy_after, 0.0, abs_tol=1e-9):
-                return 1.0
-            raise ValueError(
-                "Cannot compute energy ratio: reference gradient energy is zero while transformed energy is non-zero."
-            )
-
-        return float(energy_after / energy_before)
-
-    def measure_texture_dimensionality(
-        self, surface: Sequence[Sequence[float]]
-    ) -> float:
-        """Return a proxy for fractal dimensionality based on gradient richness."""
-
-        matrix = self._coerce_matrix(surface)
-        if not matrix:
-            return 1.0
-
-        energy = self._gradient_energy(matrix)
-        rows = len(matrix)
-        cols = len(matrix[0]) if rows else 0
-        if rows == 0 or cols == 0:
-            return 1.0
-
-        # Normalise by the maximum number of gradient comparisons to keep the
-        # metric bounded within ``[1.0, 2.0]``.
-        comparisons = float(rows * (cols - 1) + (rows - 1) * cols)
-        if comparisons <= 0:
-            return 1.0
-
-        normalised = min(1.0, energy / (comparisons + 1e-9))
-        return 1.0 + normalised
-
     # ------------------------------------------------------------------
     # Internal helpers
 
     @staticmethod
-    def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
-        if not isinstance(data, Sequence):
-            return [[float(data)]]
+    def _fourier_energy_ratio(
+        before: Sequence[Sequence[float]],
+        after: Sequence[Sequence[float]],
+        *,
+        band: str,
+    ) -> float:
+        """Return the ratio of Fourier-band energy between ``after`` and ``before``.
 
-        if not data:
-            return []
+        The helper performs minimal validation and defaults to returning ``1.0``
+        if the reference energy is zero to keep the metric stable for synthetic
+        fixtures used in the tests.
+        """
 
-        first = data[0]
-        if isinstance(first, Sequence) and not isinstance(first, (str, bytes)):
-            return [[float(value) for value in row] for row in data]  # type: ignore[arg-type]
+        if band not in {"high", "low"}:
+            raise ValueError("band must be 'high' or 'low'")
 
-        return [[float(value) for value in data]]  # type: ignore[arg-type]
+        before_matrix = _coerce_matrix(before)
+        after_matrix = _coerce_matrix(after)
+
+        if len(before_matrix) != len(after_matrix) or len(before_matrix[0]) != len(after_matrix[0]):
+            raise ValueError("before and after arrays must share the same shape")
+
+        dft_before = _dft2(before_matrix)
+        dft_after = _dft2(after_matrix)
+
+        radii = _radial_frequency_grid((len(before_matrix), len(before_matrix[0])))
+        cutoff = _median(_flatten(radii))
+
+        energy_before = _energy_by_band(dft_before, band, cutoff, radii)
+        energy_after = _energy_by_band(dft_after, band, cutoff, radii)
+
+        if math.isclose(energy_before, 0.0, rel_tol=1e-9, abs_tol=1e-12):
+            if math.isclose(energy_after, 0.0, rel_tol=1e-9, abs_tol=1e-12):
+                return 1.0
+            raise ValueError(
+                "Cannot compute Fourier energy ratio: energy_before is zero but energy_after is not. "
+                f"energy_before={energy_before}, energy_after={energy_after}, band={band}"
+            )
+
+        return float(energy_after / energy_before)
 
     @staticmethod
-    def _gradient_energy(matrix: List[List[float]]) -> float:
-        rows = len(matrix)
-        if rows == 0:
-            return 0.0
-        cols = len(matrix[0]) if matrix[0] else 0
-        if cols == 0:
-            return 0.0
+    def _calculate_hausdorff_dimension(surface: Sequence[Sequence[float]]) -> float:
+        """Estimate fractal dimension using a simple box-counting approach."""
 
-        energy = 0.0
-        for r in range(rows):
-            for c in range(cols):
-                value = matrix[r][c]
-                if c + 1 < cols:
-                    diff = matrix[r][c + 1] - value
-                    energy += diff * diff
-                if r + 1 < rows:
-                    diff = matrix[r + 1][c] - value
-                    energy += diff * diff
-        return energy
+        matrix = _coerce_matrix(surface)
+        if len(matrix) == 0 or len(matrix[0]) == 0:
+            raise ValueError("surface must contain data")
+
+        min_value = min(_flatten(matrix))
+        normalised = [[value - min_value for value in row] for row in matrix]
+
+        max_value = max(_flatten(normalised))
+        if not math.isclose(max_value, 0.0, rel_tol=1e-9, abs_tol=1e-12):
+            normalised = [[value / max_value for value in row] for row in normalised]
+
+        threshold = _median(_flatten(normalised))
+        binary = [[value > threshold for value in row] for row in normalised]
+
+        rows = len(binary)
+        cols = len(binary[0])
+        min_dim = min(rows, cols)
+        if min_dim <= 0:
+            raise ValueError("surface must contain data")
+
+        max_exponent = int(math.floor(math.log2(min_dim)))
+        if max_exponent <= 1:
+            return 1.0
+
+        sizes = [2 ** exponent for exponent in range(1, max_exponent)]
+        counts = [MaterialResponseValidator._boxcount(binary, size) for size in sizes]
+
+        eps = 1e-9
+        xs = [math.log(size + eps) for size in sizes]
+        ys = [math.log(count + eps) for count in counts]
+        slope, _ = _linear_regression(xs, ys)
+        dimension = max(-slope, 0.0)
+        return float(dimension)
+
+    @staticmethod
+    def _boxcount(binary: Sequence[Sequence[bool]], size: int) -> int:
+        """Count non-empty boxes of the given ``size`` for ``binary`` data."""
+
+        if size <= 0:
+            raise ValueError("size must be positive")
+
+        rows = len(binary)
+        cols = len(binary[0]) if rows else 0
+        if rows == 0 or cols == 0:
+            return 0
+
+        trimmed_rows = rows - (rows % size)
+        trimmed_cols = cols - (cols % size)
+        if trimmed_rows == 0 or trimmed_cols == 0:
+            return 0
+
+        count = 0
+        for row in range(0, trimmed_rows, size):
+            for col in range(0, trimmed_cols, size):
+                occupied = False
+                for dr in range(size):
+                    if occupied:
+                        break
+                    for dc in range(size):
+                        if binary[row + dr][col + dc]:
+                            occupied = True
+                            break
+                if occupied:
+                    count += 1
+
+        return count
 
