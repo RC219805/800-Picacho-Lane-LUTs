@@ -122,15 +122,18 @@ overview introduced on main so teams can reference a single, unified set of HDR
 finishing instructions.
 
 ### HDR Production Pipeline Highlights
+
 - ACES output transform selection with Dolby Vision and HDR10 metadata preservation
 - Adaptive debanding tuned to Codex reference recipes
 - Filmic halation and finishing touches that complement the luxury master grader
 
 ### HDR Production Pipeline Requirements
+
 - macOS or Linux shell environment
 - FFmpeg with zimg, `ffprobe`, and `python3`
 
 ### HDR Production Pipeline Example
+
 ```bash
 ./hdr_production_pipeline.sh source_hdr.mov out_hdr_master.mov \
   --aces-odt rec2020-pq --deband medium --halation strong --hdr10-metadata auto
