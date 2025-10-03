@@ -287,6 +287,12 @@ def _extract_keywords(text: str) -> List[str]:
 def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     """Return ``value`` limited to the inclusive ``[minimum, maximum]`` range."""
 
+    if minimum > maximum:
+        raise ValueError(
+            "minimum cannot be greater than maximum: "
+            f"minimum={minimum!r}, maximum={maximum!r}"
+        )
+
     return max(minimum, min(maximum, value))
 
 
