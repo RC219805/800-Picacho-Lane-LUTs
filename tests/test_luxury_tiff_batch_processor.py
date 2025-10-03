@@ -148,6 +148,32 @@ def test_parse_args_sets_default_output(tmp_path: Path):
     assert args.output == input_dir.parent / "SV-Stills_lux"
 
 
+def test_run_pipeline_rejects_nested_output(tmp_path: Path):
+    input_dir = tmp_path / "input"
+    nested_output = input_dir / "lux"
+    nested_output.mkdir(parents=True)
+
+    args = ltiff.parse_args([str(input_dir), str(nested_output)])
+
+    with pytest.raises(SystemExit) as excinfo:
+        ltiff.run_pipeline(args)
+
+    assert "Output folder cannot be located inside the input folder" in str(excinfo.value)
+
+
+def test_run_pipeline_rejects_input_nested_in_output(tmp_path: Path):
+    output_dir = tmp_path / "output"
+    input_dir = output_dir / "input"
+    input_dir.mkdir(parents=True)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir)])
+
+    with pytest.raises(SystemExit) as excinfo:
+        ltiff.run_pipeline(args)
+
+    assert "Input folder cannot be located inside the output folder" in str(excinfo.value)
+
+
 @documents("User overrides cascade atop curated presets without drift")
 def test_build_adjustments_applies_overrides(tmp_path):
     args = ltiff.parse_args(
