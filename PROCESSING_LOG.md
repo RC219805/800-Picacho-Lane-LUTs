@@ -42,3 +42,5 @@ processed_images/      # Enhanced output with _lux suffix
 - All IPTC/XMP metadata is preserved during processing
 - 16-bit precision is maintained when the tifffile library is available
 - Output uses LZW compression for efficient storage while maintaining quality
+- Repository workflow now documents the five-step branch synchronization routine used to
+  clear "behind" indicators on active pull requests.
