@@ -76,9 +76,11 @@ space, optionally adds ultra-fine debanding and cinematic halation bloom, and ke
 gradient-rich interiors spotless with updated presets.
 
 ### Luxury Video Master Grader Requirements
+
 - FFmpeg 6+
 
 ### Luxury Video Master Grader Examples
+
 ```bash
 # Inspect available looks and recipes
 python luxury_video_master_grader.py --list-presets
