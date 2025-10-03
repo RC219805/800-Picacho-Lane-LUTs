@@ -47,6 +47,7 @@ is available, and layers tonal, chroma, clarity, and diffusion refinements tuned
 ultra-luxury real-estate storytelling.
 
 ### TIFF Batch Processor Requirements
+
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
 
@@ -55,6 +56,7 @@ ultra-luxury real-estate storytelling.
 > that resolves the NumPy dtype handling.
 
 ### TIFF Batch Processor Example
+
 ```bash
 python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
