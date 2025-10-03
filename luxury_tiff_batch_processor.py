@@ -855,6 +855,24 @@ def run_pipeline(args: argparse.Namespace) -> int:
     if not input_root.exists() or not input_root.is_dir():
         raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
 
+    def _contains(parent: Path, child: Path) -> bool:
+        try:
+            child.relative_to(parent)
+        except ValueError:
+            return False
+        return True
+
+    if input_root == output_root:
+        raise SystemExit("Output folder must be different from the input folder to avoid self-overwrites.")
+    if _contains(input_root, output_root):
+        raise SystemExit(
+            "Output folder cannot be located inside the input folder; choose a sibling or separate directory."
+        )
+    if _contains(output_root, input_root):
+        raise SystemExit(
+            "Input folder cannot be located inside the output folder; choose non-overlapping directories."
+        )
+
     adjustments = build_adjustments(args)
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
