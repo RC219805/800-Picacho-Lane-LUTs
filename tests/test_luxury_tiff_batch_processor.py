@@ -139,6 +139,15 @@ def test_collect_images_handles_recursive(tmp_path):
     ]
 
 
+def test_parse_args_sets_default_output(tmp_path: Path):
+    input_dir = tmp_path / "SV-Stills"
+    input_dir.mkdir()
+
+    args = ltiff.parse_args([str(input_dir)])
+
+    assert args.output == input_dir.parent / "SV-Stills_lux"
+
+
 @documents("User overrides cascade atop curated presets without drift")
 def test_build_adjustments_applies_overrides(tmp_path):
     args = ltiff.parse_args(

@@ -160,7 +160,13 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("input", type=Path, help="Folder that contains source TIFF files")
-    parser.add_argument("output", type=Path, help="Folder where processed files will be written")
+    parser.add_argument(
+        "output",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="Folder where processed files will be written. Defaults to '<input>_lux' next to the input folder.",
+    )
     parser.add_argument(
         "--preset",
         default="signature",
@@ -243,8 +249,19 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
 
     args = parser.parse_args(list(argv) if argv is not None else None)
+    if args.output is None:
+        args.output = default_output_folder(args.input)
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
     return args
+
+
+def default_output_folder(input_folder: Path) -> Path:
+    """Return the default output folder for a given input directory."""
+
+    input_folder = Path(input_folder)
+    if input_folder.name:
+        return input_folder.parent / f"{input_folder.name}_lux"
+    return input_folder / "luxury_output"
 
 
 def build_adjustments(args: argparse.Namespace) -> AdjustmentSettings:
