@@ -9,7 +9,6 @@ reference.  This module provides such an artefact.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
