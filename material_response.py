@@ -9,7 +9,7 @@ reference.  This module provides such an artefact.
 
 from __future__ import annotations
 
-from collections.abc import Sequence as SequenceABC
+from collections.abc import Mapping, Sequence as SequenceABC
 from dataclasses import dataclass
 import math
 import re
@@ -229,7 +229,8 @@ class MaterialResponsePrinciple:
                 material="polished marble foyer",
                 lighting="late-afternoon sun grazing through clerestory windows",
                 challenge="Specular highlights risk clipping and flattening the stone veining.",
-                response="Apply highlight recovery before clarity so micro-contrast is boosted only after energy is preserved.",
+                response="Apply highlight recovery before clarity so micro-contrast is boosted only after "
+                "energy is preserved.",
                 outcome="Marble retains luminous sheen with detailed veining rather than a white patch.",
             ),
             MaterialResponseExample(
@@ -732,8 +733,7 @@ class MaterialResponseValidator:
         a neutral baseline.
         """
 
-        before_matrix = self._coerce_matrix(before)
-        after_matrix = self._coerce_matrix(after)
+        return self._fourier_energy_ratio(before, after, band="high")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -850,4 +850,3 @@ class MaterialResponseValidator:
                     count += 1
 
         return count
-
