@@ -9,11 +9,12 @@ reference.  This module provides such an artefact.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
 import re
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
 
 def _is_sequence(value: object) -> bool:
@@ -229,7 +230,8 @@ class MaterialResponsePrinciple:
                 material="polished marble foyer",
                 lighting="late-afternoon sun grazing through clerestory windows",
                 challenge="Specular highlights risk clipping and flattening the stone veining.",
-                response="Apply highlight recovery before clarity so micro-contrast is boosted only after energy is preserved.",
+                response="Apply highlight recovery before clarity so micro-contrast is boosted only after "
+                "energy is preserved.",
                 outcome="Marble retains luminous sheen with detailed veining rather than a white patch.",
             ),
             MaterialResponseExample(
@@ -462,13 +464,24 @@ class GlobalLuxurySemantics:
         "middle eastern": {"awe": 0.08, "comfort": 0.04},
         "american": {"focus": 0.03, "comfort": 0.02},
     }
+    _CULTURAL_ALIAS_MAP: Mapping[str, str] = {
+        "med": "mediterranean",
+        "mediterranean coast": "mediterranean",
+        "scandi": "scandinavian",
+        "nordic": "scandinavian",
+        "jp": "japanese",
+        "levantine": "middle eastern",
+        "us": "american",
+        "usa": "american",
+    }
 
     def recontextualize(
         self, material: MaterialAestheticProfile, resonance: EmotionalResonance
     ) -> ContextualResonance:
         """Return resonance tuned to cultural and material narratives."""
 
-        background = resonance.cultural_background.lower()
+        background_key = resonance.cultural_background.strip().lower()
+        background = self._CULTURAL_ALIAS_MAP.get(background_key, background_key)
         weights = self._CULTURAL_WEIGHTS.get(background, {})
 
         awe = _clamp(resonance.awe + weights.get("awe", 0.0) + 0.12 * material.rarity)
@@ -732,8 +745,7 @@ class MaterialResponseValidator:
         a neutral baseline.
         """
 
-        before_matrix = self._coerce_matrix(before)
-        after_matrix = self._coerce_matrix(after)
+        return self._fourier_energy_ratio(before, after, band="high")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -850,4 +862,3 @@ class MaterialResponseValidator:
                     count += 1
 
         return count
-
