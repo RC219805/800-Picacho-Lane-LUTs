@@ -56,6 +56,7 @@ python lux_render_pipeline.py \
   --steps 35 --strength 0.42 --gs 8.2 \
   --material-response --texture-boost 0.28 --ambient-occlusion 0.14 --highlight-warmth 0.1 --haze-strength 0.08 \
   --floor-plank-contrast 0.16 --floor-specular 0.22 --textile-contrast 0.24 \
+  --floor-contact-shadow 0.06 \
   --leather-sheen 0.18 --fireplace-glow 0.26 --fireplace-glow-radius 60 \
   --window-reflection 0.18 --bedding-relief 0.22 --wall-texture 0.14 \
   --painting-integration 0.16 --window-light-wrap 0.2 --exterior-atmosphere 0.18 \
@@ -68,6 +69,7 @@ Material Response finishing now maps common interior materials to targeted
 micro-responses:
 
 - **Floor plank contrast / specular** – reinforces oak grain variation, plank seams, and directional highlights flowing from the windows.
+- **Floor contact shadow** – feathers a grounded penumbra at the floor transition even when global ambient occlusion is gentle.
 - **Textile contrast** – separates linens, duvets, and throws with nuanced wrinkle shading so bedding reads tactile rather than plastic.
 - **Leather sheen** – restores supple specular roll-off on benches and accent seating.
 - **Fireplace glow** – diffuses a warm gradient from the flame box onto adjacent floors and walls for believable integration.
