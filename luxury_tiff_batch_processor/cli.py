@@ -201,7 +201,11 @@ def run_pipeline(args: argparse.Namespace) -> int:
     LOGGER.info("Found %s image(s) to process", len(images))
     processed = 0
 
-    if args.workers <= 1:
+    workers = getattr(args, "workers", 1)
+    resize_long_edge = getattr(args, "resize_long_edge", None)
+    resize_target = getattr(args, "resize_target", None)
+
+    if workers <= 1:
         progress_iterable = _wrap_with_progress(
             images,
             total=len(images),
@@ -228,7 +232,8 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 destination,
                 adjustments,
                 compression=args.compression,
-                resize_long_edge=args.resize_long_edge,
+                resize_long_edge=resize_long_edge,
+                resize_target=resize_target,
                 dry_run=args.dry_run,
             )
             if not args.dry_run:
@@ -249,7 +254,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 pass
 
         futures = []
-        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             for image_path in images:
                 destination = ensure_output_path(
                     input_root,
@@ -265,20 +270,18 @@ def run_pipeline(args: argparse.Namespace) -> int:
                     continue
                 if args.dry_run:
                     LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
-                    advance_progress()
-                else:
-                    futures.append(
-                        executor.submit(
-                            _process_image_worker,
-                            image_path,
-                            destination,
-                            adjustments,
-                            compression=args.compression,
-                            resize_long_edge=args.resize_long_edge,
-                            resize_target=args.resize_target,
-                            dry_run=args.dry_run,
-                        )
+                futures.append(
+                    executor.submit(
+                        _process_image_worker,
+                        image_path,
+                        destination,
+                        adjustments,
+                        compression=args.compression,
+                        resize_long_edge=resize_long_edge,
+                        resize_target=resize_target,
+                        dry_run=args.dry_run,
                     )
+                )
 
             for future in as_completed(futures):
                 try:
