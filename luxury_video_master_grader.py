@@ -18,7 +18,7 @@ import math
 import shlex
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -44,14 +44,11 @@ class GradePreset:
     cool: float = 0.0
     sharpen: Optional[str] = None
     grain: float = 0.0
-    tone_map: Optional[str] = None
-    tone_map_peak: Optional[float] = None
-    tone_map_desat: Optional[float] = None
+    notes: str = ""
     deband: Optional[str] = None
     halation_intensity: float = 0.0
-    halation_radius: float = 16.0
+    halation_radius: float = 18.0
     halation_threshold: float = 0.6
-    notes: str = ""
 
     def to_dict(self) -> Dict[str, object]:
         """Return a mutable dictionary representation for override merging."""
@@ -68,9 +65,6 @@ class GradePreset:
             "cool": self.cool,
             "sharpen": self.sharpen,
             "grain": self.grain,
-            "tone_map": self.tone_map,
-            "tone_map_peak": self.tone_map_peak,
-            "tone_map_desat": self.tone_map_desat,
             "deband": self.deband,
             "halation_intensity": self.halation_intensity,
             "halation_radius": self.halation_radius,
@@ -117,9 +111,9 @@ PRESETS: Dict[str, GradePreset] = {
         cool=-0.015,
         sharpen="soft",
         grain=4.0,
-        halation_intensity=0.1,
+        halation_intensity=0.10,
         halation_radius=18.0,
-        halation_threshold=0.5,
+        halation_threshold=0.50,
         notes="Use for west-facing terraces, pool decks and garden lifestyle coverage.",
     ),
     "interior_neutral_luxe": GradePreset(
@@ -140,6 +134,7 @@ PRESETS: Dict[str, GradePreset] = {
         sharpen="strong",
         grain=0.0,
         deband="fine",
+        halation_threshold=0.60,
         notes="Ideal for natural light interiors where texture detail and neutrality are paramount.",
     ),
 }
@@ -151,18 +146,6 @@ class FrameRatePlan:
 
     target: Optional[str]
     note: str
-
-
-@dataclass
-class DynamicRangePlan:
-    """Summary of tone-mapping decisions for the master grade."""
-
-    tone_map: Optional[str]
-    peak: Optional[float]
-    desat: Optional[float]
-    transfer: Optional[str]
-    primaries: Optional[str]
-    note: Optional[str] = None
 
 HQDN3D_PRESETS = {
     "soft": "hqdn3d=luma_spatial=1.6:luma_tmp=3.2:chroma_spatial=1.2:chroma_tmp=2.8",
@@ -177,11 +160,20 @@ UNSHARP_PRESETS = {
 }
 
 DEBAND_PRESETS = {
-    "fine": (0.65, 16),
-    "strong": (0.85, 24),
+    "soft": "gradfun=strength=0.45:radius=12",
+    "medium": "gradfun=strength=0.70:radius=16",
+    "strong": "gradfun=strength=0.90:radius=20",
 }
 
-ALLOWED_TONEMAP_METHODS = {"clip", "linear", "gamma", "reinhard", "hable", "mobius"}
+
+@dataclass
+class ToneMapPlan:
+    """Description of the tone-mapping strategy for the current clip."""
+
+    enabled: bool
+    note: str
+    config: Dict[str, object] = field(default_factory=dict)
+    metadata: Tuple[Optional[str], Optional[str], Optional[str]] = (None, None, None)
 
 
 def list_presets() -> str:
@@ -229,6 +221,20 @@ def probe_source(path: Path) -> Dict[str, object]:
         raise RuntimeError("Unable to parse ffprobe output") from exc
 
 
+def _parse_probe_duration(raw: object) -> Optional[float]:
+    """Return a finite float duration from ffprobe metadata when possible."""
+
+    if raw in (None, ""):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
 def summarize_probe(data: Dict[str, object]) -> str:
     fmt = data.get("format", {})
     duration = fmt.get("duration")
@@ -236,33 +242,29 @@ def summarize_probe(data: Dict[str, object]) -> str:
     video = next((s for s in streams if s.get("codec_type") == "video"), {})
     audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
     pieces = []
-    if duration:
-        try:
-            duration_value = float(duration)
-        except (TypeError, ValueError):
-            pieces.append(f"duration {duration}")
-        else:
-            pieces.append(f"duration {duration_value:.2f}s")
+    numeric_duration = _parse_probe_duration(duration)
+    if numeric_duration is not None:
+        pieces.append(f"duration {numeric_duration:.2f}s")
     if video:
         w = video.get("width")
         h = video.get("height")
         fps = describe_frame_rates(
             video.get("avg_frame_rate"), video.get("r_frame_rate")
         )
-        codec = video.get("codec_name") or "unknown"
-        video_info = f"video {codec}"
-        if w and h:
-            video_info += f" {w}x{h}"
-        video_info += f" @ {fps}"
-
+        codec = video.get("codec_name")
         pix_fmt = video.get("pix_fmt")
+        
+        # Build video info string
+        video_info = f"video {codec} {w}x{h} @ {fps}"
         if pix_fmt:
             video_info += f" {pix_fmt}"
-
+        
+        # Add bit depth if available
         bits_per_raw_sample = video.get("bits_per_raw_sample")
         if bits_per_raw_sample:
             video_info += f" {bits_per_raw_sample}bit"
         elif pix_fmt:
+            # Try to derive bit depth from pixel format
             if "10" in pix_fmt:
                 video_info += " 10bit"
             elif "12" in pix_fmt:
@@ -270,21 +272,22 @@ def summarize_probe(data: Dict[str, object]) -> str:
             elif "16" in pix_fmt:
                 video_info += " 16bit"
 
+        # Add color metadata if present
         color_parts = []
-        color_primaries = video.get("color_primaries")
-        color_trc = video.get("color_trc")
-        colorspace = video.get("colorspace")
+        color_primaries = normalise_color_tag(video.get("color_primaries"))
+        color_trc = normalise_color_tag(video.get("color_trc"))
+        colorspace = normalise_color_tag(get_color_space_tag(video))
 
-        if color_primaries and color_primaries != "unknown":
+        if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
-        if color_trc and color_trc != "unknown":
+        if color_trc:
             color_parts.append(f"trc={color_trc}")
-        if colorspace and colorspace != "unknown":
+        if colorspace:
             color_parts.append(f"space={colorspace}")
 
         if color_parts:
             video_info += f" ({', '.join(color_parts)})"
-
+        
         pieces.append(video_info)
     if audio:
         codec = audio.get("codec_name")
@@ -292,6 +295,98 @@ def summarize_probe(data: Dict[str, object]) -> str:
         channels = audio.get("channels")
         pieces.append(f"audio {codec} {channels}ch {sr}Hz")
     return ", ".join(pieces)
+
+
+def extract_video_stream(probe: Dict[str, object]) -> Dict[str, object]:
+    """Return the first video stream dictionary from an ffprobe result."""
+
+    streams = probe.get("streams", [])
+    return next((s for s in streams if s.get("codec_type") == "video"), {})
+
+
+HDR_PRIMARIES = {"bt2020", "smpte432", "smpte431"}
+HDR_TRANSFERS = {"smpte2084", "arib-std-b67", "hlg"}
+HDR_MATRIX = {"bt2020nc", "bt2020ncl"}
+INVALID_COLOR_TAGS = {"unknown", "unspecified", "undefined", "na"}
+
+
+def normalise_color_tag(value: Optional[str]) -> Optional[str]:
+    """Return a cleaned, lower-case color tag or ``None`` when not meaningful."""
+
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    if lowered in INVALID_COLOR_TAGS:
+        return None
+    return lowered
+
+
+def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
+    """Fetch the reported color space tag, handling legacy ffprobe key variants."""
+
+    value = stream.get("color_space")
+    if value is None:
+        value = stream.get("colorspace")
+    return value
+
+
+def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
+    """Determine whether tone mapping should run for this clip."""
+
+    method = (args.tone_map or "auto").lower()
+    tone_map_peak = args.tone_map_peak
+    tone_map_desat = args.tone_map_desat
+
+    if method == "off":
+        return ToneMapPlan(enabled=False, note="Tone mapping disabled by user preference.")
+
+    video = extract_video_stream(probe)
+    transfer = (video.get("color_trc") or "").lower()
+    primaries = (video.get("color_primaries") or "").lower()
+    matrix = (get_color_space_tag(video) or "").lower()
+
+    hdr_indicators: List[str] = []
+    if transfer in HDR_TRANSFERS:
+        hdr_indicators.append(f"transfer={transfer}")
+    if primaries in HDR_PRIMARIES:
+        hdr_indicators.append(f"primaries={primaries}")
+    if matrix in HDR_MATRIX:
+        hdr_indicators.append(f"matrix={matrix}")
+
+    detected_hdr = bool(hdr_indicators)
+
+    if method == "auto" and not detected_hdr:
+        return ToneMapPlan(
+            enabled=False,
+            note="Tone mapping not required; source tagged as SDR.",
+        )
+
+    chosen_method = method if method != "auto" else "hable"
+
+    config: Dict[str, object] = {
+        "tone_map": chosen_method,
+        "tone_map_peak": tone_map_peak,
+        "tone_map_desat": tone_map_desat,
+    }
+    note_parts = [
+        "Applying HDR tone mapping using",
+        chosen_method,
+    ]
+    if detected_hdr:
+        note_parts.append(f"(detected {'/'.join(hdr_indicators)})")
+    else:
+        note_parts.append("(forced by user override)")
+
+    metadata = ("bt709", "bt709", "bt709")
+    return ToneMapPlan(
+        enabled=True,
+        note=" ".join(note_parts),
+        config=config,
+        metadata=metadata,
+    )
 
 
 def describe_frame_rates(avg: Optional[str], real: Optional[str]) -> str:
@@ -432,63 +527,6 @@ def assess_frame_rate(
     )
 
 
-def assess_dynamic_range(
-    probe: Dict[str, object],
-    user_method: Optional[str],
-    user_peak: Optional[float],
-    user_desat: Optional[float],
-) -> DynamicRangePlan:
-    """Decide how (and if) HDR material should be tonemapped to SDR."""
-
-    video = next((s for s in probe.get("streams", []) if s.get("codec_type") == "video"), None)
-    if not video:
-        return DynamicRangePlan(None, None, None, None, None, note=None)
-
-    method = (user_method or "").strip().lower() or None
-    if method and method not in ALLOWED_TONEMAP_METHODS and method != "off":
-        raise ValueError(
-            f"Unsupported tone-mapping method '{user_method}'. Choose from {sorted(ALLOWED_TONEMAP_METHODS)} or 'off'."
-        )
-
-    transfer = str(video.get("color_trc") or "").lower() or None
-    primaries = str(video.get("color_primaries") or "").lower() or None
-    if transfer in {"", "unknown", "unspecified"}:
-        transfer = None
-    if primaries in {"", "unknown", "unspecified"}:
-        primaries = None
-
-    auto_method: Optional[str] = None
-    auto_note: Optional[str] = None
-    if not method:
-        hdr_transfers = {"smpte2084", "arib-std-b67"}
-        hdr_primaries = {"bt2020"}
-        if (transfer and transfer in hdr_transfers) or (primaries and primaries in hdr_primaries):
-            auto_method = "hable"
-            hdr_desc = ", ".join(filter(None, [transfer or None, primaries or None])) or "HDR metadata"
-            auto_note = (
-                f"Detected {hdr_desc}; applying automatic tone mapping with '{auto_method}' response."
-            )
-    elif method == "off":
-        return DynamicRangePlan(None, None, None, transfer, primaries, note="Tone mapping disabled by user.")
-
-    chosen = method if method and method != "off" else auto_method
-    if not chosen:
-        return DynamicRangePlan(None, None, None, transfer, primaries, note="Source flagged as SDR; preserving transfer.")
-
-    peak = user_peak if user_peak is not None else 1000.0
-    if peak <= 0:
-        raise ValueError("tone-map-peak must be positive when tone mapping is enabled")
-
-    desat = user_desat if user_desat is not None else 0.25
-    desat = clamp(desat, 0.0, 1.0)
-
-    note = auto_note
-    if method and method != "off":
-        note = f"Tone map override requested; using '{chosen}' operator."
-
-    return DynamicRangePlan(chosen, peak, desat, transfer, primaries, note=note)
-
-
 def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     nodes: List[str] = []
     label_index = 0
@@ -506,6 +544,36 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     nodes.append(f"[{current}]format=yuv444p16le[{new_label}]")
     current = new_label
 
+    tone_map = config.get("tone_map")
+    if tone_map and str(tone_map).lower() != "off":
+        tone_map_peak = config.get("tone_map_peak")
+        pre_tonemap_args = ["transfer=linear"]
+        if tone_map_peak is not None:
+            pre_tonemap_args.append(f"npl={float(tone_map_peak):.4f}")
+        new_label = next_label()
+        nodes.append(f"[{current}]zscale={':'.join(pre_tonemap_args)}[{new_label}]")
+        current = new_label
+
+        tonemap_args = [str(tone_map)]
+        if tone_map_peak is not None:
+            tonemap_args.append(f"peak={float(tone_map_peak):.4f}")
+        tone_map_desat = config.get("tone_map_desat")
+        if tone_map_desat is not None:
+            tonemap_args.append(f"desat={float(tone_map_desat):.4f}")
+        new_label = next_label()
+        nodes.append(f"[{current}]tonemap={':'.join(tonemap_args)}[{new_label}]")
+        current = new_label
+
+        post_tonemap_args = [
+            "primaries=bt709",
+            "transfer=bt709",
+            "matrix=bt709",
+            "range=tv",
+        ]
+        new_label = next_label()
+        nodes.append(f"[{current}]zscale={':'.join(post_tonemap_args)}[{new_label}]")
+        current = new_label
+
     denoise = config.get("denoise")
     if denoise and denoise.lower() != "off":
         expr = HQDN3D_PRESETS.get(denoise.lower())
@@ -519,36 +587,6 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     new_label = next_label()
     nodes.append(f"[{current}]format=gbrpf32le[{new_label}]")
     current = new_label
-    pre_grade_label = current
-
-    tone_map = config.get("tone_map")
-    if tone_map and str(tone_map).lower() != "off":
-        method = str(tone_map).lower()
-        peak = float(config.get("tone_map_peak", 1000.0))
-        desat = clamp(float(config.get("tone_map_desat", 0.25)), 0.0, 1.0)
-        transfer = str(config.get("tone_map_transfer") or "linear").lower()
-        primaries = str(config.get("tone_map_primaries") or "bt709").lower()
-
-        # Normalise to linear light before tone mapping, then return to BT.709 space.
-        new_label = next_label()
-        nodes.append(
-            f"[{current}]zscale=transfer=linear:transfer_in={transfer}:"
-            f"primaries=bt709:primaries_in={primaries}:range=full[{new_label}]"
-        )
-        current = new_label
-
-        new_label = next_label()
-        tm_expr = f"tonemap={method}:peak={peak:.1f}:desat={desat:.3f}"
-        nodes.append(f"[{current}]{tm_expr}[{new_label}]")
-        current = new_label
-
-        new_label = next_label()
-        nodes.append(
-            f"[{current}]zscale=transfer=bt709:transfer_in=linear:primaries=bt709:primaries_in=bt709:range=full[{new_label}]"
-        )
-        current = new_label
-
-    pre_grade_label = current
 
     eq_parts: List[str] = []
     contrast = float(config.get("contrast", 1.0))
@@ -565,13 +603,16 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     if not math.isclose(brightness, 0.0, abs_tol=1e-4):
         eq_parts.append(f"brightness={brightness:.4f}")
 
+    post_eq_label = current
     if eq_parts:
         new_label = next_label()
         nodes.append(f"[{current}]eq={':'.join(eq_parts)}[{new_label}]")
         current = new_label
+    post_eq_label = current
 
     warmth = float(config.get("warmth", 0.0))
     cool = float(config.get("cool", 0.0))
+    post_color_label = post_eq_label
     if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(cool, 0.0, abs_tol=1e-4):
         new_label = next_label()
         # Clamp values to [-0.5, 0.5] to stay within tasteful limits.
@@ -581,8 +622,11 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
             f"[{current}]colorbalance=rm={warmth_c:.4f}:gm=0.0000:bm={cool_c:.4f}[{new_label}]"
         )
         current = new_label
+        post_color_label = current
+    else:
+        current = post_color_label
 
-    pre_grade_label = current
+    pre_lut_label = post_color_label
 
     lut_path: Path = Path(config["lut"]).resolve()
     if not lut_path.exists():
@@ -595,61 +639,12 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     graded_label = current
 
     lut_strength = float(config.get("lut_strength", 1.0))
-    if lut_strength < 0.0 or lut_strength > 1.0:
-        raise ValueError("lut_strength must be between 0.0 and 1.0")
 
     if lut_strength < 0.999:
         blend_label = next_label()
         nodes.append(
-            f"[{pre_grade_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
+            f"[{pre_lut_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
         )
-        current = blend_label
-    else:
-        current = graded_label
-
-    deband = config.get("deband")
-    if deband and str(deband).lower() != "off":
-        preset = DEBAND_PRESETS.get(str(deband).lower())
-        if not preset:
-            raise ValueError(f"Unsupported deband preset: {deband}")
-        strength, radius = preset
-        new_label = next_label()
-        nodes.append(f"[{current}]format=yuv444p16le[{new_label}]")
-        current = new_label
-
-        new_label = next_label()
-        nodes.append(f"[{current}]gradfun=strength={strength:.3f}:radius={int(radius)}[{new_label}]")
-        current = new_label
-
-        new_label = next_label()
-        nodes.append(f"[{current}]format=gbrpf32le[{new_label}]")
-        current = new_label
-
-    halation_intensity = float(config.get("halation_intensity", 0.0))
-    if halation_intensity > 0.0:
-        intensity = clamp(halation_intensity, 0.0, 1.0)
-        radius = max(1.0, float(config.get("halation_radius", 16.0)))
-        threshold = clamp(float(config.get("halation_threshold", 0.6)), 0.0, 1.0)
-
-        base_label = next_label()
-        halo_label = next_label()
-        nodes.append(f"[{current}]split=2[{base_label}][{halo_label}]")
-
-        highlight_label = next_label()
-        nodes.append(
-            f"[{halo_label}]colorlevels=rimin={threshold:.3f}:gimin={threshold:.3f}:bimin={threshold:.3f}[{highlight_label}]"
-        )
-
-        blur_label = next_label()
-        nodes.append(f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]")
-
-        tint_label = next_label()
-        nodes.append(
-            f"[{blur_label}]colorbalance=rm={intensity*0.55:.4f}:gm={intensity*0.25:.4f}:bm={-intensity*0.15:.4f}[{tint_label}]"
-        )
-
-        blend_label = next_label()
-        nodes.append(f"[{base_label}][{tint_label}]blend=all_expr='A+({intensity:.3f}*B)'[{blend_label}]")
         current = blend_label
 
     sharpen = config.get("sharpen")
@@ -667,6 +662,45 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         nodes.append(f"[{current}]noise=alls={grain:.2f}:allf=t+u[{new_label}]")
         current = new_label
 
+    deband = config.get("deband")
+    if deband and str(deband).lower() != "off":
+        expr = DEBAND_PRESETS.get(str(deband).lower())
+        if not expr:
+            raise ValueError(f"Unsupported deband preset: {deband}")
+        new_label = next_label()
+        nodes.append(f"[{current}]{expr}[{new_label}]")
+        current = new_label
+
+    halation_intensity = float(config.get("halation_intensity", 0.0))
+    if halation_intensity > 0.0:
+        intensity = clamp(halation_intensity, 0.0, 1.0)
+        radius = clamp(float(config.get("halation_radius", 18.0)), 0.0, 128.0)
+        radius = max(radius, 1.0)
+        threshold = clamp(float(config.get("halation_threshold", 0.6)), 0.0, 1.0)
+
+        base_label = next_label()
+        halo_label = next_label()
+        nodes.append(f"[{current}]split=2[{base_label}][{halo_label}]")
+
+        highlight_label = next_label()
+        nodes.append(
+            f"[{halo_label}]colorlevels=rimin={threshold:.3f}:gimin={threshold:.3f}:bimin={threshold:.3f}[{highlight_label}]"
+        )
+
+        blur_label = next_label()
+        nodes.append(f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]")
+
+        tint_label = next_label()
+        nodes.append(
+            f"[{blur_label}]colorbalance=rm={intensity * 0.55:.4f}:gm={intensity * 0.25:.4f}:bm={-intensity * 0.15:.4f}[{tint_label}]"
+        )
+
+        blend_label = next_label()
+        nodes.append(
+            f"[{base_label}][{tint_label}]blend=all_expr='A+({intensity:.3f}*B)'[{blend_label}]"
+        )
+        current = blend_label
+
     target_fps = config.get("target_fps")
     if target_fps:
         new_label = next_label()
@@ -676,6 +710,26 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     nodes.append(f"[{current}]format=yuv422p10le[vout]")
     graph = ";".join(nodes)
     return graph, "vout"
+
+
+def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Determine color metadata based on priority: explicit > color-from-source > none."""
+    # Priority 1: Explicit overrides
+    if args.color_primaries or args.color_transfer or args.color_space:
+        return args.color_primaries, args.color_transfer, args.color_space
+
+    # Priority 2: Copy from source if requested
+    if args.color_from_source:
+        streams = probe.get("streams", [])
+        video = next((s for s in streams if s.get("codec_type") == "video"), {})
+        if video:
+            primaries = normalise_color_tag(video.get("color_primaries"))
+            transfer = normalise_color_tag(video.get("color_trc"))
+            space = normalise_color_tag(get_color_space_tag(video))
+            return primaries, transfer, space
+
+    # Priority 3: None (default behavior - no color tags set)
+    return None, None, None
 
 
 def build_command(
@@ -693,7 +747,10 @@ def build_command(
     threads: Optional[int],
     log_level: str,
     preview_frames: Optional[int],
-    output_fps: Optional[str],
+    vsync: str,
+    color_primaries: Optional[str] = None,
+    color_transfer: Optional[str] = None,
+    color_space: Optional[str] = None,
 ) -> List[str]:
     cmd: List[str] = [
         "ffmpeg",
@@ -718,7 +775,13 @@ def build_command(
     if bitrate:
         cmd.extend(["-b:v", bitrate])
 
-    cmd.extend(["-color_primaries", "1", "-color_trc", "1", "-colorspace", "1"])
+    # Add color metadata if specified (priority: explicit > none by default)
+    if color_primaries:
+        cmd.extend(["-color_primaries", color_primaries])
+    if color_transfer:
+        cmd.extend(["-color_trc", color_transfer])
+    if color_space:
+        cmd.extend(["-colorspace", color_space])
 
     cmd.extend(["-c:a", audio_codec])
     if audio_bitrate:
@@ -730,11 +793,32 @@ def build_command(
     if threads:
         cmd.extend(["-threads", str(threads)])
 
-    if output_fps:
-        cmd.extend(["-r", output_fps])
+    cmd.extend(["-vsync", vsync])
 
     cmd.append(str(output_path))
     return cmd
+
+
+class ListPresetsAction(argparse.Action):
+    """Custom argparse action that prints presets and exits early."""
+
+    def __init__(
+        self,
+        option_strings: List[str],
+        dest: str = argparse.SUPPRESS,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: Optional[str] = None,
+    ) -> None:
+        print("Available presets:\n" + list_presets())
+        parser.exit()
 
 
 def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
@@ -744,15 +828,19 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("input_video", type=Path, nargs="?", help="Source video to be mastered.")
-    parser.add_argument("output_video", type=Path, nargs="?", help="Destination path for the master grade.")
+    parser.add_argument("input_video", type=Path, help="Source video to be mastered.")
+    parser.add_argument("output_video", type=Path, help="Destination path for the master grade.")
     parser.add_argument(
         "--preset",
         choices=sorted(PRESETS.keys()),
         default="signature_estate",
         help="Select the baseline grading look to apply.",
     )
-    parser.add_argument("--list-presets", action="store_true", help="Print available presets and exit.")
+    parser.add_argument(
+        "--list-presets",
+        action=ListPresetsAction,
+        help="Print available presets and exit.",
+    )
     parser.add_argument("--custom-lut", type=Path, help="Override the preset LUT with a custom .cube file.")
     parser.add_argument("--lut-strength", type=float, help="Blend the LUT with the original signal (0.0-1.0).")
     parser.add_argument("--denoise", choices=list(HQDN3D_PRESETS) + ["off"], help="Override denoise strength.")
@@ -764,6 +852,47 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument("--cool", type=float, help="Override cool mid-tone tint (blue channel).")
     parser.add_argument("--sharpen", choices=list(UNSHARP_PRESETS) + ["off"], help="Override clarity setting.")
     parser.add_argument("--grain", type=float, help="Override film-grain intensity.")
+    parser.add_argument(
+        "--tone-map",
+        choices=["auto", "off", "hable", "mobius", "reinhard", "bt2390"],
+        default="auto",
+        help="Tone-mapping operator to apply (auto = detect HDR metadata).",
+    )
+    parser.add_argument(
+        "--tone-map-peak",
+        type=float,
+        default=1000.0,
+        help="Peak nits reference for tone-mapping operators that support it.",
+    )
+    parser.add_argument(
+        "--tone-map-desat",
+        type=float,
+        default=0.1,
+        help="Desaturation factor for tone-mapping (0.0 retains original chroma).",
+    )
+    parser.add_argument(
+        "--deband",
+        choices=list(DEBAND_PRESETS) + ["off"],
+        default="off",
+        help="Apply debanding (gradfun) smoothing after grain.",
+    )
+    parser.add_argument(
+        "--halation-intensity",
+        type=float,
+        default=0.0,
+        help="Strength of halation bloom (0.0 disables).",
+    )
+    parser.add_argument(
+        "--halation-radius",
+        type=float,
+        default=18.0,
+        help="Radius of the halation blur kernel when enabled.",
+    )
+    parser.add_argument(
+        "--halation-threshold",
+        type=float,
+        help="Luminance threshold (0-1) before highlights feed the halation pass.",
+    )
     parser.add_argument("--video-codec", default="prores_ks", help="Video mezzanine codec to use.")
     parser.add_argument(
         "--prores-profile",
@@ -791,56 +920,42 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Tolerance in fps when assessing frame-rate drift before conforming.",
     )
     parser.add_argument(
-        "--tone-map",
-        choices=sorted(ALLOWED_TONEMAP_METHODS) + ["off"],
-        help="Override tone-mapping operator (defaults to automatic HDR detection).",
+        "--vsync",
+        choices=["auto", "cfr", "vfr", "drop", "passthrough"],
+        default="cfr",
+        help="Video sync method (muxer vsync behavior).",
     )
     parser.add_argument(
-        "--tone-map-peak",
-        type=float,
-        help="Assumed HDR peak luminance in nits when tone mapping (positive float).",
+        "--print-filter-graph",
+        action="store_true",
+        help="Print the filter graph in human-readable format for debugging.",
     )
     parser.add_argument(
-        "--tone-map-desat",
-        type=float,
-        help="Desaturation factor applied during tone mapping (0-1).",
+        "--color-primaries",
+        help="Set explicit color primaries (e.g., bt709, bt2020).",
     )
     parser.add_argument(
-        "--deband",
-        choices=list(DEBAND_PRESETS) + ["off"],
-        help="Apply high-quality debanding to polish gradients (preset strength).",
+        "--color-transfer",
+        help="Set explicit color transfer characteristics (e.g., bt709, smpte2084).",
     )
     parser.add_argument(
-        "--halation-intensity",
-        type=float,
-        help="Strength of cinematic halation bloom (set 0 to disable).",
+        "--color-space",
+        help="Set explicit color space (e.g., bt709, bt2020nc).",
     )
     parser.add_argument(
-        "--halation-radius",
-        type=float,
-        help="Blur radius used when generating the halation glow mask.",
-    )
-    parser.add_argument(
-        "--halation-threshold",
-        type=float,
-        help="Luminance threshold (0-1) before highlights feed the halation pass.",
+        "--color-from-source",
+        action="store_true",
+        help="Copy color metadata from source instead of overriding.",
     )
 
-    args = parser.parse_args(list(argv) if argv is not None else None)
-    if not args.list_presets and (args.input_video is None or args.output_video is None):
-        parser.error("input_video and output_video are required unless --list-presets is provided")
-    return args
+    return parser.parse_args(list(argv) if argv is not None else None)
 
 
 def build_config(
     args: argparse.Namespace,
     *,
     target_fps: Optional[str] = None,
-    tone_map: Optional[str] = None,
-    tone_map_peak: Optional[float] = None,
-    tone_map_desat: Optional[float] = None,
-    tone_map_transfer: Optional[str] = None,
-    tone_map_primaries: Optional[str] = None,
+    tone_map_plan: Optional[ToneMapPlan] = None,
 ) -> Dict[str, object]:
     preset = PRESETS[args.preset]
     config = preset.to_dict()
@@ -875,27 +990,16 @@ def build_config(
         config["halation_radius"] = args.halation_radius
     if args.halation_threshold is not None:
         config["halation_threshold"] = args.halation_threshold
-    if args.tone_map is not None:
-        config["tone_map"] = args.tone_map
-    if args.tone_map_peak is not None:
-        config["tone_map_peak"] = args.tone_map_peak
-    if args.tone_map_desat is not None:
-        config["tone_map_desat"] = args.tone_map_desat
     if target_fps is not None:
         config["target_fps"] = target_fps
-    if tone_map_transfer is not None:
-        config["tone_map_transfer"] = tone_map_transfer
-    if tone_map_primaries is not None:
-        config["tone_map_primaries"] = tone_map_primaries
+    if tone_map_plan and tone_map_plan.enabled:
+        config.update(tone_map_plan.config)
+
     return config
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_arguments(argv)
-
-    if args.list_presets:
-        print("Available presets:\n" + list_presets())
-        return 0
 
     ensure_tools_available()
 
@@ -925,30 +1029,80 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     print(frame_plan.note)
 
+    tone_plan = plan_tone_mapping(args, probe)
+    print(tone_plan.note)
+
+    config = build_config(args, target_fps=frame_plan.target, tone_map_plan=tone_plan)
+
+    # Validate grading parameters early with clear error messages
     try:
-        dynamic_plan = assess_dynamic_range(probe, args.tone_map, args.tone_map_peak, args.tone_map_desat)
+        contrast = float(config.get("contrast", 1.0))
+        if contrast <= 0:
+            raise ValueError("contrast must be greater than 0")
+
+        saturation = float(config.get("saturation", 1.0))
+        if saturation <= 0:
+            raise ValueError("saturation must be greater than 0")
+
+        gamma = float(config.get("gamma", 1.0))
+        if gamma <= 0:
+            raise ValueError("gamma must be greater than 0")
+
+        brightness = float(config.get("brightness", 0.0))
+        if brightness < -1.0 or brightness > 1.0:
+            raise ValueError("brightness must be in range [-1.0, 1.0]")
+        # Use existing clamp helper to ensure brightness is within bounds
+        config["brightness"] = clamp(brightness, -1.0, 1.0)
+
+        lut_strength = float(config.get("lut_strength", 1.0))
+        if lut_strength < 0.0 or lut_strength > 1.0:
+            raise ValueError("lut_strength must be in range [0.0, 1.0]")
+        tone_map_peak = config.get("tone_map_peak")
+        if tone_map_peak is not None and float(tone_map_peak) <= 0.0:
+            raise ValueError("tone_map_peak must be greater than 0")
+        tone_map_desat = config.get("tone_map_desat")
+        if tone_map_desat is not None and not (0.0 <= float(tone_map_desat) <= 1.0):
+            raise ValueError("tone_map_desat must be within [0.0, 1.0]")
+        halation_intensity = float(config.get("halation_intensity", 0.0))
+        if halation_intensity < 0.0:
+            raise ValueError("halation_intensity must be non-negative")
+        config["halation_intensity"] = clamp(halation_intensity, 0.0, 1.0)
+        halation_radius = float(config.get("halation_radius", 0.0))
+        if halation_radius < 0.0:
+            raise ValueError("halation_radius must be non-negative")
+        config["halation_radius"] = clamp(halation_radius, 0.0, 128.0)
+        threshold_value = float(config.get("halation_threshold", 0.6))
+        if not 0.0 <= threshold_value <= 1.0:
+            raise ValueError("halation_threshold must be within [0.0, 1.0]")
+        config["halation_threshold"] = clamp(threshold_value, 0.0, 1.0)
     except ValueError as exc:
-        print(f"Tone-mapping configuration error: {exc}", file=sys.stderr)
+        print(f"Parameter validation error: {exc}", file=sys.stderr)
         return 7
-
-    if dynamic_plan.note:
-        print(dynamic_plan.note)
-
-    config = build_config(
-        args,
-        target_fps=frame_plan.target,
-        tone_map=dynamic_plan.tone_map,
-        tone_map_peak=dynamic_plan.peak,
-        tone_map_desat=dynamic_plan.desat,
-        tone_map_transfer=dynamic_plan.transfer,
-        tone_map_primaries=dynamic_plan.primaries,
-    )
 
     try:
         filter_graph, filter_output = build_filter_graph(config)
-    except (ValueError, FileNotFoundError) as exc:
+    except Exception as exc:  # pylint: disable=broad-except
         print(f"Failed to build filter graph: {exc}", file=sys.stderr)
         return 5
+
+    if args.print_filter_graph:
+        print("\nFilter graph (human-readable):")
+        # Convert semicolon-separated filter chain to multi-line format
+        filter_nodes = filter_graph.split(";")
+        for i, node in enumerate(filter_nodes):
+            print(f"  {i+1:2d}. {node}")
+        print()
+
+    # Determine color metadata based on priority system
+    color_primaries, color_transfer, color_space = determine_color_metadata(args, probe)
+    if (
+        color_primaries is None
+        and color_transfer is None
+        and color_space is None
+        and tone_plan.enabled
+        and tone_plan.metadata != (None, None, None)
+    ):
+        color_primaries, color_transfer, color_space = tone_plan.metadata
 
     cmd = build_command(
         input_video,
@@ -964,7 +1118,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         threads=args.threads,
         log_level=args.log_level,
         preview_frames=args.preview_frames,
-        output_fps=config.get("target_fps"),
+        vsync=args.vsync,
+        color_primaries=color_primaries,
+        color_transfer=color_transfer,
+        color_space=color_space,
     )
 
     print("\nFFmpeg command:")
