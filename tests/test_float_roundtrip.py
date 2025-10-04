@@ -15,11 +15,13 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import luxury_tiff_batch_processor as ltiff
-from luxury_tiff_batch_processor import (
-    float_to_dtype_array,
+from luxury_tiff_batch_processor.adjustments import (
     gaussian_blur,
     gaussian_kernel,
     gaussian_kernel_cached,
+)
+from luxury_tiff_batch_processor.io_utils import (
+    float_to_dtype_array,
     image_to_float,
     save_image,
 )
