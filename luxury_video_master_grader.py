@@ -647,24 +647,28 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     return graph, "vout"
 
 
-def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object]) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    """Determine color metadata based on priority: explicit > color-from-source > none."""
+def determine_color_metadata(
+    args: argparse.Namespace, probe: Dict[str, object]
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Determine color metadata based on priority: explicit > color-from-source > none.
+
+    Consolidates multiple historical implementations by normalising the ffprobe
+    metadata when inheriting tags from source clips.  This avoids leaking values
+    such as ``"unknown"``/``"unspecified"`` and ensures the caller receives
+    consistently lower-cased identifiers.
+    """
+
     # Priority 1: Explicit overrides
     if args.color_primaries or args.color_transfer or args.color_space:
         return args.color_primaries, args.color_transfer, args.color_space
 
     # Priority 2: Copy from source if requested
     if args.color_from_source:
-        streams = probe.get("streams", [])
-        video = next((s for s in streams if s.get("codec_type") == "video"), {})
+        video = extract_video_stream(probe)
         if video:
-            primaries = video.get("color_primaries")
-            transfer = video.get("color_trc")
-            space = video.get("colorspace")
-            # Only use if not "unknown"
-            primaries = primaries if primaries and primaries != "unknown" else None
-            transfer = transfer if transfer and transfer != "unknown" else None
-            space = space if space and space != "unknown" else None
+            primaries = normalise_color_tag(video.get("color_primaries"))
+            transfer = normalise_color_tag(video.get("color_trc"))
+            space = normalise_color_tag(video.get("colorspace"))
             return primaries, transfer, space
 
     # Priority 3: None (default behavior - no color tags set)
