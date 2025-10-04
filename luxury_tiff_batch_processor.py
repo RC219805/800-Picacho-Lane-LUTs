@@ -528,8 +528,9 @@ def image_to_float(
         return result.array, result.dtype, result.alpha
     if return_format == "tuple4":
         return result.array, result.dtype, result.alpha, result.base_channels
-    if return_format != "object":
-        raise ValueError(f"Unsupported return_format: {return_format}")
+    allowed_formats = ("object", "tuple3", "tuple4")
+    if return_format not in allowed_formats:
+        raise ValueError(f"Unsupported return_format: {return_format}. Allowed values are: {allowed_formats}")
     return result
 
 
