@@ -507,7 +507,7 @@ def parse_float_triplet(value: str) -> Tuple[float, float, float]:
     try:
         parts = [float(p.strip()) for p in value.split(",")]
     except ValueError as exc:  # pragma: no cover - defensive
-        raise typer.BadParameter("Expected comma-separated floats") from exc
+        raise typer.BadParameter('Expected three comma-separated floats between 0 and 1, e.g. "0.82,0.88,0.96"') from exc
     if len(parts) != 3:
         raise typer.BadParameter("Expected three comma-separated floats between 0 and 1")
     clamped = tuple(max(0.0, min(1.0, p)) for p in parts)
