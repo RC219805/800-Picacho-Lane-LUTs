@@ -129,7 +129,6 @@ __all__ = [
     "float_to_dtype_array",
     "gaussian_blur",
     "gaussian_kernel",
-    "gaussian_kernel_cached",
     "image_to_float",
     "main",
     "parse_args",
