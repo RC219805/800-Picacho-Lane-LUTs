@@ -11,9 +11,13 @@ and an optional diffusion glow for an elevated aesthetic.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
+import functools
 import logging
 import math
+import os
+import uuid
 from pathlib import Path
 from typing import Any as _Any
 from typing import Dict as _Dict
@@ -29,6 +33,24 @@ try:  # Optional high-fidelity TIFF writer
     import tifffile  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     tifffile = None
+
+try:  # Optional progress bar for batch runs
+    from tqdm import tqdm as _tqdm  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    _tqdm = None
+
+
+def _tqdm_progress(
+    iterable: Iterable[Any], *, total: Optional[int], description: Optional[str]
+) -> Iterable[Any]:
+    """Wrap *iterable* with :mod:`tqdm` if available."""
+
+    if _tqdm is None:  # pragma: no cover - defensive fallback
+        return iterable
+    return _tqdm(iterable, total=total, desc=description, unit="image")
+
+
+_PROGRESS_WRAPPER = _tqdm_progress if _tqdm is not None else None
 
 
 class LuxuryGradeException(RuntimeError):
@@ -104,6 +126,7 @@ __all__ = [
     "ImageToFloatResult",
     "LUXURY_PRESETS",
     "ProcessingCapabilities",
+    "ProcessingContext",
     "apply_adjustments",
     "build_adjustments",
     "collect_images",
@@ -119,6 +142,70 @@ __all__ = [
     "run_pipeline",
     "save_image",
 ]
+
+
+def _wrap_with_progress(
+    iterable: Iterable[Any],
+    *,
+    total: Optional[int],
+    description: str,
+    enabled: bool,
+) -> Iterable[Any]:
+    """Return an iterable wrapped with a progress helper when available."""
+
+    if not enabled:
+        return iterable
+
+    helper = _PROGRESS_WRAPPER
+    if helper is None:
+        LOGGER.debug("Progress helper not available; install tqdm for progress reporting.")
+        return iterable
+
+    try:
+        return helper(iterable, total=total, description=description)
+    except Exception:  # pragma: no cover - defensive fallback
+        LOGGER.exception("Progress helper failed; continuing without progress display.")
+        return iterable
+
+
+@dataclasses.dataclass
+class ProcessingContext:
+    """Context manager staging output beside the destination."""
+
+    destination: Path
+    suffix: str = ".tmp"
+
+    def __post_init__(self) -> None:
+        self._staged_path: Optional[Path] = None
+
+    def _temp_path(self) -> Path:
+        unique = uuid.uuid4().hex
+        name = f".{self.destination.name}{self.suffix}-{unique}"
+        return self.destination.parent / name
+
+    def __enter__(self) -> Path:
+        self.destination.parent.mkdir(parents=True, exist_ok=True)
+        self._staged_path = self._temp_path()
+        return self._staged_path
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        if self._staged_path is None:
+            return False
+
+        staged = self._staged_path
+        self._staged_path = None
+
+        if exc_type is None:
+            try:
+                os.replace(staged, self.destination)
+            except Exception:
+                with contextlib.suppress(Exception):
+                    staged.unlink()
+                raise
+        else:
+            with contextlib.suppress(FileNotFoundError):
+                staged.unlink()
+        return False
 
 
 @dataclasses.dataclass
@@ -362,6 +449,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Optionally resize the longest image edge to this many pixels while preserving aspect ratio",
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview the work without writing any files")
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress reporting (useful for minimal or non-interactive environments)",
+    )
 
     # Fine control overrides.
     parser.add_argument("--exposure", type=float, default=None, help="Exposure adjustment in stops")
@@ -656,6 +748,7 @@ def save_image(
     icc_profile: Optional[bytes],
     compression: str,
 ) -> None:
+    destination_fs = os.fspath(destination)
     metadata = sanitize_tiff_metadata(metadata)
     np_dtype = np.dtype(dtype)
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
@@ -689,7 +782,7 @@ def save_image(
                 LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
         if extratags:
             tiff_kwargs["extratags"] = extratags
-        tifffile.imwrite(destination, array_to_write, **tiff_kwargs)
+        tifffile.imwrite(destination_fs, array_to_write, **tiff_kwargs)
         return
 
     if dtype_info and dtype_info.bits == 16:
@@ -726,7 +819,7 @@ def save_image(
         save_kwargs["tiffinfo"] = metadata
     if icc_profile:
         save_kwargs["icc_profile"] = icc_profile
-    image.save(destination, format="TIFF", **save_kwargs)
+    image.save(destination_fs, format="TIFF", **save_kwargs)
 
 
 def apply_exposure(arr: np.ndarray, stops: float) -> np.ndarray:
@@ -885,6 +978,26 @@ def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
 
 
 def gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
+    """
+    Retrieve a cached 1D Gaussian kernel for the given radius and sigma.
+
+    Parameters
+    ----------
+    radius : int
+        The radius of the kernel. Must be >= 0.
+    sigma : Optional[float]
+        The standard deviation of the Gaussian. If None, a default based on radius is used.
+
+    Returns
+    -------
+    np.ndarray
+        A 1D numpy array containing the Gaussian kernel, normalized to sum to 1.
+
+    Notes
+    -----
+    The returned kernel is cached for each (radius, sigma) combination to improve performance.
+    The kernel must not be mutated; callers should copy it if mutation is required.
+    """
     return gaussian_kernel(radius, sigma)
 
 
@@ -1061,8 +1174,12 @@ def process_single_image(
         destination.parent.mkdir(parents=True, exist_ok=True)
 
     with Image.open(source) as image:
-        metadata = getattr(image, "tag_v2", None)
-        icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
+        metadata = None
+        with contextlib.suppress(AttributeError):
+            metadata = image.tag_v2
+        icc_profile = None
+        if isinstance(image.info, dict):
+            icc_profile = image.info.get("icc_profile")
         float_result = image_to_float(image, return_format="object")
         arr = float_result.array
         dtype = float_result.dtype
@@ -1085,7 +1202,8 @@ def process_single_image(
         if dry_run:
             LOGGER.info("Dry run enabled, skipping save for %s", destination)
             return
-        save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
+        with ProcessingContext(destination) as staged_path:
+            save_image(staged_path, arr_int, dtype, metadata, icc_profile, compression)
 
 
 # Backwards compatibility shim for older integrations expecting the previous helper name.
@@ -1120,6 +1238,7 @@ def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
 def run_pipeline(args: argparse.Namespace) -> int:
     """Run the batch processor with the provided arguments."""
 
+    run_id = uuid.uuid4().hex
     adjustments = build_adjustments(args)
     input_root = args.input.resolve()
     output_root = args.output.resolve()
@@ -1131,9 +1250,10 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
     _ensure_non_overlapping(input_root, output_root)
 
+    LOGGER.info("Starting batch run %s for %s", run_id, input_root)
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
-        LOGGER.warning("No TIFF images found in %s", input_root)
+        LOGGER.warning("No TIFF images found in %s (run %s)", input_root, run_id)
         return 0
 
     if not args.dry_run:
@@ -1142,7 +1262,14 @@ def run_pipeline(args: argparse.Namespace) -> int:
     LOGGER.info("Found %s image(s) to process", len(images))
     processed = 0
 
-    for image_path in images:
+    progress_iterable = _wrap_with_progress(
+        images,
+        total=len(images),
+        description="Processing images",
+        enabled=not getattr(args, "no_progress", False),
+    )
+
+    for image_path in progress_iterable:
         destination = ensure_output_path(
             input_root,
             output_root,
@@ -1154,6 +1281,8 @@ def run_pipeline(args: argparse.Namespace) -> int:
         if destination.exists() and not args.overwrite and not args.dry_run:
             LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
             continue
+        if args.dry_run:
+            LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
         process_single_image(
             image_path,
             destination,
@@ -1165,6 +1294,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
         if not args.dry_run:
             processed += 1
 
+    LOGGER.info("Finished batch run %s; processed %s image(s)", run_id, processed)
     return processed
 
 

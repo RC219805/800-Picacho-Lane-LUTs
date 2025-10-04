@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+from typing import Any, Dict
 
 import pytest
 
@@ -96,6 +97,48 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
         assert np.array(processed).dtype == np.uint8
 
 
+def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    source_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    source_dir.mkdir()
+    output_dir.mkdir()
+
+    arr = np.linspace(0, 255, 4 * 4 * 3, dtype=np.uint8).reshape((4, 4, 3))
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        image = Image.fromarray(arr, mode="RGB")
+    source_path = source_dir / "frame.tif"
+    image.save(source_path)
+
+    dest_path = output_dir / "frame_processed.tif"
+    original_bytes = b"original-destination"
+    dest_path.write_bytes(original_bytes)
+
+    class Boom(RuntimeError):
+        pass
+
+    def failing_save(path: Path, *args, **kwargs) -> None:
+        Path(path).write_bytes(b"partial")
+        raise Boom("simulated failure")
+
+    monkeypatch.setattr(ltiff, "save_image", failing_save)
+
+    with pytest.raises(Boom):
+        ltiff.process_single_image(
+            source_path,
+            dest_path,
+            ltiff.AdjustmentSettings(),
+            compression="tiff_lzw",
+        )
+
+    assert dest_path.exists()
+    assert dest_path.read_bytes() == original_bytes
+    temp_artifacts = list(dest_path.parent.glob(f".{dest_path.name}.tmp*"))
+    assert temp_artifacts == []
+
+
 @documents("Dry runs provide planning insight without side effects")
 def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     input_dir = tmp_path / "in"
@@ -118,6 +161,64 @@ def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
 
     assert processed == 0
     assert not any(output_dir.rglob("*.tif"))
+
+
+def _create_sample_image(path: Path) -> None:
+    image = Image.new("RGB", (2, 2), color=(32, 64, 96))
+    image.save(path)
+
+
+def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    sample = input_dir / "frame.tif"
+    _create_sample_image(sample)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run"])
+
+    calls: Dict[str, Any] = {"called": False, "items": []}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        calls["called"] = True
+        calls["total"] = total
+        calls["description"] = description
+        for item in iterable:
+            calls["items"].append(item)
+            yield item
+
+    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+
+    processed = ltiff.run_pipeline(args)
+
+    assert processed == 0
+    assert calls["called"] is True
+    assert calls["total"] == 1
+    assert calls["items"] == [sample]
+    assert "Processing" in (calls["description"] or "")
+
+
+def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    _create_sample_image(input_dir / "frame.tif")
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run", "--no-progress"])
+
+    calls = {"called": False}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        calls["called"] = True
+        yield from iterable
+
+    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+
+    ltiff.run_pipeline(args)
+
+    assert calls["called"] is False
 
 
 @documents("Filesystem discovery respects operator scope selections")
