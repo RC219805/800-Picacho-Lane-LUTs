@@ -23,6 +23,7 @@ from .pipeline import (
     ensure_output_path,
     process_single_image,
 )
+from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
@@ -162,6 +163,12 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default="signature",
         choices=sorted(LUXURY_PRESETS.keys()),
         help="Adjustment preset that provides a starting point",
+    )
+    parser.add_argument(
+        "--profile",
+        default=DEFAULT_PROFILE_NAME,
+        choices=sorted(PROCESSING_PROFILES.keys()),
+        help="Processing profile balancing fidelity and speed",
     )
     parser.add_argument(
         "--recursive",
@@ -319,6 +326,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
     run_id = uuid.uuid4().hex
     adjustments = build_adjustments(args)
+    profile = PROCESSING_PROFILES[args.profile]
     input_root = args.input.resolve()
     output_root = args.output.resolve()
 
@@ -329,7 +337,12 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
     _ensure_non_overlapping(input_root, output_root)
 
-    LOGGER.info("Starting batch run %s for %s", run_id, input_root)
+    LOGGER.info(
+        "Starting batch run %s for %s using '%s' profile",
+        run_id,
+        input_root,
+        profile.name,
+    )
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
         LOGGER.warning("No TIFF images found in %s (run %s)", input_root, run_id)
@@ -344,6 +357,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
     workers = getattr(args, "workers", 1)
     resize_long_edge = getattr(args, "resize_long_edge", None)
     resize_target = getattr(args, "resize_target", None)
+    compression = profile.resolve_compression(args.compression)
 
     if workers <= 1:
         progress_iterable = _wrap_with_progress(
@@ -371,10 +385,11 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 image_path,
                 destination,
                 adjustments,
-                compression=args.compression,
+                compression=compression,
                 resize_long_edge=resize_long_edge,
                 resize_target=resize_target,
                 dry_run=args.dry_run,
+                profile=profile,
             )
             if not args.dry_run:
                 processed += 1
@@ -416,10 +431,11 @@ def run_pipeline(args: argparse.Namespace) -> int:
                         image_path,
                         destination,
                         adjustments,
-                        compression=args.compression,
+                        compression=compression,
                         resize_long_edge=resize_long_edge,
                         resize_target=resize_target,
                         dry_run=args.dry_run,
+                        profile=profile,
                     )
                 )
 
