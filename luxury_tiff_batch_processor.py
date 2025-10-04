@@ -41,17 +41,24 @@ class LuxuryGradeException(RuntimeError):
 class ProcessingCapabilities:
     """Introspects optional dependencies to describe processing fidelity."""
 
-    def __init__(self, tifffile_module: Any | None = None) -> None:
+    _SENTINEL = object()
+
+    def __init__(self, tifffile_module: Any | None | object = _SENTINEL) -> None:
         """Initialise capability detection.
 
         Parameters
         ----------
         tifffile_module:
-            Optional dependency override primarily used by tests.  When ``None``
-            the globally imported :mod:`tifffile` module is consulted.
+            Optional dependency override primarily used by tests.  When omitted
+            (the default) the globally imported :mod:`tifffile` module is
+            consulted.  Passing ``None`` explicitly simulates the dependency not
+            being available at all.
         """
 
-        self._tifffile = tifffile_module if tifffile_module is not None else tifffile
+        if tifffile_module is self._SENTINEL:
+            self._tifffile = tifffile
+        else:
+            self._tifffile = tifffile_module
         self.bit_depth = 16 if self._supports_16_bit_output() else 8
         self.hdr_capable = self._detect_hdr_support()
 
