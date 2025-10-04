@@ -19,6 +19,7 @@ from luxury_tiff_batch_processor import (
     float_to_dtype_array,
     gaussian_blur,
     gaussian_kernel,
+    gaussian_kernel_cached,
     image_to_float,
     save_image,
 )
@@ -110,7 +111,7 @@ def test_image_to_float_float_dynamic_range_restored():
 
 
 def _reference_gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    kernel = gaussian_kernel(radius, sigma)
+    kernel = gaussian_kernel_cached(radius, sigma)
 
     working = arr
     squeeze = False
@@ -145,3 +146,20 @@ def test_gaussian_blur_matches_reference():
     reference = _reference_gaussian_blur(data, radius)
 
     assert np.allclose(optimised, reference, atol=1e-6)
+
+
+def test_gaussian_blur_reuses_cached_kernel():
+    ltiff.gaussian_kernel.cache_clear()
+    rng = np.random.default_rng(123)
+    data = rng.random((16, 12, 3), dtype=np.float32)
+    radius = 2
+
+    first = gaussian_blur(data, radius)
+    first_info = ltiff.gaussian_kernel.cache_info()
+    assert first_info.misses == 1
+
+    second = gaussian_blur(data, radius)
+    second_info = ltiff.gaussian_kernel.cache_info()
+    assert second_info.hits >= 1
+
+    assert np.allclose(first, second)
