@@ -12,15 +12,18 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import dataclasses
 import dis
 import inspect
 import logging
 import math
+import os
 from pathlib import Path
 from typing import Any as _Any
 from typing import Dict as _Dict
 from typing import Iterable, Iterator, List, Optional, Tuple, Union
+import uuid
 
 Any = _Any
 Dict = _Dict
@@ -107,6 +110,7 @@ __all__ = [
     "ImageToFloatResult",
     "LUXURY_PRESETS",
     "ProcessingCapabilities",
+    "ProcessingContext",
     "apply_adjustments",
     "build_adjustments",
     "collect_images",
@@ -119,6 +123,46 @@ __all__ = [
     "run_pipeline",
     "save_image",
 ]
+
+
+@dataclasses.dataclass
+class ProcessingContext:
+    """Context manager staging output beside the destination."""
+
+    destination: Path
+    suffix: str = ".tmp"
+
+    def __post_init__(self) -> None:
+        self._staged_path: Optional[Path] = None
+
+    def _temp_path(self) -> Path:
+        unique = uuid.uuid4().hex
+        name = f".{self.destination.name}{self.suffix}-{unique}"
+        return self.destination.parent / name
+
+    def __enter__(self) -> Path:
+        self.destination.parent.mkdir(parents=True, exist_ok=True)
+        self._staged_path = self._temp_path()
+        return self._staged_path
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        if self._staged_path is None:
+            return False
+
+        staged = self._staged_path
+        self._staged_path = None
+
+        if exc_type is None:
+            try:
+                os.replace(staged, self.destination)
+            except Exception:
+                with contextlib.suppress(Exception):
+                    staged.unlink()
+                raise
+        else:
+            with contextlib.suppress(FileNotFoundError):
+                staged.unlink()
+        return False
 
 
 @dataclasses.dataclass
@@ -710,6 +754,7 @@ def save_image(
     icc_profile: Optional[bytes],
     compression: str,
 ) -> None:
+    destination_fs = os.fspath(destination)
     metadata = sanitize_tiff_metadata(metadata)
     np_dtype = np.dtype(dtype)
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
@@ -743,7 +788,7 @@ def save_image(
                 LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
         if extratags:
             tiff_kwargs["extratags"] = extratags
-        tifffile.imwrite(destination, array_to_write, **tiff_kwargs)
+        tifffile.imwrite(destination_fs, array_to_write, **tiff_kwargs)
         return
 
     if dtype_info and dtype_info.bits == 16:
@@ -780,7 +825,7 @@ def save_image(
         save_kwargs["tiffinfo"] = metadata
     if icc_profile:
         save_kwargs["icc_profile"] = icc_profile
-    image.save(destination, format="TIFF", **save_kwargs)
+    image.save(destination_fs, format="TIFF", **save_kwargs)
 
 
 def apply_exposure(arr: np.ndarray, stops: float) -> np.ndarray:
@@ -1142,7 +1187,8 @@ def process_single_image(
         if dry_run:
             LOGGER.info("Dry run enabled, skipping save for %s", destination)
             return
-        save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
+        with ProcessingContext(destination) as staged_path:
+            save_image(staged_path, arr_int, dtype, metadata, icc_profile, compression)
 
 
 # Backwards compatibility shim for older integrations expecting the previous helper name.

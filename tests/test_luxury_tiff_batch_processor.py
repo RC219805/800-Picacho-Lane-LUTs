@@ -96,6 +96,48 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
         assert np.array(processed).dtype == np.uint8
 
 
+def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    source_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    source_dir.mkdir()
+    output_dir.mkdir()
+
+    arr = np.linspace(0, 255, 4 * 4 * 3, dtype=np.uint8).reshape((4, 4, 3))
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        image = Image.fromarray(arr, mode="RGB")
+    source_path = source_dir / "frame.tif"
+    image.save(source_path)
+
+    dest_path = output_dir / "frame_processed.tif"
+    original_bytes = b"original-destination"
+    dest_path.write_bytes(original_bytes)
+
+    class Boom(RuntimeError):
+        pass
+
+    def failing_save(path: Path, *args, **kwargs) -> None:
+        Path(path).write_bytes(b"partial")
+        raise Boom("simulated failure")
+
+    monkeypatch.setattr(ltiff, "save_image", failing_save)
+
+    with pytest.raises(Boom):
+        ltiff.process_single_image(
+            source_path,
+            dest_path,
+            ltiff.AdjustmentSettings(),
+            compression="tiff_lzw",
+        )
+
+    assert dest_path.exists()
+    assert dest_path.read_bytes() == original_bytes
+    temp_artifacts = list(dest_path.parent.glob(f".{dest_path.name}.tmp*"))
+    assert temp_artifacts == []
+
+
 @documents("Dry runs provide planning insight without side effects")
 def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     input_dir = tmp_path / "in"
