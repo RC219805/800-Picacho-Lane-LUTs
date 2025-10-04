@@ -1130,8 +1130,12 @@ def process_single_image(
         destination.parent.mkdir(parents=True, exist_ok=True)
 
     with Image.open(source) as image:
-        metadata = getattr(image, "tag_v2", None)
-        icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
+        metadata = None
+        with contextlib.suppress(AttributeError):
+            metadata = image.tag_v2
+        icc_profile = None
+        if isinstance(image.info, dict):
+            icc_profile = image.info.get("icc_profile")
         float_result = image_to_float(image, return_format="object")
         arr = float_result.array
         dtype = float_result.dtype
@@ -1189,6 +1193,7 @@ def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
 def run_pipeline(args: argparse.Namespace) -> int:
     """Run the batch processor with the provided arguments."""
 
+    run_id = uuid.uuid4().hex
     adjustments = build_adjustments(args)
     input_root = args.input.resolve()
     output_root = args.output.resolve()
@@ -1200,9 +1205,10 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
     _ensure_non_overlapping(input_root, output_root)
 
+    LOGGER.info("Starting batch run %s for %s", run_id, input_root)
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
-        LOGGER.warning("No TIFF images found in %s", input_root)
+        LOGGER.warning("No TIFF images found in %s (run %s)", input_root, run_id)
         return 0
 
     if not args.dry_run:
@@ -1243,6 +1249,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
         if not args.dry_run:
             processed += 1
 
+    LOGGER.info("Finished batch run %s; processed %s image(s)", run_id, processed)
     return processed
 
 
