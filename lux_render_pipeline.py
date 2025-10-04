@@ -205,12 +205,6 @@ def apply_material_response_finishing(
     x_norm = xx.astype(np.float32) / max(1, w - 1)
 
     floor_mask = np.clip((y_norm - 0.55) / 0.45, 0.0, 1.0)
-    floor_transition = gaussian_filter(floor_mask * (1.0 - floor_mask), sigma=2.0)
-    floor_transition = np.clip(floor_transition, 0.0, 1.0)
-
-    if floor_contact_shadow > 0:
-        contact_falloff = 1.0 - floor_contact_shadow * floor_transition
-        rgb = np.clip(rgb * contact_falloff[..., None], 0.0, 1.0)
 
     if ambient_occlusion > 0:
         # Edge-based occlusion mask to ground furniture with the floor
@@ -221,7 +215,9 @@ def apply_material_response_finishing(
             edge_mag /= edge_mag.max()
         occlusion = gaussian_filter(edge_mag, sigma=1.2)
         occlusion = np.clip(occlusion, 0.0, 1.0)
-        shadow = 1.0 - ambient_occlusion * (occlusion + 0.6 * floor_transition)
+        floor_contact = gaussian_filter(floor_mask * (1.0 - floor_mask), sigma=2.0)
+        contact_weight = np.clip(floor_contact, 0.0, 1.0)
+        shadow = 1.0 - ambient_occlusion * (occlusion + 0.6 * contact_weight)
         rgb = np.clip(rgb * shadow[..., None], 0.0, 1.0)
 
     # Floor plank definition + specular streaks guided by perspective gradient
