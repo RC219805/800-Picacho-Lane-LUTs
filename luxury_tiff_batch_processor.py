@@ -952,15 +952,20 @@ def process_single_image(
         icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
         arr, dtype, alpha, base_channels = image_to_float(image)
         adjusted = apply_adjustments(arr, adjustments)
-        if resize_long_edge is not None:
-            adjusted = resize_long_edge_array(adjusted, resize_long_edge)
+        resize_target = resize_long_edge
+        if resize_target is not None:
+            adjusted = resize_long_edge_array(adjusted, resize_target)
             if alpha is not None:
-                alpha = resize_long_edge_array(alpha, resize_long_edge)
+                alpha = resize_long_edge_array(alpha, resize_target)
         arr_int = float_to_dtype_array(adjusted, dtype, alpha, base_channels)
         if dry_run:
             LOGGER.info("Dry run enabled, skipping save for %s", destination)
             return
         save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
+
+
+# Backwards compatibility shim for older integrations expecting the previous helper name.
+process_image = process_single_image
 
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
