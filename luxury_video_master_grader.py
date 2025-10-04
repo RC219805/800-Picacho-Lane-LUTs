@@ -276,7 +276,7 @@ def summarize_probe(data: Dict[str, object]) -> str:
         color_parts = []
         color_primaries = normalise_color_tag(video.get("color_primaries"))
         color_trc = normalise_color_tag(video.get("color_trc"))
-        colorspace = normalise_color_tag(video.get("colorspace"))
+        colorspace = normalise_color_tag(get_color_space_tag(video))
 
         if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
@@ -324,6 +324,15 @@ def normalise_color_tag(value: Optional[str]) -> Optional[str]:
     return lowered
 
 
+def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
+    """Fetch the reported color space tag, handling legacy ffprobe key variants."""
+
+    value = stream.get("color_space")
+    if value is None:
+        value = stream.get("colorspace")
+    return value
+
+
 def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
     """Determine whether tone mapping should run for this clip."""
 
@@ -337,7 +346,7 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     video = extract_video_stream(probe)
     transfer = (video.get("color_trc") or "").lower()
     primaries = (video.get("color_primaries") or "").lower()
-    matrix = (video.get("colorspace") or "").lower()
+    matrix = (get_color_space_tag(video) or "").lower()
 
     hdr_indicators: List[str] = []
     if transfer in HDR_TRANSFERS:
@@ -705,18 +714,18 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
 def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object]) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Determine color metadata based on priority: explicit > color-from-source > none."""
+
     # Priority 1: Explicit overrides
     if args.color_primaries or args.color_transfer or args.color_space:
         return args.color_primaries, args.color_transfer, args.color_space
 
     # Priority 2: Copy from source if requested
     if args.color_from_source:
-        streams = probe.get("streams", [])
-        video = next((s for s in streams if s.get("codec_type") == "video"), {})
+        video = extract_video_stream(probe)
         if video:
             primaries = normalise_color_tag(video.get("color_primaries"))
             transfer = normalise_color_tag(video.get("color_trc"))
-            space = normalise_color_tag(video.get("colorspace"))
+            space = normalise_color_tag(get_color_space_tag(video))
             return primaries, transfer, space
 
     # Priority 3: None (default behavior - no color tags set)

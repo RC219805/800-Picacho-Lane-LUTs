@@ -7,6 +7,7 @@ from pathlib import Path
 
 from decision_decay_dashboard import (
     collect_color_token_report,
+    collect_outdated_valid_until_records,
     collect_philosophy_violations,
     collect_valid_until_records,
 )
@@ -31,6 +32,26 @@ def test_collect_valid_until_records_sorted(tmp_path):
 
     assert [record.target for record in records] == ["test_future_b", "test_future_a"]
     assert records[0].reason == "Soon"
+
+
+def test_collect_outdated_valid_until_records(tmp_path):
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    module = tests_dir / "test_expirations.py"
+    expired = (date.today() - timedelta(days=1)).isoformat()
+    upcoming = (date.today() + timedelta(days=3)).isoformat()
+    module.write_text(
+        "from tests.documentation import valid_until\n\n"
+        f"@valid_until(\"{expired}\", reason=\"Expired contract\")\n"
+        "def test_outdated():\n    pass\n\n"
+        f"@valid_until(\"{upcoming}\", reason=\"Still valid\")\n"
+        "def test_current():\n    pass\n"
+    )
+
+    records = collect_outdated_valid_until_records(tests_dir)
+
+    assert [record.target for record in records] == ["test_outdated"]
+    assert records[0].reason == "Expired contract"
 
 
 class DummyAuditor:
