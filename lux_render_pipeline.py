@@ -566,7 +566,6 @@ class LuxuryRenderPipeline:
         init = resize_to_multiple(init_image, mult=8, target=(cfg.width, cfg.height))
         canny = self.pre.make_canny(init)
         depth = self.pre.make_depth(init) if self._use_depth else None
-        depth = self.pre.make_depth(init)
         control_images = [canny]
         if depth is not None:
             control_images.append(depth)
