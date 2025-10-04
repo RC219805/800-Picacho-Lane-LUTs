@@ -11,9 +11,11 @@ and an optional diffusion glow for an elevated aesthetic.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import logging
 import math
+import uuid
 from pathlib import Path
 from typing import Any as _Any
 from typing import Dict as _Dict
