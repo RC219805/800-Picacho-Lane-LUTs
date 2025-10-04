@@ -137,6 +137,29 @@ class AdjustmentSettings:
     chroma_denoise: float = 0.0
     glow: float = 0.0
 
+    def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        def ensure_range(name: str, value: float, minimum: float, maximum: float) -> None:
+            if not (minimum <= value <= maximum):
+                raise ValueError(f"{name} must be between {minimum} and {maximum}, got {value}")
+
+        ensure_range("exposure", self.exposure, -5.0, 5.0)
+
+        if self.white_balance_temp is not None:
+            ensure_range("white_balance_temp", self.white_balance_temp, 1500.0, 20000.0)
+
+        ensure_range("white_balance_tint", self.white_balance_tint, -150.0, 150.0)
+        ensure_range("shadow_lift", self.shadow_lift, 0.0, 1.0)
+        ensure_range("highlight_recovery", self.highlight_recovery, 0.0, 1.0)
+        ensure_range("midtone_contrast", self.midtone_contrast, -1.0, 1.0)
+        ensure_range("vibrance", self.vibrance, -1.0, 1.0)
+        ensure_range("saturation", self.saturation, -1.0, 1.0)
+        ensure_range("clarity", self.clarity, -1.0, 1.0)
+        ensure_range("chroma_denoise", self.chroma_denoise, 0.0, 1.0)
+        ensure_range("glow", self.glow, 0.0, 1.0)
+
 
 # --- Float handling primitives -------------------------------------------------
 
@@ -409,6 +432,7 @@ def build_adjustments(args: argparse.Namespace) -> AdjustmentSettings:
         value = getattr(args, field.name, None)
         if value is not None:
             setattr(base, field.name, value)
+            base._validate()
     LOGGER.debug("Using adjustments: %s", base)
     return base
 
