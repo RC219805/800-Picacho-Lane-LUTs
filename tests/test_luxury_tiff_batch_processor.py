@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+from typing import Any, Dict
 
 import pytest
 
@@ -160,6 +161,64 @@ def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
 
     assert processed == 0
     assert not any(output_dir.rglob("*.tif"))
+
+
+def _create_sample_image(path: Path) -> None:
+    image = Image.new("RGB", (2, 2), color=(32, 64, 96))
+    image.save(path)
+
+
+def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    sample = input_dir / "frame.tif"
+    _create_sample_image(sample)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run"])
+
+    calls: Dict[str, Any] = {"called": False, "items": []}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        calls["called"] = True
+        calls["total"] = total
+        calls["description"] = description
+        for item in iterable:
+            calls["items"].append(item)
+            yield item
+
+    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+
+    processed = ltiff.run_pipeline(args)
+
+    assert processed == 0
+    assert calls["called"] is True
+    assert calls["total"] == 1
+    assert calls["items"] == [sample]
+    assert "Processing" in (calls["description"] or "")
+
+
+def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    _create_sample_image(input_dir / "frame.tif")
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run", "--no-progress"])
+
+    calls = {"called": False}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        calls["called"] = True
+        yield from iterable
+
+    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+
+    ltiff.run_pipeline(args)
+
+    assert calls["called"] is False
 
 
 @documents("Filesystem discovery respects operator scope selections")
