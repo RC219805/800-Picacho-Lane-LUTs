@@ -11,17 +11,13 @@ and an optional diffusion glow for an elevated aesthetic.
 from __future__ import annotations
 
 import argparse
-import ast
 import dataclasses
-import dis
-import functools
-import inspect
 import logging
 import math
 from pathlib import Path
 from typing import Any as _Any
 from typing import Dict as _Dict
-from typing import Iterable, Iterator, List, Optional, Tuple, Union
+from typing import Iterable, Iterator, List, Literal, Optional, Tuple, Union
 
 Any = _Any
 Dict = _Dict
@@ -140,6 +136,29 @@ class AdjustmentSettings:
     clarity: float = 0.0
     chroma_denoise: float = 0.0
     glow: float = 0.0
+
+    def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        def ensure_range(name: str, value: float, minimum: float, maximum: float) -> None:
+            if not (minimum <= value <= maximum):
+                raise ValueError(f"{name} must be between {minimum} and {maximum}, got {value}")
+
+        ensure_range("exposure", self.exposure, -5.0, 5.0)
+
+        if self.white_balance_temp is not None:
+            ensure_range("white_balance_temp", self.white_balance_temp, 1500.0, 20000.0)
+
+        ensure_range("white_balance_tint", self.white_balance_tint, -150.0, 150.0)
+        ensure_range("shadow_lift", self.shadow_lift, 0.0, 1.0)
+        ensure_range("highlight_recovery", self.highlight_recovery, 0.0, 1.0)
+        ensure_range("midtone_contrast", self.midtone_contrast, -1.0, 1.0)
+        ensure_range("vibrance", self.vibrance, -1.0, 1.0)
+        ensure_range("saturation", self.saturation, -1.0, 1.0)
+        ensure_range("clarity", self.clarity, -1.0, 1.0)
+        ensure_range("chroma_denoise", self.chroma_denoise, 0.0, 1.0)
+        ensure_range("glow", self.glow, 0.0, 1.0)
 
 
 # --- Float handling primitives -------------------------------------------------
@@ -413,6 +432,7 @@ def build_adjustments(args: argparse.Namespace) -> AdjustmentSettings:
         value = getattr(args, field.name, None)
         if value is not None:
             setattr(base, field.name, value)
+            base._validate()
     LOGGER.debug("Using adjustments: %s", base)
     return base
 
@@ -444,89 +464,9 @@ def ensure_output_path(
     return destination.with_name(new_name)
 
 
-def _expected_unpack_count() -> Optional[int]:
-    frame = inspect.currentframe()
-    if frame is None or frame.f_back is None or frame.f_back.f_back is None:
-        return None
-    caller = frame.f_back.f_back
-    try:
-        source = inspect.getsource(caller.f_code)
-    except (OSError, TypeError):
-        source = None
-    if source is not None:
-        try:
-            module = ast.parse(source)
-        except SyntaxError:
-            module = None
-        else:
-            for node in ast.walk(module):
-                if isinstance(node, ast.Assign):
-                    start = getattr(node, "lineno", -1)
-                    end = getattr(node, "end_lineno", start)
-                    if not (start <= caller.f_lineno <= end):
-                        continue
-                    value = node.value
-                    if isinstance(value, ast.Call):
-                        func = value.func
-                        func_name: Optional[str] = None
-                        if isinstance(func, ast.Name):
-                            func_name = func.id
-                        elif isinstance(func, ast.Attribute):
-                            func_name = func.attr
-                        if func_name == "image_to_float" and node.targets:
-                            target = node.targets[0]
-                            if isinstance(target, (ast.Tuple, ast.List)):
-                                return len(target.elts)
-                            return 1
-
-    try:
-        instructions = list(dis.get_instructions(caller.f_code))
-        target_index: Optional[int] = None
-        for idx, instruction in enumerate(instructions):
-            if instruction.offset > caller.f_lasti:
-                target_index = idx - 1
-                break
-            if instruction.offset == caller.f_lasti:
-                target_index = idx
-                break
-        if target_index is None:
-            return None
-        target_index = max(target_index, 0)
-        for next_instruction in instructions[target_index + 1 :]:
-            if next_instruction.opname in {"CACHE", "EXTENDED_ARG"}:
-                continue
-            if next_instruction.opname == "UNPACK_SEQUENCE":
-                return int(next_instruction.arg)
-            if next_instruction.opname == "UNPACK_EX":
-                arg = int(next_instruction.arg or 0)
-                before = arg & 0xFF
-                after = arg >> 8
-                return before + after
-            break
-        for prev_instruction in reversed(instructions[: target_index + 1]):
-            if prev_instruction.opname in {"CACHE", "EXTENDED_ARG"}:
-                continue
-            if prev_instruction.opname == "UNPACK_SEQUENCE":
-                return int(prev_instruction.arg)
-            if prev_instruction.opname == "UNPACK_EX":
-                arg = int(prev_instruction.arg or 0)
-                before = arg & 0xFF
-                after = arg >> 8
-                return before + after
-            if prev_instruction.opname.startswith("LOAD_") or prev_instruction.opname.startswith("STORE_"):
-                continue
-            if prev_instruction.opname.startswith("PUSH"):
-                continue
-            break
-    except Exception:
-        return None
-    finally:
-        del frame
-    return None
-
-
 def image_to_float(
     image: Image.Image,
+    return_format: Literal["tuple3", "tuple4", "object"] = "object",
 ) -> Union[
     Tuple[np.ndarray, np.dtype, Optional[np.ndarray]],
     Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int],
@@ -611,11 +551,13 @@ def image_to_float(
         float_normalisation=float_norm,
     )
 
-    expected = _expected_unpack_count()
-    if expected == 3:
+    if return_format == "tuple3":
         return result.array, result.dtype, result.alpha
-    if expected == 4:
+    if return_format == "tuple4":
         return result.array, result.dtype, result.alpha, result.base_channels
+    allowed_formats = ("object", "tuple3", "tuple4")
+    if return_format not in allowed_formats:
+        raise ValueError(f"Unsupported return_format: {return_format}. Allowed values are: {allowed_formats}")
     return result
 
 
@@ -1121,20 +1063,12 @@ def process_single_image(
     with Image.open(source) as image:
         metadata = getattr(image, "tag_v2", None)
         icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
-        float_result = image_to_float(image)
-        if isinstance(float_result, ImageToFloatResult):
-            arr = float_result.array
-            dtype = float_result.dtype
-            alpha = float_result.alpha
-            base_channels = float_result.base_channels
-            float_norm = float_result.float_normalisation
-        else:
-            if len(float_result) == 3:
-                arr, dtype, alpha = float_result
-                base_channels = arr.shape[2] if arr.ndim == 3 else 1
-            else:
-                arr, dtype, alpha, base_channels = float_result  # type: ignore[misc]
-            float_norm = None
+        float_result = image_to_float(image, return_format="object")
+        arr = float_result.array
+        dtype = float_result.dtype
+        alpha = float_result.alpha
+        base_channels = float_result.base_channels
+        float_norm = float_result.float_normalisation
         adjusted = apply_adjustments(arr, adjustments)
         target = _coerce_resize_target(resize_long_edge, resize_target)
         if target is not None:
