@@ -928,10 +928,18 @@ def process_single_image(
     dry_run: bool = False,
 ) -> None:
     LOGGER.info("Processing %s -> %s", source, destination)
-    if destination.exists() and not dry_run:
-        if not destination.is_file():
-            raise ValueError(f"Destination path is not a file: {destination}")
-        LOGGER.debug("Destination exists")
+    if destination.exists() and not dry_run and not destination.is_file():
+        if destination.is_dir():
+            path_type = "directory"
+        elif destination.is_symlink():
+            path_type = "symlink"
+        else:
+            path_type = "non-file"
+        raise ValueError(f"Destination path exists but is a {path_type}: {destination}")
+
+    if not dry_run:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
     with Image.open(source) as image:
         metadata = getattr(image, "tag_v2", None)
         icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
