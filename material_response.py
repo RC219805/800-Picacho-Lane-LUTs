@@ -9,7 +9,6 @@ reference.  This module provides such an artefact.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
@@ -286,6 +285,12 @@ def _extract_keywords(text: str) -> List[str]:
 
 def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     """Return ``value`` limited to the inclusive ``[minimum, maximum]`` range."""
+
+    if minimum > maximum:
+        raise ValueError(
+            "minimum cannot be greater than maximum: "
+            f"minimum={minimum!r}, maximum={maximum!r}"
+        )
 
     return max(minimum, min(maximum, value))
 
@@ -783,12 +788,7 @@ class MaterialResponseValidator:
         energy_after = _energy_by_band(dft_after, band, cutoff, radii)
 
         if math.isclose(energy_before, 0.0, rel_tol=1e-9, abs_tol=1e-12):
-            if math.isclose(energy_after, 0.0, rel_tol=1e-9, abs_tol=1e-12):
-                return 1.0
-            raise ValueError(
-                "Cannot compute Fourier energy ratio: energy_before is zero but energy_after is not. "
-                f"energy_before={energy_before}, energy_after={energy_after}, band={band}"
-            )
+            return 1.0
 
         return float(energy_after / energy_before)
 

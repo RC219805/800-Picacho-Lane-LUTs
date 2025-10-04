@@ -139,6 +139,41 @@ def test_collect_images_handles_recursive(tmp_path):
     ]
 
 
+def test_parse_args_sets_default_output(tmp_path: Path):
+    input_dir = tmp_path / "SV-Stills"
+    input_dir.mkdir()
+
+    args = ltiff.parse_args([str(input_dir)])
+
+    assert args.output == input_dir.parent / "SV-Stills_lux"
+
+
+def test_run_pipeline_rejects_nested_output(tmp_path: Path):
+    input_dir = tmp_path / "input"
+    nested_output = input_dir / "lux"
+    nested_output.mkdir(parents=True)
+
+    args = ltiff.parse_args([str(input_dir), str(nested_output)])
+
+    with pytest.raises(SystemExit) as excinfo:
+        ltiff.run_pipeline(args)
+
+    assert "Output folder cannot be located inside the input folder" in str(excinfo.value)
+
+
+def test_run_pipeline_rejects_input_nested_in_output(tmp_path: Path):
+    output_dir = tmp_path / "output"
+    input_dir = output_dir / "input"
+    input_dir.mkdir(parents=True)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir)])
+
+    with pytest.raises(SystemExit) as excinfo:
+        ltiff.run_pipeline(args)
+
+    assert "Input folder cannot be located inside the output folder" in str(excinfo.value)
+
+
 @documents("User overrides cascade atop curated presets without drift")
 def test_build_adjustments_applies_overrides(tmp_path):
     args = ltiff.parse_args(
@@ -163,6 +198,20 @@ def test_build_adjustments_applies_overrides(tmp_path):
     assert adjustments.clarity == 0.33
     # Ensure we still carry over preset defaults for untouched controls
     assert adjustments.shadow_lift == ltiff.LUXURY_PRESETS["signature"].shadow_lift
+
+
+@documents("Golden Hour Courtyard preset translates coastal warm scene guidance into defaults")
+def test_golden_hour_courtyard_preset_matches_material_response_brief():
+    preset = ltiff.LUXURY_PRESETS["golden_hour_courtyard"]
+
+    assert preset.exposure == pytest.approx(0.08)
+    assert preset.white_balance_temp == pytest.approx(5600)
+    assert preset.shadow_lift == pytest.approx(0.24)
+    assert preset.highlight_recovery == pytest.approx(0.18)
+    assert preset.midtone_contrast == pytest.approx(0.10)
+    assert preset.vibrance == pytest.approx(0.28)
+    assert preset.clarity == pytest.approx(0.20)
+    assert preset.glow == pytest.approx(0.12)
 
 
 @documents("Platform intelligence supersedes forced uniformity")

@@ -259,7 +259,7 @@ def test_plan_tone_mapping_detects_hdr():
                 "codec_type": "video",
                 "color_trc": "smpte2084",
                 "color_primaries": "bt2020",
-                "colorspace": "bt2020nc",
+                "color_space": "bt2020nc",
             }
         ]
     }
@@ -269,6 +269,26 @@ def test_plan_tone_mapping_detects_hdr():
     assert plan.enabled
     assert plan.config["tone_map"] == "hable"
     assert plan.metadata == ("bt709", "bt709", "bt709")
+    assert "detected" in plan.note
+
+
+@documents("Legacy metadata keys remain compatible with HDR heuristics")
+def test_plan_tone_mapping_honours_legacy_colorspace_key():
+    args = make_tone_args()
+    probe = {
+        "streams": [
+            {
+                "codec_type": "video",
+                "color_trc": "smpte2084",
+                "color_primaries": "bt2020",
+                "colorspace": "bt2020nc",
+            }
+        ]
+    }
+
+    plan = plan_tone_mapping(args, probe)
+
+    assert plan.enabled
     assert "detected" in plan.note
 
 
@@ -322,12 +342,34 @@ def test_determine_color_metadata_from_source_filters_unknown():
                 "codec_type": "video",
                 "color_primaries": "bt2020",
                 "color_trc": "unknown",
-                "colorspace": "bt2020nc",
+                "color_space": "bt2020nc",
             }
         ]
     }
 
     assert determine_color_metadata(args, probe) == ("bt2020", None, "bt2020nc")
+
+
+@documents("Historical ffprobe keypath remains supported for metadata copy")
+def test_determine_color_metadata_legacy_colorspace_key():
+    args = argparse.Namespace(
+        color_primaries=None,
+        color_transfer=None,
+        color_space=None,
+        color_from_source=True,
+    )
+    probe = {
+        "streams": [
+            {
+                "codec_type": "video",
+                "color_primaries": "bt2020",
+                "color_trc": "smpte2084",
+                "colorspace": "bt2020nc",
+            }
+        ]
+    }
+
+    assert determine_color_metadata(args, probe) == ("bt2020", "smpte2084", "bt2020nc")
 
 
 @documents("Absent metadata yields neutral defaults for pipeline safety")
@@ -397,7 +439,7 @@ def test_summarize_probe_ignores_non_descriptive_color_tags():
                 "avg_frame_rate": "24/1",
                 "color_primaries": "unknown",
                 "color_trc": "unspecified",
-                "colorspace": "BT709",
+                "color_space": "BT709",
             }
         ],
     }
@@ -407,6 +449,27 @@ def test_summarize_probe_ignores_non_descriptive_color_tags():
     assert "space=bt709" in summary
     assert "primaries" not in summary
     assert "trc=" not in summary
+
+
+@documents("Legacy color_space keypath is summarised for operator visibility")
+def test_summarize_probe_supports_legacy_colorspace_key():
+    probe = {
+        "format": {"duration": "5.0"},
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "prores",
+                "width": 1920,
+                "height": 1080,
+                "avg_frame_rate": "30/1",
+                "colorspace": "BT2020NC",
+            }
+        ],
+    }
+
+    summary = summarize_probe(probe)
+
+    assert "space=bt2020nc" in summary
 
 
 @documents("Metadata summaries gracefully skip unusable duration fields")
