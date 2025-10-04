@@ -221,6 +221,20 @@ def probe_source(path: Path) -> Dict[str, object]:
         raise RuntimeError("Unable to parse ffprobe output") from exc
 
 
+def _parse_probe_duration(raw: object) -> Optional[float]:
+    """Return a finite float duration from ffprobe metadata when possible."""
+
+    if raw in (None, ""):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
 def summarize_probe(data: Dict[str, object]) -> str:
     fmt = data.get("format", {})
     duration = fmt.get("duration")
@@ -228,8 +242,9 @@ def summarize_probe(data: Dict[str, object]) -> str:
     video = next((s for s in streams if s.get("codec_type") == "video"), {})
     audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
     pieces = []
-    if duration:
-        pieces.append(f"duration {float(duration):.2f}s")
+    numeric_duration = _parse_probe_duration(duration)
+    if numeric_duration is not None:
+        pieces.append(f"duration {numeric_duration:.2f}s")
     if video:
         w = video.get("width")
         h = video.get("height")
@@ -261,7 +276,7 @@ def summarize_probe(data: Dict[str, object]) -> str:
         color_parts = []
         color_primaries = normalise_color_tag(video.get("color_primaries"))
         color_trc = normalise_color_tag(video.get("color_trc"))
-        colorspace = normalise_color_tag(video.get("colorspace"))
+        colorspace = normalise_color_tag(get_color_space_tag(video))
 
         if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
@@ -309,6 +324,15 @@ def normalise_color_tag(value: Optional[str]) -> Optional[str]:
     return lowered
 
 
+def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
+    """Fetch the reported color space tag, handling legacy ffprobe key variants."""
+
+    value = stream.get("color_space")
+    if value is None:
+        value = stream.get("colorspace")
+    return value
+
+
 def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
     """Determine whether tone mapping should run for this clip."""
 
@@ -322,7 +346,7 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     video = extract_video_stream(probe)
     transfer = (video.get("color_trc") or "").lower()
     primaries = (video.get("color_primaries") or "").lower()
-    matrix = (video.get("colorspace") or "").lower()
+    matrix = (get_color_space_tag(video) or "").lower()
 
     hdr_indicators: List[str] = []
     if transfer in HDR_TRANSFERS:
@@ -701,7 +725,7 @@ def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object])
         if video:
             primaries = normalise_color_tag(video.get("color_primaries"))
             transfer = normalise_color_tag(video.get("color_trc"))
-            space = normalise_color_tag(video.get("colorspace"))
+            space = normalise_color_tag(get_color_space_tag(video))
             return primaries, transfer, space
 
     # Priority 3: None (default behavior - no color tags set)

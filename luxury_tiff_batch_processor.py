@@ -15,7 +15,12 @@ import dataclasses
 import logging
 import math
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any as _Any
+from typing import Dict as _Dict
+from typing import Iterable, Iterator, List, Optional, Tuple
+
+Any = _Any
+Dict = _Dict
 
 import numpy as np
 from PIL import Image, TiffImagePlugin
@@ -24,6 +29,63 @@ try:  # Optional high-fidelity TIFF writer
     import tifffile  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     tifffile = None
+
+
+class LuxuryGradeException(RuntimeError):
+    """Raised when the processing environment cannot meet luxury standards."""
+
+
+class ProcessingCapabilities:
+    """Introspects optional dependencies to describe processing fidelity."""
+
+    def __init__(self, tifffile_module: Any | None = None) -> None:
+        """Initialise capability detection.
+
+        Parameters
+        ----------
+        tifffile_module:
+            Optional dependency override primarily used by tests.  When ``None``
+            the globally imported :mod:`tifffile` module is consulted.
+        """
+
+        self._tifffile = tifffile_module if tifffile_module is not None else tifffile
+        self.bit_depth = 16 if self._supports_16_bit_output() else 8
+        self.hdr_capable = self._detect_hdr_support()
+
+    def _supports_16_bit_output(self) -> bool:
+        """Return ``True`` when a writer capable of 16-bit output is available."""
+
+        return bool(getattr(self._tifffile, "imwrite", None))
+
+    def _detect_hdr_support(self) -> bool:
+        """Best-effort check for HDR support given optional dependencies."""
+
+        if not self._supports_16_bit_output():
+            return False
+
+        supports_hdr = getattr(self._tifffile, "supports_hdr", True)
+        try:
+            return bool(supports_hdr)
+        except Exception:  # pragma: no cover - defensive fallback
+            return False
+
+    def assert_luxury_grade(self) -> None:
+        """
+        Validates that the processing environment meets luxury-grade requirements:
+        - 16-bit precision
+        - HDR capability
+        Raises LuxuryGradeException if requirements are not met.
+        """
+        if self.bit_depth < 16:
+            raise LuxuryGradeException(
+                "Material Response requires 16-bit precision. "
+                "Install tifffile to unlock quantum color depth."
+            )
+        if not self.hdr_capable:
+            raise LuxuryGradeException(
+                "Luxury-grade processing requires HDR capability. "
+                "Install tifffile or ensure your environment supports HDR."
+            )
 
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
@@ -76,6 +138,19 @@ LUXURY_PRESETS = {
         chroma_denoise=0.05,
         glow=0.02,
     ),
+    "golden_hour_courtyard": AdjustmentSettings(
+        exposure=0.08,
+        white_balance_temp=5600,
+        white_balance_tint=5.0,
+        shadow_lift=0.24,
+        highlight_recovery=0.18,
+        midtone_contrast=0.10,
+        vibrance=0.28,
+        saturation=0.05,
+        clarity=0.20,
+        chroma_denoise=0.06,
+        glow=0.12,
+    ),
     "twilight": AdjustmentSettings(
         exposure=0.05,
         white_balance_temp=5400,
@@ -98,7 +173,13 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("input", type=Path, help="Folder that contains source TIFF files")
-    parser.add_argument("output", type=Path, help="Folder where processed files will be written")
+    parser.add_argument(
+        "output",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="Folder where processed files will be written. Defaults to '<input>_lux' next to the input folder.",
+    )
     parser.add_argument(
         "--preset",
         default="signature",
@@ -181,8 +262,19 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
 
     args = parser.parse_args(list(argv) if argv is not None else None)
+    if args.output is None:
+        args.output = default_output_folder(args.input)
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
     return args
+
+
+def default_output_folder(input_folder: Path) -> Path:
+    """Return the default output folder for a given input directory."""
+
+    # input_folder is already a Path object
+    if input_folder.name:
+        return input_folder.parent / f"{input_folder.name}_lux"
+    return input_folder / "luxury_output"
 
 
 def build_adjustments(args: argparse.Namespace) -> AdjustmentSettings:
@@ -775,6 +867,24 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
     if not input_root.exists() or not input_root.is_dir():
         raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
+
+    def _contains(parent: Path, child: Path) -> bool:
+        try:
+            child.relative_to(parent)
+        except ValueError:
+            return False
+        return True
+
+    if input_root == output_root:
+        raise SystemExit("Output folder must be different from the input folder to avoid self-overwrites.")
+    if _contains(input_root, output_root):
+        raise SystemExit(
+            "Output folder cannot be located inside the input folder; choose a sibling or separate directory."
+        )
+    if _contains(output_root, input_root):
+        raise SystemExit(
+            "Input folder cannot be located inside the output folder; choose non-overlapping directories."
+        )
 
     adjustments = build_adjustments(args)
     images = sorted(collect_images(input_root, args.recursive))
