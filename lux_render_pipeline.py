@@ -276,9 +276,7 @@ class LuxuryRenderPipeline:
         controlnets: List[ControlNetModel] = [self.cn_canny]
         if self.cn_depth is not None:
             controlnets.append(self.cn_depth)
-        controlnet_arg: Union[ControlNetModel, List[ControlNetModel]] = (
-            controlnets[0] if len(controlnets) == 1 else controlnets
-        )
+        controlnet_arg: List[ControlNetModel] = controlnets
 
         # Pick pipeline type based on base model family (SD1.5 vs SDXL)
         is_sdxl = "xl" in model_ids.base_model.lower()
