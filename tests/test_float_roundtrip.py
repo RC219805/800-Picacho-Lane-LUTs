@@ -14,6 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import luxury_tiff_batch_processor as ltiff
 from luxury_tiff_batch_processor import (
     float_to_dtype_array,
     gaussian_blur,
@@ -69,6 +70,37 @@ def test_image_to_float_roundtrip_signed_int_image():
     assert max_diff <= 256
     for channel in range(1, restored.shape[2]):
         assert np.array_equal(restored[:, :, channel], restored[:, :, 0])
+
+
+def test_image_to_float_float_dynamic_range_restored():
+    data = np.linspace(-2.0, 2.0, 36, dtype=np.float32).reshape(6, 6)
+    image = Image.fromarray(data, mode="F")
+
+    result = ltiff.image_to_float(image)
+    if isinstance(result, ltiff.ImageToFloatResult):
+        arr = result.array
+        dtype = result.dtype
+        alpha = result.alpha
+        base_channels = result.base_channels
+        float_norm = result.float_normalisation
+    else:
+        arr, dtype, alpha, base_channels = result
+        float_norm = None
+
+    assert np.issubdtype(dtype, np.floating)
+    assert float_norm is not None
+
+    restored = ltiff.float_to_dtype_array(
+        arr,
+        dtype,
+        alpha,
+        base_channels,
+        float_normalisation=float_norm,
+    )
+
+    assert restored.dtype == np.float32
+    assert restored.shape == data.shape
+    assert np.allclose(restored, data, atol=1e-6)
 
 
 def _reference_gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
