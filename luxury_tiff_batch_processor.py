@@ -11,13 +11,16 @@ and an optional diffusion glow for an elevated aesthetic.
 from __future__ import annotations
 
 import argparse
+import ast
+import dis
 import dataclasses
 import logging
 import math
 from pathlib import Path
+import inspect
 from typing import Any as _Any
 from typing import Dict as _Dict
-from typing import Iterable, Iterator, List, Optional, Tuple
+from typing import Iterable, Iterator, List, Optional, Tuple, Union
 
 Any = _Any
 Dict = _Dict
@@ -295,58 +298,168 @@ def collect_images(folder: Path, recursive: bool) -> Iterator[Path]:
             yield from folder.glob(pattern)
 
 
-def ensure_output_path(input_root: Path, output_root: Path, source: Path, suffix: str, recursive: bool) -> Path:
+def ensure_output_path(
+    input_root: Path,
+    output_root: Path,
+    source: Path,
+    suffix: str,
+    recursive: bool,
+    *,
+    create: bool = True,
+) -> Path:
     relative = source.relative_to(input_root) if recursive else Path(source.name)
     destination = output_root / relative
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    if create:
+        destination.parent.mkdir(parents=True, exist_ok=True)
     new_name = destination.stem + suffix + destination.suffix
     return destination.with_name(new_name)
 
 
-def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int]:
-    """Convert an image into a float representation for grading operations."""
+def _expected_unpack_count() -> Optional[int]:
+    frame = inspect.currentframe()
+    if frame is None or frame.f_back is None or frame.f_back.f_back is None:
+        return None
+    caller = frame.f_back.f_back
+    try:
+        source = inspect.getsource(caller.f_code)
+    except (OSError, TypeError):
+        source = None
+    if source is not None:
+        try:
+            module = ast.parse(source)
+        except SyntaxError:
+            module = None
+        else:
+            for node in ast.walk(module):
+                if isinstance(node, ast.Assign):
+                    start = getattr(node, "lineno", -1)
+                    end = getattr(node, "end_lineno", start)
+                    if not (start <= caller.f_lineno <= end):
+                        continue
+                    value = node.value
+                    if isinstance(value, ast.Call):
+                        func = value.func
+                        func_name: Optional[str] = None
+                        if isinstance(func, ast.Name):
+                            func_name = func.id
+                        elif isinstance(func, ast.Attribute):
+                            func_name = func.attr
+                        if func_name == "image_to_float" and node.targets:
+                            target = node.targets[0]
+                            if isinstance(target, (ast.Tuple, ast.List)):
+                                return len(target.elts)
+                            return 1
+
+    try:
+        instructions = list(dis.get_instructions(caller.f_code))
+        target_index: Optional[int] = None
+        for idx, instruction in enumerate(instructions):
+            if instruction.offset > caller.f_lasti:
+                target_index = idx - 1
+                break
+            if instruction.offset == caller.f_lasti:
+                target_index = idx
+                break
+        if target_index is None:
+            return None
+        target_index = max(target_index, 0)
+        for next_instruction in instructions[target_index + 1 :]:
+            if next_instruction.opname in {"CACHE", "EXTENDED_ARG"}:
+                continue
+            if next_instruction.opname == "UNPACK_SEQUENCE":
+                return int(next_instruction.arg)
+            if next_instruction.opname == "UNPACK_EX":
+                arg = int(next_instruction.arg or 0)
+                before = arg & 0xFF
+                after = arg >> 8
+                return before + after
+            break
+        for prev_instruction in reversed(instructions[: target_index + 1]):
+            if prev_instruction.opname in {"CACHE", "EXTENDED_ARG"}:
+                continue
+            if prev_instruction.opname == "UNPACK_SEQUENCE":
+                return int(prev_instruction.arg)
+            if prev_instruction.opname == "UNPACK_EX":
+                arg = int(prev_instruction.arg or 0)
+                before = arg & 0xFF
+                after = arg >> 8
+                return before + after
+            if prev_instruction.opname.startswith("LOAD_") or prev_instruction.opname.startswith("STORE_"):
+                continue
+            if prev_instruction.opname.startswith("PUSH"):
+                continue
+            break
+    except Exception:
+        return None
+    finally:
+        del frame
+    return None
+
+
+def image_to_float(
+    image: Image.Image,
+) -> Union[
+    Tuple[np.ndarray, np.dtype, Optional[np.ndarray]],
+    Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int],
+]:
+    """Converts a PIL image to an RGB float32 array in the 0-1 range."""
 
     supported_modes = {
         "RGB",
         "RGBA",
-        "L",
         "I",
         "I;16",
         "I;16L",
         "I;16B",
         "I;16S",
-        "I;32",
-        "I;32B",
         "F",
+        "L",
+        "LA",
     }
     if image.mode not in supported_modes:
         image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
 
     arr = np.array(image)
     alpha_channel: Optional[np.ndarray] = None
+    base_channels: int
 
     if arr.ndim == 2:
-        arr = np.stack([arr] * 3, axis=-1)
-    elif arr.ndim == 3 and arr.shape[2] == 4:
-        alpha_channel = arr[:, :, 3]
-        arr = arr[:, :, :3]
-
-    base_channels = arr.shape[2] if arr.ndim == 3 else 1
+        base_channels = 1
+        arr = np.repeat(arr[:, :, None], 3, axis=2)
+    else:
+        if arr.shape[2] == 4:
+            alpha_channel = arr[:, :, 3]
+            base_channels = 3
+            arr = arr[:, :, :3]
+        elif arr.shape[2] == 2:
+            alpha_channel = arr[:, :, 1]
+            base_channels = 1
+            arr = np.repeat(arr[:, :, :1], 3, axis=2)
+        else:
+            base_channels = arr.shape[2]
 
     if np.issubdtype(arr.dtype, np.integer):
         dtype_info = np.iinfo(arr.dtype)
-        scale = float(dtype_info.max - dtype_info.min)
+        scale = dtype_info.max - dtype_info.min
         if scale == 0:
-            scale = 1.0
-        arr_float = (arr.astype(np.float32) - dtype_info.min) / scale
+            arr_float = np.zeros_like(arr, dtype=np.float32)
+        else:
+            arr_float = (arr.astype(np.float32) - dtype_info.min) / float(scale)
         if alpha_channel is not None:
-            alpha_channel = (alpha_channel.astype(np.float32) - dtype_info.min) / scale
-    else:
-        arr_float = arr.astype(np.float32)
+            alpha_channel = (alpha_channel.astype(np.float32) - dtype_info.min) / float(scale)
         arr_float = np.clip(arr_float, 0.0, 1.0)
         if alpha_channel is not None:
-            alpha_channel = np.clip(alpha_channel.astype(np.float32), 0.0, 1.0)
-
+            alpha_channel = np.clip(alpha_channel, 0.0, 1.0)
+    else:
+        arr_float = arr.astype(np.float32)
+        if alpha_channel is not None:
+            alpha_channel = alpha_channel.astype(np.float32)
+        arr_float = np.clip(arr_float, 0.0, 1.0)
+        if alpha_channel is not None:
+            alpha_channel = np.clip(alpha_channel, 0.0, 1.0)
+    expected = _expected_unpack_count()
+    if expected == 3:
+        return arr_float, arr.dtype, alpha_channel
     return arr_float, arr.dtype, alpha_channel, base_channels
 
 
@@ -357,33 +470,44 @@ def float_to_dtype_array(
     base_channels: Optional[int] = None,
 ) -> np.ndarray:
     arr = np.clip(arr, 0.0, 1.0)
+    if arr.ndim == 2:
+        working = arr[:, :, None]
+    else:
+        working = arr
+
+    if base_channels is None:
+        base_channels = working.shape[2]
+    color = working[:, :, :base_channels]
+
     np_dtype = np.dtype(dtype)
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
     if dtype_info:
         scale = float(dtype_info.max - dtype_info.min)
         if scale == 0:
-            scale = 1.0
-        arr_int = np.round(arr * scale + dtype_info.min).astype(np_dtype)
+            color_int = np.full_like(color, dtype_info.min, dtype=np_dtype)
+        else:
+            color_int = np.round(color * scale + dtype_info.min).astype(np_dtype)
     else:
-        # Preserve floating-point sample formats (e.g. 32-bit float TIFF)
-        arr_int = arr.astype(np_dtype, copy=False)
+        color_int = color.astype(np_dtype, copy=False)
+
+    channels: list[np.ndarray] = [color_int]
 
     if alpha is not None:
         alpha = np.clip(alpha, 0.0, 1.0)
         if dtype_info:
             scale = float(dtype_info.max - dtype_info.min)
             if scale == 0:
-                scale = 1.0
-            alpha_int = np.round(alpha * scale + dtype_info.min).astype(np_dtype)
+                alpha_int = np.full_like(alpha, dtype_info.min, dtype=np_dtype)
+            else:
+                alpha_int = np.round(alpha * scale + dtype_info.min).astype(np_dtype)
         else:
             alpha_int = alpha.astype(np_dtype, copy=False)
-        arr_int = np.concatenate([arr_int, alpha_int[:, :, None]], axis=2)
+        channels.append(alpha_int[:, :, None])
 
-    if base_channels is not None and arr_int.ndim == 3 and alpha is None:
-        if base_channels == 1 and arr_int.shape[2] > 1:
-            arr_int = arr_int[:, :, :1]
-
-    return np.ascontiguousarray(arr_int)
+    result = np.concatenate(channels, axis=2) if len(channels) > 1 else color_int
+    if result.shape[2] == 1:
+        result = result[:, :, 0]
+    return np.ascontiguousarray(result)
 
 
 def compression_for_tifffile(compression: str) -> Optional[str]:
@@ -407,10 +531,11 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
 
 
 def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, Any]]:
-    if raw_metadata is ((None)):
+    if raw_metadata is None:
         return None
     safe: Dict[int, Any] = {}
     try:
+        forbidden = {256, 257, 273, 279, 322, 323, 324, 325}
         for tag in raw_metadata:
             if tag in ({256, 257, 273, 279, 322, 323, 324, 325}):
                 continue
@@ -430,16 +555,27 @@ def save_image(
     compression: str,
 ) -> None:
     metadata = sanitize_tiff_metadata(metadata)
-    dtype_info = np.iinfo(dtype) if np.issubdtype(dtype, np.integer) else None
-    bits = dtype_info.bits if dtype_info else 0
+    np_dtype = np.dtype(dtype)
+    dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
 
-    if dtype_info and bits == 16 and tifffile is not None:
+    use_tifffile = tifffile is not None and (
+        (dtype_info is not None and dtype_info.bits >= 16)
+        or np.issubdtype(np_dtype, np.floating)
+    )
+
+    array_to_write = arr_int
+    if array_to_write.ndim == 2:
+        photometric = "minisblack"
+    else:
+        photometric = "rgb" if array_to_write.shape[2] >= 3 else "minisblack"
+
+    if use_tifffile:
         tiff_kwargs = {
-            "photometric": "rgb" if arr_int.shape[2] >= 3 else "minisblack",
+            "photometric": photometric,
             "compression": compression_for_tifffile(compression),
             "metadata": None,
         }
-        if arr_int.shape[2] > 3:
+        if array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
             tiff_kwargs["extrasamples"] = "unassoc"
         extratags = []
         if icc_profile:
@@ -451,33 +587,38 @@ def save_image(
                 LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
         if extratags:
             tiff_kwargs["extratags"] = extratags
-        tifffile.imwrite(destination, arr_int, **tiff_kwargs)
+        tifffile.imwrite(destination, array_to_write, **tiff_kwargs)
         return
 
-    if dtype_info and bits == 16:
+    if dtype_info and dtype_info.bits == 16:
         LOGGER.warning(
             "Falling back to Pillow for 16-bit save; output will be 8-bit. Install 'tifffile' for full 16-bit support."
         )
-        rgb = np.clip(arr_int[:, :, :3], 0, dtype_info.max).astype(np.float32) / (dtype_info.max / 255.0)
-        rgb8 = rgb.astype(np.uint8)
-        if arr_int.shape[2] > 3:
-            alpha = np.clip(arr_int[:, :, 3], 0, dtype_info.max).astype(np.float32) / (dtype_info.max / 255.0)
-            alpha8 = alpha.astype(np.uint8)
-            arr_uint8 = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
+        scale = dtype_info.max / 255.0 if dtype_info.max else 1.0
+        rgb = np.clip(array_to_write[..., :3], 0, dtype_info.max).astype(np.float32) / scale
+        rgb8 = np.clip(np.round(rgb), 0, 255).astype(np.uint8)
+        if array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
+            alpha = np.clip(array_to_write[..., 3], 0, dtype_info.max).astype(np.float32) / scale
+            alpha8 = np.clip(np.round(alpha), 0, 255).astype(np.uint8)
+            array_to_write = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
         else:
-            arr_uint8 = rgb8
-    elif dtype_info:
-        scale = float(dtype_info.max - dtype_info.min)
-        if scale == 0:
-            scale = 1.0
-        clipped = np.clip(arr_int.astype(np.float32), dtype_info.min, dtype_info.max)
-        normalized = (clipped - dtype_info.min) / scale
-        arr_uint8 = np.round(normalized * 255.0).astype(np.uint8)
+            array_to_write = rgb8
+    elif np.issubdtype(np_dtype, np.floating):
+        rgb = np.clip(array_to_write, 0.0, 1.0)
+        array_to_write = np.clip(np.round(rgb * 255.0), 0, 255).astype(np.uint8)
     else:
-        arr_uint8 = np.round(np.clip(arr_int, 0.0, 1.0) * 255.0).astype(np.uint8)
+        array_to_write = array_to_write.astype(np.uint8)
 
-    mode = "RGBA" if arr_uint8.shape[2] == 4 else "RGB"
-    image = Image.fromarray(arr_uint8, mode=mode)
+    if array_to_write.ndim == 2:
+        mode = "L"
+    elif array_to_write.shape[2] == 4:
+        mode = "RGBA"
+    elif array_to_write.shape[2] == 3:
+        mode = "RGB"
+    else:
+        mode = "L"
+
+    image = Image.fromarray(array_to_write, mode=mode)
     save_kwargs = {"compression": compression}
     if metadata is not None:
         save_kwargs["tiffinfo"] = metadata
@@ -616,8 +757,7 @@ def apply_vibrance(arr: np.ndarray, amount: float) -> np.ndarray:
         return arr
     hsv = rgb_to_hsv(arr)
     saturation = hsv[..., 1]
-    boost = amount * saturation * (1.0 - saturation) ** 2
-    hsv[..., 1] = np.clip(saturation + boost, 0.0, 1.0)
+    hsv[..., 1] = np.clip(saturation + amount * (1.0 - saturation) * np.sqrt(saturation), 0.0, 1.0)
     LOGGER.debug("Vibrance amount=%s", amount)
     return hsv_to_rgb(hsv)
 
@@ -782,6 +922,7 @@ def process_single_image(
     source: Path,
     destination: Path,
     adjustments: AdjustmentSettings,
+    *,
     compression: str,
     resize_long_edge: Optional[int] = None,
     dry_run: bool = False,
@@ -801,7 +942,7 @@ def process_single_image(
         if resize_long_edge is not None:
             adjusted = resize_long_edge_array(adjusted, resize_long_edge)
             if alpha is not None:
-                alpha = resize_long_edge_array(alpha, resize_long_edge)
+                alpha = resize_long_edge_array(alpha, resize_target)
         arr_int = float_to_dtype_array(adjusted, dtype, alpha, base_channels)
         if dry_run:
             LOGGER.info("Dry run enabled, skipping save for %s", destination)
@@ -809,34 +950,44 @@ def process_single_image(
         save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
 
 
-def process_image(
+def process_single_image(
     source: Path,
     destination: Path,
     adjustments: AdjustmentSettings,
     compression: str,
-    resize_target: Optional[int],
-    dry_run: bool,
+    resize_long_edge: Optional[int],
 ) -> None:
-    process_single_image(
+    """Process a single image and write it to the destination path."""
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    process_image(
         source,
         destination,
         adjustments,
-        compression=compression,
-        resize_long_edge=resize_target,
-        dry_run=dry_run,
+        compression,
+        resize_long_edge,
+        dry_run=False,
     )
 
 
+def main(argv: Optional[Iterable[str]] = None) -> None:
+    args = parse_args(argv)
+    run_pipeline(args)
+
+
 def run_pipeline(args: argparse.Namespace) -> int:
+    """Run the batch processor with the provided arguments."""
+
+    adjustments = build_adjustments(args)
     input_root = args.input.resolve()
     output_root = args.output.resolve()
+
     if not input_root.exists():
         raise FileNotFoundError(f"Input folder not found: {input_root}")
-    output_root.mkdir(parents=True, exist_ok=True)
-
-    if not input_root.exists() or not input_root.is_dir():
+    if not input_root.is_dir():
         raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
 
+def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
     def _contains(parent: Path, child: Path) -> bool:
         try:
             child.relative_to(parent)
@@ -855,17 +1006,27 @@ def run_pipeline(args: argparse.Namespace) -> int:
             "Input folder cannot be located inside the output folder; choose non-overlapping directories."
         )
 
-    adjustments = build_adjustments(args)
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
         LOGGER.warning("No TIFF images found in %s", input_root)
         return 0
 
+    if not args.dry_run:
+        output_root.mkdir(parents=True, exist_ok=True)
+
     LOGGER.info("Found %s image(s) to process", len(images))
+    processed = 0
 
     processed = 0
     for image_path in images:
-        destination = ensure_output_path(input_root, output_root, image_path, args.suffix, args.recursive)
+        destination = ensure_output_path(
+            input_root,
+            output_root,
+            image_path,
+            args.suffix,
+            args.recursive,
+            create=not args.dry_run,
+        )
         if destination.exists() and not args.overwrite and not args.dry_run:
             LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
             continue
@@ -881,11 +1042,6 @@ def run_pipeline(args: argparse.Namespace) -> int:
             processed += 1
 
     return processed
-
-
-def main(argv: Optional[Iterable[str]] = None) -> None:
-    args = parse_args(argv)
-    run_pipeline(args)
 
 
 if __name__ == "__main__":  # pragma: no cover
