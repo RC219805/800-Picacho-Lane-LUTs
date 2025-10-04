@@ -4,57 +4,41 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-        # Example manifest describing how source renders should be processed.
-# Each entry under `renders` maps a source image to one or more variants.
-# Variants reference aspect ratio presets defined in src.config.ASPECT_RATIO_PRESETS
-# and can chain multiple operations such as cropping, resizing and grading.
-renders:
-  - source: lobby_daylight.jpg
-    variants:
-      - filename: lobby_daylight_dci4k.jpg
-        operations:
-          - type: resize
-            preset: dci_4k
-          - type: grade
-            exposure: 0.05
-            contrast: 1.05
-            saturation: 1.02
-      - filename: lobby_daylight_square.jpg
-        operations:
-          - type: resize
-            preset: square_1080
-          - type: grade
-            exposure: 0.1
-      - filename: lobby_daylight_hero.jpg
-        operations:
-          - type: crop
-            preset: hero_21x9
-            offset: [0, -0.2]  # Bias crop slightly upward
-          - type: resize
-            preset: dci_4k
-          - type: grade
-            temperature_shift: 15  # Warm the image slightly
-            micro_contrast: 1.1    # Enhance local contrast
-  - source: rooftop_evening.png
-    variants:
-      - filename: rooftop_evening_story.png
-        operations:
-          - type: crop
-            preset: web_16x9
-          - type: resize
-            preset: vertical_story
-          - type: grade
-            exposure: -0.05
-            saturation: 1.1
-      - filename: rooftop_evening_ultrawide.png
-        operations:
-          - type: resize
-            preset: ultrawide
-    """
-750-Picacho-Lightfiction: Spatially aware application of materials and textures 
-to architectural renderings at 4K DCI resolution.
-"""
-
-__version__ = "0.1.0"
+        
+        {
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": "${command:pickArgs}"
+        },
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Debug Python Script",
+            "program": "${input:pythonScript}",
+            "console": "integratedTerminal",
+            "args": []
+        }
+    ],
+    "inputs": [
+        {
+            "type": "pickString",
+            "id": "pythonScript",
+            "description": "Select Python script to debug",
+            "options": [
+                "${workspaceFolder}/lux_render_pipeline.py",
+                "${workspaceFolder}/luxury_tiff_batch_processor.py",
+                "${workspaceFolder}/luxury_video_master_grader.py"
+            ]
+        }
     ]
 }

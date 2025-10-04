@@ -136,6 +136,19 @@ LUXURY_PRESETS = {
         chroma_denoise=0.05,
         glow=0.02,
     ),
+    "golden_hour_courtyard": AdjustmentSettings(
+        exposure=0.08,
+        white_balance_temp=5600,
+        white_balance_tint=5.0,
+        shadow_lift=0.24,
+        highlight_recovery=0.18,
+        midtone_contrast=0.10,
+        vibrance=0.28,
+        saturation=0.05,
+        clarity=0.20,
+        chroma_denoise=0.06,
+        glow=0.12,
+    ),
     "twilight": AdjustmentSettings(
         exposure=0.05,
         white_balance_temp=5400,
@@ -158,7 +171,13 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("input", type=Path, help="Folder that contains source TIFF files")
-    parser.add_argument("output", type=Path, help="Folder where processed files will be written")
+    parser.add_argument(
+        "output",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="Folder where processed files will be written. Defaults to '<input>_lux' next to the input folder.",
+    )
     parser.add_argument(
         "--preset",
         default="signature",
@@ -241,8 +260,19 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
 
     args = parser.parse_args(list(argv) if argv is not None else None)
+    if args.output is None:
+        args.output = default_output_folder(args.input)
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
     return args
+
+
+def default_output_folder(input_folder: Path) -> Path:
+    """Return the default output folder for a given input directory."""
+
+    # input_folder is already a Path object
+    if input_folder.name:
+        return input_folder.parent / f"{input_folder.name}_lux"
+    return input_folder / "luxury_output"
 
 
 def build_adjustments(args: argparse.Namespace) -> AdjustmentSettings:
@@ -746,6 +776,28 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
         raise FileNotFoundError(f"Input folder not found: {input_root}")
     output_root.mkdir(parents=True, exist_ok=True)
 
+    if not input_root.exists() or not input_root.is_dir():
+        raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
+
+    def _contains(parent: Path, child: Path) -> bool:
+        try:
+            child.relative_to(parent)
+        except ValueError:
+            return False
+        return True
+
+    if input_root == output_root:
+        raise SystemExit("Output folder must be different from the input folder to avoid self-overwrites.")
+    if _contains(input_root, output_root):
+        raise SystemExit(
+            "Output folder cannot be located inside the input folder; choose a sibling or separate directory."
+        )
+    if _contains(output_root, input_root):
+        raise SystemExit(
+            "Input folder cannot be located inside the output folder; choose non-overlapping directories."
+        )
+
+    adjustments = build_adjustments(args)
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
         LOGGER.warning("No TIFF images found in %s", input_root)
