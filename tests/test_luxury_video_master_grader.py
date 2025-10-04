@@ -255,6 +255,27 @@ def test_determine_color_metadata_defaults_to_none_when_missing():
     assert determine_color_metadata(args, probe) == (None, None, None)
 
 
+def test_determine_color_metadata_normalises_source_tags():
+    args = argparse.Namespace(
+        color_primaries=None,
+        color_transfer=None,
+        color_space=None,
+        color_from_source=True,
+    )
+    probe = {
+        "streams": [
+            {
+                "codec_type": "video",
+                "color_primaries": "UNSPECIFIED",
+                "color_trc": "SMPTE2084",
+                "colorspace": "BT2020NC",
+            }
+        ]
+    }
+
+    assert determine_color_metadata(args, probe) == (None, "smpte2084", "bt2020nc")
+
+
 def test_build_command_includes_expected_arguments(tmp_path):
     input_path = tmp_path / "input.mov"
     output_path = tmp_path / "output.mov"
