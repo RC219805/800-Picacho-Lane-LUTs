@@ -172,6 +172,7 @@ def apply_material_response_finishing(
     haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96),
     floor_plank_contrast: float = 0.12,
     floor_specular: float = 0.18,
+    floor_contact_shadow: float = 0.05,
     textile_contrast: float = 0.18,
     leather_sheen: float = 0.16,
     fireplace_glow: float = 0.18,
@@ -449,6 +450,7 @@ class FinishConfig:
     haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96)
     floor_plank_contrast: float = 0.12
     floor_specular: float = 0.18
+    floor_contact_shadow: float = 0.05
     textile_contrast: float = 0.18
     leather_sheen: float = 0.16
     fireplace_glow: float = 0.18
@@ -640,6 +642,7 @@ class LuxuryRenderPipeline:
                 haze_tint=finish.haze_tint,
                 floor_plank_contrast=finish.floor_plank_contrast,
                 floor_specular=finish.floor_specular,
+                floor_contact_shadow=finish.floor_contact_shadow,
                 textile_contrast=finish.textile_contrast,
                 leather_sheen=finish.leather_sheen,
                 fireplace_glow=finish.fireplace_glow,
@@ -710,6 +713,7 @@ def main(
     haze_tint: str = typer.Option("0.82,0.88,0.96", help="Material response: haze tint (r,g,b in 0-1)"),
     floor_plank_contrast: float = typer.Option(0.12, help="Material response: enhance floor plank definition"),
     floor_specular: float = typer.Option(0.18, help="Material response: specular streak intensity on flooring"),
+    floor_contact_shadow: float = typer.Option(0.05, help="Material response: floor transition contact shadow"),
     textile_contrast: float = typer.Option(0.18, help="Material response: linen/fabric separation"),
     leather_sheen: float = typer.Option(0.16, help="Material response: leather sheen blend"),
     fireplace_glow: float = typer.Option(0.18, help="Material response: fireplace spill intensity"),
@@ -752,6 +756,7 @@ def main(
         haze_tint=parse_float_triplet(haze_tint),
         floor_plank_contrast=floor_plank_contrast,
         floor_specular=floor_specular,
+        floor_contact_shadow=floor_contact_shadow,
         textile_contrast=textile_contrast,
         leather_sheen=leather_sheen,
         fireplace_glow=fireplace_glow,
