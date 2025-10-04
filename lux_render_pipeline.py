@@ -4,7 +4,7 @@
 Luxury Real Estate Render Refinement Pipeline
 ---------------------------------------------
 Transforms basic 3D model images into high-resolution marketing visuals by:
-- Preprocessing (Canny + Depth)
+- Preprocessing (Canny + optional Depth)
 - Structure-preserving image-to-image diffusion (ControlNet)
 - Optional SDXL refiner
 - High-resolution upscaling (latent x2 and/or Real-ESRGAN)
@@ -27,7 +27,7 @@ Usage examples:
         --prompt "luxury real estate exterior, golden hour, glass and stone facade, landscaped garden, dramatic sky, cinematic, photo-real, ultra-detailed" \
         --neg "overexposed, warped structure, crooked lines, lowres, noise, text, logo" \
         --width 1024 --height 576 --steps 35 --strength 0.5 --gs 7.0 \
-        --use_realesrgan
+        --use_realesrgan --no-depth
 """
 from __future__ import annotations
 import os, math, glob, random
@@ -258,15 +258,27 @@ class LuxuryRenderPipeline:
         device: Optional[str] = None,
         fp16: bool = True,
         use_realesrgan: bool = False,
+        use_depth: bool = True,
     ):
         self.model_ids = model_ids
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.float16 if (fp16 and torch.cuda.is_available()) else torch.float32
+        self._use_depth = use_depth
 
         # Load ControlNets
         print("[Load] ControlNets...")
         self.cn_canny = ControlNetModel.from_pretrained(model_ids.controlnet_canny, torch_dtype=self.dtype)
-        self.cn_depth = ControlNetModel.from_pretrained(model_ids.controlnet_depth, torch_dtype=self.dtype)
+        self.cn_depth = (
+            ControlNetModel.from_pretrained(model_ids.controlnet_depth, torch_dtype=self.dtype)
+            if self._use_depth
+            else None
+        )
+        controlnets: List[ControlNetModel] = [self.cn_canny]
+        if self.cn_depth is not None:
+            controlnets.append(self.cn_depth)
+        controlnet_arg: Union[ControlNetModel, List[ControlNetModel]] = (
+            controlnets[0] if len(controlnets) == 1 else controlnets
+        )
 
         # Pick pipeline type based on base model family (SD1.5 vs SDXL)
         is_sdxl = "xl" in model_ids.base_model.lower()
@@ -277,7 +289,7 @@ class LuxuryRenderPipeline:
             print("[Load] SDXL + ControlNet pipeline...")
             self.pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
                 model_ids.base_model,
-                controlnet=[self.cn_canny, self.cn_depth],
+                controlnet=controlnet_arg,
                 torch_dtype=self.dtype,
                 add_watermarker=False,
             )
@@ -294,7 +306,7 @@ class LuxuryRenderPipeline:
             print("[Load] SD1.5 + ControlNet Img2Img pipeline...")
             self.pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
                 model_ids.base_model,
-                controlnet=[self.cn_canny, self.cn_depth],
+                controlnet=controlnet_arg,
                 torch_dtype=self.dtype,
                 safety_checker=None,
                 feature_extractor=None,
@@ -324,7 +336,7 @@ class LuxuryRenderPipeline:
             self.realesrgan.load_weights("RealESRGAN_x4plus.pth", download=True)
 
         # Preprocessor
-        self.pre = Preprocessor()
+        self.pre = Preprocessor(use_depth=self._use_depth)
 
     @torch.inference_mode()
     def enhance(
@@ -341,7 +353,11 @@ class LuxuryRenderPipeline:
         # 1) Prepare images
         init = resize_to_multiple(init_image, mult=8, target=(cfg.width, cfg.height))
         canny = self.pre.make_canny(init)
-        depth = self.pre.make_depth(init)
+        depth = self.pre.make_depth(init) if self._use_depth else None
+        control_images = [canny]
+        if depth is not None:
+            control_images.append(depth)
+        control_image_arg = control_images[0] if len(control_images) == 1 else control_images
 
         # 2) Diffusion pass (structure-preserving)
         g = seed_all(cfg.seed)
@@ -349,7 +365,7 @@ class LuxuryRenderPipeline:
             prompt=prompt,
             negative_prompt=negative_prompt,
             image=init,
-            control_image=[canny, depth],
+            control_image=control_image_arg,
             num_inference_steps=cfg.steps,
             guidance_scale=cfg.guidance_scale,
             strength=cfg.strength,
@@ -442,6 +458,7 @@ def main(
     no_bloom: bool = typer.Option(False, help="Disable bloom"),
     no_vignette: bool = typer.Option(False, help="Disable vignette"),
     no_grain: bool = typer.Option(False, help="Disable grain"),
+    no_depth: bool = typer.Option(False, help="Disable depth guidance (ControlNet depth)"),
     # Branding
     logo: Optional[str] = typer.Option(None, help="Path to PNG/SVG logo (PNG w/ alpha recommended)"),
     brand_text: Optional[str] = typer.Option(None, help="Caption, e.g. 'The Veridian | Penthouse 21B'"),
@@ -468,7 +485,11 @@ def main(
         grain=not no_grain,
     )
 
-    pipe = LuxuryRenderPipeline(model_ids, use_realesrgan=use_realesrgan)
+    pipe = LuxuryRenderPipeline(
+        model_ids,
+        use_realesrgan=use_realesrgan,
+        use_depth=not no_depth,
+    )
 
     files = sorted([p for g in input.split(",") for p in glob.glob(g.strip())])
     if not files:
