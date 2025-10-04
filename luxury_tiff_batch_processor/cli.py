@@ -5,11 +5,13 @@ import argparse
 import dataclasses
 import logging
 import uuid
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, Optional
 
 from .adjustments import AdjustmentSettings, LUXURY_PRESETS
 from .pipeline import (
+    _process_image_worker,
     _wrap_with_progress,
     collect_images,
     ensure_output_path,
@@ -78,6 +80,12 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Disable progress reporting (useful for minimal or non-interactive environments)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of worker processes for parallel image processing",
+    )
 
     # Fine control overrides.
     parser.add_argument("--exposure", type=float, default=None, help="Exposure adjustment in stops")
@@ -127,6 +135,8 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
 
     args = parser.parse_args(list(argv) if argv is not None else None)
+    if args.workers < 1:
+        parser.error("--workers must be a positive integer")
     if args.output is None:
         args.output = default_output_folder(args.input)
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
@@ -191,37 +201,92 @@ def run_pipeline(args: argparse.Namespace) -> int:
     LOGGER.info("Found %s image(s) to process", len(images))
     processed = 0
 
-    progress_iterable = _wrap_with_progress(
-        images,
-        total=len(images),
-        description="Processing images",
-        enabled=not getattr(args, "no_progress", False),
-    )
+    if args.workers <= 1:
+        progress_iterable = _wrap_with_progress(
+            images,
+            total=len(images),
+            description="Processing images",
+            enabled=not getattr(args, "no_progress", False),
+        )
 
-    for image_path in progress_iterable:
-        destination = ensure_output_path(
-            input_root,
-            output_root,
-            image_path,
-            args.suffix,
-            args.recursive,
-            create=not args.dry_run,
+        for image_path in progress_iterable:
+            destination = ensure_output_path(
+                input_root,
+                output_root,
+                image_path,
+                args.suffix,
+                args.recursive,
+                create=not args.dry_run,
+            )
+            if destination.exists() and not args.overwrite and not args.dry_run:
+                LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
+                continue
+            if args.dry_run:
+                LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
+            process_single_image(
+                image_path,
+                destination,
+                adjustments,
+                compression=args.compression,
+                resize_long_edge=args.resize_long_edge,
+                dry_run=args.dry_run,
+            )
+            if not args.dry_run:
+                processed += 1
+    else:
+        progress_range = _wrap_with_progress(
+            range(len(images)),
+            total=len(images),
+            description="Processing images",
+            enabled=not getattr(args, "no_progress", False),
         )
-        if destination.exists() and not args.overwrite and not args.dry_run:
-            LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
-            continue
-        if args.dry_run:
-            LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
-        process_single_image(
-            image_path,
-            destination,
-            adjustments,
-            compression=args.compression,
-            resize_long_edge=args.resize_long_edge,
-            dry_run=args.dry_run,
-        )
-        if not args.dry_run:
-            processed += 1
+        progress_iterator = iter(progress_range)
+
+        def advance_progress() -> None:
+            try:
+                next(progress_iterator)
+            except StopIteration:
+                pass
+
+        futures = []
+        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+            for image_path in images:
+                destination = ensure_output_path(
+                    input_root,
+                    output_root,
+                    image_path,
+                    args.suffix,
+                    args.recursive,
+                    create=not args.dry_run,
+                )
+                if destination.exists() and not args.overwrite and not args.dry_run:
+                    LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
+                    advance_progress()
+                    continue
+                if args.dry_run:
+                    LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
+                futures.append(
+                    executor.submit(
+                        _process_image_worker,
+                        image_path,
+                        destination,
+                        adjustments,
+                        compression=args.compression,
+                        resize_long_edge=args.resize_long_edge,
+                        resize_target=None,
+                        dry_run=args.dry_run,
+                    )
+                )
+
+            for future in as_completed(futures):
+                try:
+                    wrote_output = future.result()
+                except Exception:
+                    advance_progress()
+                    raise
+                if wrote_output:
+                    processed += 1
+                advance_progress()
 
     LOGGER.info("Finished batch run %s; processed %s image(s)", run_id, processed)
     return processed
