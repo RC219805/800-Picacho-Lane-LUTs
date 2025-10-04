@@ -162,6 +162,62 @@ def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.n
     noise = rng.normal(0.0, amount, size=rgb.shape).astype(np.float32)
     return np.clip(rgb + noise, 0.0, 1.0)
 
+
+def apply_material_response_finishing(
+    rgb: np.ndarray,
+    texture_boost: float = 0.25,
+    ambient_occlusion: float = 0.12,
+    highlight_warmth: float = 0.08,
+    haze_strength: float = 0.06,
+    haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96),
+) -> np.ndarray:
+    """Empirical material response layer to emphasize texture, shadowing, and atmosphere."""
+
+    from scipy.ndimage import gaussian_filter, sobel  # Lazy import to avoid hard dependency at module import time
+
+    rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
+
+    if texture_boost > 0:
+        # High-frequency boost to reveal subtle grain and fabric weave
+        blurred = gaussian_filter(rgb, sigma=(1.1, 1.1, 0))
+        detail = rgb - blurred
+        rgb = np.clip(rgb + texture_boost * detail, 0.0, 1.0)
+
+    lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
+
+    if ambient_occlusion > 0:
+        # Edge-based occlusion mask to ground furniture with the floor
+        grad_x = sobel(lum, axis=1)
+        grad_y = sobel(lum, axis=0)
+        edge_mag = np.hypot(grad_x, grad_y)
+        if edge_mag.max() > 0:
+            edge_mag /= edge_mag.max()
+        occlusion = gaussian_filter(edge_mag, sigma=1.2)
+        occlusion = np.clip(occlusion, 0.0, 1.0)
+        shadow = 1.0 - ambient_occlusion * occlusion
+        rgb = np.clip(rgb * shadow[..., None], 0.0, 1.0)
+
+    if highlight_warmth > 0:
+        # Warm the brightest values to simulate fireplace spill and sunlit reflections
+        highlight_mask = np.clip((lum - 0.58) / 0.35, 0.0, 1.0)
+        warm_color = np.array([1.0, 0.78, 0.55], dtype=np.float32)
+        rgb = np.clip(
+            rgb + highlight_mask[..., None] * highlight_warmth * (warm_color - rgb),
+            0.0,
+            1.0,
+        )
+
+    if haze_strength > 0:
+        h, w = lum.shape
+        # Vertical gradient bias with gentle falloff toward window region
+        gradient = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
+        haze = haze_strength * gradient
+        tint = np.array(haze_tint, dtype=np.float32)
+        tint = np.clip(tint, 0.0, 1.0)
+        rgb = np.clip(rgb * (1.0 - haze[..., None]) + tint * haze[..., None], 0.0, 1.0)
+
+    return rgb
+
 def adjust_contrast_saturation(rgb: np.ndarray, contrast: float = 1.08, saturation: float = 1.05) -> np.ndarray:
     # Contrast in linear light
     gray = rgb.mean(axis=2, keepdims=True)
@@ -247,6 +303,12 @@ class FinishConfig:
     vignette_strength: float = 0.18
     grain: bool = True
     grain_amount: float = 0.012
+    material_response: bool = False
+    texture_boost: float = 0.25
+    ambient_occlusion: float = 0.12
+    highlight_warmth: float = 0.08
+    haze_strength: float = 0.06
+    haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96)
 
 # --------------------------
 # Core pipeline
@@ -418,6 +480,15 @@ class LuxuryRenderPipeline:
         if finish.bloom: rgb = add_bloom(rgb, finish.bloom_threshold, finish.bloom_radius, finish.bloom_intensity)
         if finish.vignette: rgb = add_vignette(rgb, finish.vignette_strength)
         if finish.grain: rgb = add_film_grain(rgb, finish.grain_amount, seed=cfg.seed)
+        if finish.material_response:
+            rgb = apply_material_response_finishing(
+                rgb,
+                texture_boost=finish.texture_boost,
+                ambient_occlusion=finish.ambient_occlusion,
+                highlight_warmth=finish.highlight_warmth,
+                haze_strength=finish.haze_strength,
+                haze_tint=finish.haze_tint,
+            )
         out = np_to_pil(rgb)
 
         # 7) Branding
@@ -430,6 +501,18 @@ class LuxuryRenderPipeline:
 # --------------------------
 import typer
 app = typer.Typer(add_completion=False)
+
+
+def parse_float_triplet(value: str) -> Tuple[float, float, float]:
+    try:
+        parts = [float(p.strip()) for p in value.split(",")]
+    except ValueError as exc:  # pragma: no cover - defensive
+        raise typer.BadParameter('Expected three comma-separated floats between 0 and 1, e.g. "0.82,0.88,0.96"') from exc
+    if len(parts) != 3:
+        raise typer.BadParameter('Expected three comma-separated floats between 0 and 1, e.g. "0.82,0.88,0.96"')
+    clamped = tuple(max(0.0, min(1.0, p)) for p in parts)
+    clamped_tuple: Tuple[float, float, float] = (clamped[0], clamped[1], clamped[2])
+    return clamped_tuple
 
 @app.command()
 def main(
@@ -457,6 +540,12 @@ def main(
     no_vignette: bool = typer.Option(False, help="Disable vignette"),
     no_grain: bool = typer.Option(False, help="Disable grain"),
     no_depth: bool = typer.Option(False, help="Disable depth guidance (ControlNet depth)"),
+    material_response: bool = typer.Option(False, help="Enable texture + atmosphere finishing enhancements"),
+    texture_boost: float = typer.Option(0.25, help="Material response: detail boost strength"),
+    ambient_occlusion: float = typer.Option(0.12, help="Material response: contact shadow intensity"),
+    highlight_warmth: float = typer.Option(0.08, help="Material response: warm highlight mix"),
+    haze_strength: float = typer.Option(0.06, help="Material response: volumetric haze blend"),
+    haze_tint: str = typer.Option("0.82,0.88,0.96", help="Material response: haze tint (r,g,b in 0-1)"),
     # Branding
     logo: Optional[str] = typer.Option(None, help="Path to PNG/SVG logo (PNG w/ alpha recommended)"),
     brand_text: Optional[str] = typer.Option(None, help="Caption, e.g. 'The Veridian | Penthouse 21B'"),
@@ -481,6 +570,12 @@ def main(
         bloom=not no_bloom,
         vignette=not no_vignette,
         grain=not no_grain,
+        material_response=material_response,
+        texture_boost=texture_boost,
+        ambient_occlusion=ambient_occlusion,
+        highlight_warmth=highlight_warmth,
+        haze_strength=haze_strength,
+        haze_tint=parse_float_triplet(haze_tint),
     )
 
     pipe = LuxuryRenderPipeline(

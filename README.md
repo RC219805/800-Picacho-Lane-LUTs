@@ -37,6 +37,29 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 2. Apply at **60–80% opacity** initially.
 3. Stack multiple LUTs for complex material interactions.
 
+### Material Response Finishing for Neural Renders
+
+`lux_render_pipeline.py` now exposes a **Material Response** finishing layer that reinforces
+wood grain, textile separation, fireplace warmth, and atmospheric haze directly from the
+command line. Enable it with `--material-response` to activate detail boosts, contact shadowing,
+and volumetric tinting that better fuse interior renders with their exterior vistas.
+
+Example:
+
+```bash
+python lux_render_pipeline.py \
+  --input bedroom_render.jpg \
+  --out ./enhanced_bedroom \
+  --prompt "minimalist bedroom interior, wide plank oak flooring with visible grain and subtle sheen, white linen bedding with fabric texture, black leather tufted bench, linear gas fireplace casting warm glow, floor to ceiling windows, misty mountain lake view, morning light, photorealistic architectural visualization, material response technology, subtle ambient occlusion, volumetric lighting" \
+  --neg "flat textures, uniform surfaces, no shadows, plastic looking, disconnected lighting, harsh contrast" \
+  --width 1536 --height 864 \
+  --steps 35 --strength 0.42 --gs 8.2 \
+  --material-response --texture-boost 0.28 --ambient-occlusion 0.14 --highlight-warmth 0.1 --haze-strength 0.08 \
+  --no-depth
+```
+
+Pair the result with the TIFF batch processor below for final client delivery.
+
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow for polishing large-format TIFF photography prior to digital launch. The script preserves metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/) is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for ultra-luxury real-estate storytelling.
 
