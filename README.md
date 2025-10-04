@@ -227,5 +227,26 @@ Use `--root` to audit a different project tree, `--tests` or `--tokens` to point
 automation. Near-term `valid_until` expirations are flagged in yellow when `rich` is installed (or with a `!` prefix in plain text). Philosophy violations are
 aggregated by principle with example file locations, while the color section lists which brand hex values are still unused in CSS/JS deliverables.
 
+## Luxury TIFF Batch Processor
+The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow
+for polishing large-format TIFF photography prior to digital launch. The script preserves
+metadata, honours 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/)
+is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for
+ultra-luxury real-estate storytelling.
+
+### Requirements
+- Python 3.11+
+- `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
+
+### Example
+```bash
+python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
+  --preset signature --resize-long-edge 7000 --overwrite
+```
+
+Override any preset control (exposure, midtone contrast, vibrance, clarity, glow, etc.)
+by providing the corresponding command-line flag. Use `--dry-run` to audit the processing
+plan without writing files, and `--recursive` to mirror nested shoot-day folders.
+
 ## License
 Professional use permitted with attribution.
