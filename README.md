@@ -1,6 +1,7 @@
 # 800 Picacho Lane — Professional LUT Collection
 
 ## Overview
+
 A cutting-edge collection of **16 professional color grading LUTs** featuring innovative **Material Response** technology.
 
 ## Table of Contents
@@ -34,6 +35,7 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 **Material Response LUTs** analyze and enhance how different surfaces interact with light—shifting from purely global color transforms to surface-aware rendering that respects highlights, midtones, and micro-contrast differently across materials. The approach keeps natural roll-off in highlights, protects nuanced midtone skin detail, and intelligently refines specular textures so metal, stone, glass, and fabric all retain their distinctive depth.
 
 ## Usage
+
 1. Import into DaVinci Resolve, Premiere Pro, or other color-grading software.
 2. Apply at **60–80% opacity** initially.
 3. Stack multiple LUTs for complex material interactions.
@@ -95,9 +97,9 @@ The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch w
 - Python 3.11+
 - `pip install numpy pillow` (add `tifffile` for lossless 16-bit output)
 
-> **Note:** Earlier revisions triggered `F821` undefined-name lint errors. Pull the latest
-> main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper
-> that resolves the NumPy dtype handling.
+> **Note:** Earlier revisions triggered `F821` undefined-name lint errors. Pull the latest main branch (or reinstall from the freshest ZIP) to ensure you have the corrected helper that resolves the NumPy dtype handling.
+
+### Example (TIFF Batch Processor)
 
 ### Staying Synchronized With `main`
 To keep feature branches review-ready, regularly reconcile them with the newest
