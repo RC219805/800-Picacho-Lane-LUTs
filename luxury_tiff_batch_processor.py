@@ -690,10 +690,10 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
     if raw_metadata is None:
         return None
     safe: Dict[int, Any] = {}
+    forbidden_tags = {256, 257, 273, 279, 322, 323, 324, 325}
     try:
-        forbidden = {256, 257, 273, 279, 322, 323, 324, 325}
         for tag in raw_metadata:
-            if tag in ({256, 257, 273, 279, 322, 323, 324, 325}):
+            if tag in forbidden_tags:
                 continue
             safe[tag] = raw_metadata[tag]
     except Exception:  # pragma: no cover - metadata best effort
@@ -1074,6 +1074,18 @@ def apply_adjustments(arr: np.ndarray, adjustments: AdjustmentSettings) -> np.nd
     return np.clip(arr, 0.0, 1.0)
 
 
+def _coerce_resize_target(
+    resize_long_edge: Optional[int], resize_target: Optional[int]
+) -> Optional[int]:
+    """Normalise legacy ``resize_target`` parameter usages."""
+
+    if resize_long_edge is None:
+        return resize_target
+    if resize_target is None or resize_target == resize_long_edge:
+        return resize_long_edge
+    raise ValueError("Conflicting resize targets provided; choose one value")
+
+
 def process_single_image(
     source: Path,
     destination: Path,
@@ -1081,6 +1093,7 @@ def process_single_image(
     *,
     compression: str,
     resize_long_edge: Optional[int] = None,
+    resize_target: Optional[int] = None,
     dry_run: bool = False,
 ) -> None:
     LOGGER.info("Processing %s -> %s", source, destination)
@@ -1114,10 +1127,11 @@ def process_single_image(
                 arr, dtype, alpha, base_channels = float_result  # type: ignore[misc]
             float_norm = None
         adjusted = apply_adjustments(arr, adjustments)
-        if resize_long_edge is not None:
-            adjusted = resize_long_edge_array(adjusted, resize_long_edge)
+        target = _coerce_resize_target(resize_long_edge, resize_target)
+        if target is not None:
+            adjusted = resize_long_edge_array(adjusted, target)
             if alpha is not None:
-                alpha = resize_long_edge_array(alpha, resize_long_edge)
+                alpha = resize_long_edge_array(alpha, target)
         arr_int = float_to_dtype_array(
             adjusted,
             dtype,
