@@ -295,49 +295,100 @@ def collect_images(folder: Path, recursive: bool) -> Iterator[Path]:
             yield from folder.glob(pattern)
 
 
-def ensure_output_path(input_root: Path, output_root: Path, source: Path, suffix: str, recursive: bool) -> Path:
+def ensure_output_path(
+    input_root: Path,
+    output_root: Path,
+    source: Path,
+    suffix: str,
+    recursive: bool,
+    *,
+    create: bool = True,
+) -> Path:
     relative = source.relative_to(input_root) if recursive else Path(source.name)
     destination = output_root / relative
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    if create:
+        destination.parent.mkdir(parents=True, exist_ok=True)
     new_name = destination.stem + suffix + destination.suffix
     return destination.with_name(new_name)
 
 
-def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[np.ndarray]]:
-    """Converts a PIL image to an RGB float32 array in the 0-1 range."""
+def image_to_float(image: Image.Image) -> Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int]:
+    """Convert a PIL image into a float32 RGB array in the 0-1 domain."""
 
-    if image.mode not in {"RGB", "RGBA", "I;16", "I;16L", "I;16B", "I;16S", "L"}:
+    supported_modes = {
+        "RGB",
+        "RGBA",
+        "I",
+        "I;16",
+        "I;16L",
+        "I;16B",
+        "I;16S",
+        "L",
+        "LA",
+        "F",
+    }
+    if image.mode not in supported_modes:
         image = image.convert("RGBA" if "A" in image.mode else "RGB")
 
     arr = np.array(image)
     alpha_channel: Optional[np.ndarray] = None
 
     if arr.ndim == 2:
+        base_channels = 1
         arr = np.stack([arr] * 3, axis=-1)
-    elif arr.shape[2] == 4:
-        alpha_channel = arr[:, :, 3]
-        arr = arr[:, :, :3]
+    else:
+        base_channels = arr.shape[2]
+        if arr.shape[2] == 4:
+            alpha_channel = arr[:, :, 3]
+            arr = arr[:, :, :3]
+            base_channels = 3
+        elif arr.shape[2] == 2:
+            alpha_channel = arr[:, :, 1]
+            arr = np.stack([arr[:, :, 0]] * 3, axis=-1)
+            base_channels = 1
 
-    dtype_max = float(np.iinfo(arr.dtype).max) if arr.dtype.kind in {"u", "i"} else 1.0
-    arr_float = arr.astype(np.float32) / dtype_max
+    np_dtype = arr.dtype
+    if np.issubdtype(np_dtype, np.integer):
+        info = np.iinfo(np_dtype)
+        min_value = float(info.min)
+        max_value = float(info.max)
+        scale = max_value - min_value
+        if scale <= 0:
+            arr_float = np.zeros_like(arr, dtype=np.float32)
+        else:
+            arr_float = (arr.astype(np.float32) - min_value) / scale
+        if alpha_channel is not None:
+            alpha_channel = (
+                (alpha_channel.astype(np.float32) - min_value) / scale if scale > 0 else np.zeros_like(alpha_channel)
+            )
+    else:
+        arr_float = arr.astype(np.float32)
+        if alpha_channel is not None:
+            alpha_channel = alpha_channel.astype(np.float32)
 
+    arr_float = np.clip(arr_float, 0.0, 1.0)
     if alpha_channel is not None:
-        alpha_channel = alpha_channel.astype(np.float32) / dtype_max
+        alpha_channel = np.clip(alpha_channel, 0.0, 1.0)
 
-    return arr_float, arr.dtype, alpha_channel
+    return arr_float, np_dtype, alpha_channel, base_channels
 
 
 def float_to_dtype_array(
     arr: np.ndarray,
     dtype: np.dtype,
     alpha: Optional[np.ndarray],
+    base_channels: Optional[int] = None,
 ) -> np.ndarray:
     arr = np.clip(arr, 0.0, 1.0)
     np_dtype = np.dtype(dtype)
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
     if dtype_info:
-        dtype_max = float(dtype_info.max)
-        arr_int = np.round(arr * dtype_max).astype(np_dtype)
+        range_span = float(dtype_info.max) - float(dtype_info.min)
+        if range_span <= 0:
+            arr_scaled = np.zeros_like(arr, dtype=np.float32)
+        else:
+            arr_scaled = arr * range_span + float(dtype_info.min)
+        arr_int = np.round(arr_scaled).astype(np_dtype)
     else:
         # Preserve floating-point sample formats (e.g. 32-bit float TIFF)
         arr_int = arr.astype(np_dtype, copy=False)
@@ -345,10 +396,18 @@ def float_to_dtype_array(
     if alpha is not None:
         alpha = np.clip(alpha, 0.0, 1.0)
         if dtype_info:
-            alpha_int = np.round(alpha * dtype_max).astype(np_dtype)
+            range_span = float(dtype_info.max) - float(dtype_info.min)
+            if range_span <= 0:
+                alpha_scaled = np.zeros_like(alpha, dtype=np.float32)
+            else:
+                alpha_scaled = alpha * range_span + float(dtype_info.min)
+            alpha_int = np.round(alpha_scaled).astype(np_dtype)
         else:
             alpha_int = alpha.astype(np_dtype, copy=False)
         arr_int = np.concatenate([arr_int, alpha_int[:, :, None]], axis=2)
+
+    if base_channels is not None and arr_int.ndim == 3 and base_channels < arr_int.shape[2]:
+        arr_int = arr_int[:, :, :base_channels + (1 if alpha is not None else 0)]
 
     return np.ascontiguousarray(arr_int)
 
@@ -374,12 +433,13 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
 
 
 def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, Any]]:
-    if raw_metadata is ((None)):
+    if raw_metadata is None:
         return None
     safe: Dict[int, Any] = {}
     try:
+        forbidden = {256, 257, 273, 279, 322, 323, 324, 325}
         for tag in raw_metadata:
-            if tag in ({273, 279, 324, 325}):
+            if tag in forbidden:
                 continue
             safe[tag] = raw_metadata[tag]
     except Exception:  # pragma: no cover - metadata best effort
@@ -397,16 +457,21 @@ def save_image(
     compression: str,
 ) -> None:
     metadata = sanitize_tiff_metadata(metadata)
-    dtype_info = np.iinfo(dtype) if np.issubdtype(dtype, np.integer) else None
+    np_dtype = np.dtype(dtype)
+    dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
     bits = dtype_info.bits if dtype_info else 0
 
-    if dtype_info and bits == 16 and tifffile is not None:
+    save_arr = arr_int
+    if tifffile is not None:
+        arr_for_tifffile = save_arr
+        if arr_for_tifffile.ndim == 3 and arr_for_tifffile.shape[2] == 1:
+            arr_for_tifffile = arr_for_tifffile[:, :, 0]
         tiff_kwargs = {
-            "photometric": "rgb" if arr_int.shape[2] >= 3 else "minisblack",
+            "photometric": "rgb" if (arr_for_tifffile.ndim == 3 and arr_for_tifffile.shape[2] >= 3) else "minisblack",
             "compression": compression_for_tifffile(compression),
             "metadata": None,
         }
-        if arr_int.shape[2] > 3:
+        if arr_for_tifffile.ndim == 3 and arr_for_tifffile.shape[2] > 3:
             tiff_kwargs["extrasamples"] = "unassoc"
         extratags = []
         if icc_profile:
@@ -418,25 +483,43 @@ def save_image(
                 LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
         if extratags:
             tiff_kwargs["extratags"] = extratags
-        tifffile.imwrite(destination, arr_int, **tiff_kwargs)
+        tifffile.imwrite(destination, arr_for_tifffile, **tiff_kwargs)
         return
 
+    arr_uint8: np.ndarray
     if dtype_info and bits == 16:
         LOGGER.warning(
             "Falling back to Pillow for 16-bit save; output will be 8-bit. Install 'tifffile' for full 16-bit support."
         )
-        rgb = np.clip(arr_int[:, :, :3], 0, dtype_info.max).astype(np.float32) / (dtype_info.max / 255.0)
+        rgb = np.clip(save_arr[..., :3], 0, dtype_info.max).astype(np.float32) / (dtype_info.max / 255.0)
         rgb8 = rgb.astype(np.uint8)
-        if arr_int.shape[2] > 3:
-            alpha = np.clip(arr_int[:, :, 3], 0, dtype_info.max).astype(np.float32) / (dtype_info.max / 255.0)
+        if save_arr.ndim == 3 and save_arr.shape[2] > 3:
+            alpha = np.clip(save_arr[:, :, 3], 0, dtype_info.max).astype(np.float32) / (dtype_info.max / 255.0)
             alpha8 = alpha.astype(np.uint8)
             arr_uint8 = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
         else:
             arr_uint8 = rgb8
+    elif np.issubdtype(np_dtype, np.floating):
+        rgb = np.clip(save_arr[..., :3], 0.0, 1.0)
+        rgb16 = np.round(rgb * 65535.0).astype(np.uint16)
+        if save_arr.ndim == 3 and save_arr.shape[2] > 3:
+            alpha = np.clip(save_arr[:, :, 3], 0.0, 1.0)
+            alpha16 = np.round(alpha * 65535.0).astype(np.uint16)
+            arr_uint8 = np.concatenate([rgb16, alpha16[:, :, None]], axis=2)
+        else:
+            arr_uint8 = rgb16
     else:
-        arr_uint8 = arr_int.astype(np.uint8)
+        arr_uint8 = save_arr.astype(np.uint8)
 
-    mode = "RGBA" if arr_uint8.shape[2] == 4 else "RGB"
+    mode = "RGB"
+    if arr_uint8.ndim == 2:
+        mode = "L"
+    elif arr_uint8.shape[2] == 4:
+        mode = "RGBA"
+    elif arr_uint8.shape[2] == 1:
+        mode = "L"
+        arr_uint8 = arr_uint8[:, :, 0]
+
     image = Image.fromarray(arr_uint8, mode=mode)
     save_kwargs = {"compression": compression}
     if metadata is not None:
@@ -576,7 +659,9 @@ def apply_vibrance(arr: np.ndarray, amount: float) -> np.ndarray:
         return arr
     hsv = rgb_to_hsv(arr)
     saturation = hsv[..., 1]
-    hsv[..., 1] = np.clip(saturation + amount * (1.0 - saturation) * saturation, 0.0, 1.0)
+    muted_weight = np.sqrt(np.clip(saturation, 0.0, 1.0))
+    boost = amount * (1.0 - saturation) * muted_weight
+    hsv[..., 1] = np.clip(saturation + boost, 0.0, 1.0)
     LOGGER.debug("Vibrance amount=%s", amount)
     return hsv_to_rgb(hsv)
 
@@ -737,13 +822,14 @@ def apply_adjustments(arr: np.ndarray, adjustments: AdjustmentSettings) -> np.nd
     return np.clip(arr, 0.0, 1.0)
 
 
-def process_image(
+def process_single_image(
     source: Path,
     destination: Path,
     adjustments: AdjustmentSettings,
+    *,
     compression: str,
-    resize_target: Optional[int],
-    dry_run: bool,
+    resize_long_edge: Optional[int] = None,
+    dry_run: bool = False,
 ) -> None:
     LOGGER.info("Processing %s -> %s", source, destination)
     if destination.exists() and not dry_run:
@@ -753,13 +839,13 @@ def process_image(
     with Image.open(source) as image:
         metadata = getattr(image, "tag_v2", None)
         icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
-        arr, dtype, alpha = image_to_float(image)
+        arr, dtype, alpha, base_channels = image_to_float(image)
         adjusted = apply_adjustments(arr, adjustments)
-        if resize_target is not None:
-            adjusted = resize_long_edge_array(adjusted, resize_target)
+        if resize_long_edge is not None:
+            adjusted = resize_long_edge_array(adjusted, resize_long_edge)
             if alpha is not None:
-                alpha = resize_long_edge_array(alpha, resize_target)
-        arr_int = float_to_dtype_array(adjusted, dtype, alpha)
+                alpha = resize_long_edge_array(alpha, resize_long_edge)
+        arr_int = float_to_dtype_array(adjusted, dtype, alpha, base_channels)
         if dry_run:
             LOGGER.info("Dry run enabled, skipping save for %s", destination)
             return
@@ -768,17 +854,10 @@ def process_image(
 
 def main(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
-    adjustments = build_adjustments(args)
+    run_pipeline(args)
 
-    input_root = args.input.resolve()
-    output_root = args.output.resolve()
-    if not input_root.exists():
-        raise FileNotFoundError(f"Input folder not found: {input_root}")
-    output_root.mkdir(parents=True, exist_ok=True)
 
-    if not input_root.exists() or not input_root.is_dir():
-        raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
-
+def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
     def _contains(parent: Path, child: Path) -> bool:
         try:
             child.relative_to(parent)
@@ -797,27 +876,52 @@ def main(argv: Optional[Iterable[str]] = None) -> None:
             "Input folder cannot be located inside the output folder; choose non-overlapping directories."
         )
 
+
+def run_pipeline(args: argparse.Namespace) -> int:
     adjustments = build_adjustments(args)
+
+    input_root = args.input.resolve()
+    output_root = args.output.resolve()
+
+    if not input_root.exists() or not input_root.is_dir():
+        raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
+
+    _ensure_non_overlapping(input_root, output_root)
+
+    if not args.dry_run:
+        output_root.mkdir(parents=True, exist_ok=True)
+
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
         LOGGER.warning("No TIFF images found in %s", input_root)
-        return
+        return 0
 
     LOGGER.info("Found %s image(s) to process", len(images))
+    processed = 0
 
     for image_path in images:
-        destination = ensure_output_path(input_root, output_root, image_path, args.suffix, args.recursive)
+        destination = ensure_output_path(
+            input_root,
+            output_root,
+            image_path,
+            args.suffix,
+            args.recursive,
+            create=not args.dry_run,
+        )
         if destination.exists() and not args.overwrite and not args.dry_run:
             LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
             continue
-        process_image(
+        process_single_image(
             image_path,
             destination,
             adjustments,
-            args.compression,
-            args.resize_long_edge,
-            args.dry_run,
+            compression=args.compression,
+            resize_long_edge=args.resize_long_edge,
+            dry_run=args.dry_run,
         )
+        processed += 0 if args.dry_run else 1
+
+    return processed
 
 
 if __name__ == "__main__":  # pragma: no cover
