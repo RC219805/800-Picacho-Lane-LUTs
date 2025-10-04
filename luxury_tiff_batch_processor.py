@@ -932,9 +932,26 @@ def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
 
 
 def gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    """Return the cached Gaussian kernel for ``radius``/``sigma`` combinations."""
+    """
+    Retrieve a cached 1D Gaussian kernel for the given radius and sigma.
 
-    # The cached kernel must not be mutated; callers should copy when mutation is needed.
+    Parameters
+    ----------
+    radius : int
+        The radius of the kernel. Must be >= 0.
+    sigma : Optional[float]
+        The standard deviation of the Gaussian. If None, a default based on radius is used.
+
+    Returns
+    -------
+    np.ndarray
+        A 1D numpy array containing the Gaussian kernel, normalized to sum to 1.
+
+    Notes
+    -----
+    The returned kernel is cached for each (radius, sigma) combination to improve performance.
+    The kernel must not be mutated; callers should copy it if mutation is required.
+    """
     return gaussian_kernel(radius, sigma)
 
 
