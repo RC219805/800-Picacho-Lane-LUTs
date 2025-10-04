@@ -44,3 +44,5 @@ processed_images/      # Enhanced output with _lux suffix
 - Output uses LZW compression for efficient storage while maintaining quality
 - Repository workflow now documents the five-step branch synchronization routine used to
   clear "behind" indicators on active pull requests.
+- Verified October 2025 pytest failure report against current test suite; reran `pytest`
+  and confirmed all 87 tests pass, marking the earlier failure as outdated.

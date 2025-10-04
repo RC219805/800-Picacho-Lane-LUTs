@@ -79,6 +79,17 @@ def collect_valid_until_records(tests_root: Path) -> List[ValidUntilRecord]:
     return sorted(records, key=lambda item: item.days_remaining)
 
 
+def collect_outdated_valid_until_records(tests_root: Path) -> List[ValidUntilRecord]:
+    """Return ``valid_until`` records whose deadlines have passed."""
+
+    today = date.today()
+    return [
+        record
+        for record in collect_valid_until_records(tests_root)
+        if record.deadline < today
+    ]
+
+
 def _valid_until_from_decorator(
     decorator: ast.AST, path: Path
 ) -> Optional[tuple[date, str]]:
