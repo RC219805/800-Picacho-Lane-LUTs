@@ -714,14 +714,14 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
 def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object]) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Determine color metadata based on priority: explicit > color-from-source > none."""
+
     # Priority 1: Explicit overrides
     if args.color_primaries or args.color_transfer or args.color_space:
         return args.color_primaries, args.color_transfer, args.color_space
 
     # Priority 2: Copy from source if requested
     if args.color_from_source:
-        streams = probe.get("streams", [])
-        video = next((s for s in streams if s.get("codec_type") == "video"), {})
+        video = extract_video_stream(probe)
         if video:
             primaries = normalise_color_tag(video.get("color_primaries"))
             transfer = normalise_color_tag(video.get("color_trc"))
