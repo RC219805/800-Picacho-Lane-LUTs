@@ -109,6 +109,48 @@ python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
 ```
 
+#### Configuration files
+
+Every command-line flag (other than `--config` itself) can be provided through a
+JSON or YAML configuration file. JSON is supported out of the box, while YAML
+files require [`pyyaml`](https://pypi.org/project/PyYAML/) to be installed.
+
+Create a configuration file with keys that mirror the argument names (hyphens
+and underscores are treated interchangeably):
+
+```json
+{
+  "input": "./input_images",
+  "output": "./processed_images",
+  "preset": "signature",
+  "recursive": true,
+  "resize_long_edge": 7000,
+  "workers": 4
+}
+```
+
+Or, when `pyyaml` is available, YAML:
+
+```yaml
+input: ./input_images
+output: ./processed_images
+preset: heritage
+recursive: true
+suffix: _client
+log_level: DEBUG
+```
+
+Load the configuration and optionally override specific settings on the command
+line:
+
+```bash
+python luxury_tiff_batch_processor.py --config settings.json --workers 8 --overwrite
+```
+
+Values specified on the command line always take precedence over configuration
+defaults, and unknown configuration keys raise a helpful error so typos are
+caught quickly.
+
 For coastal twilight exteriors that need richer terracotta, nuanced lawn depth, and
 Pacific color separation, start from the new **Golden Hour Courtyard** preset and layer in
 the creative overrides recommended by the Material Response team.
