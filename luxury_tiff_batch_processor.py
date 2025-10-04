@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import logging
 import math
 from pathlib import Path
@@ -126,6 +127,8 @@ __all__ = [
     "build_adjustments",
     "collect_images",
     "float_to_dtype_array",
+    "gaussian_blur",
+    "gaussian_kernel",
     "image_to_float",
     "main",
     "parse_args",
@@ -917,6 +920,7 @@ def apply_saturation(arr: np.ndarray, amount: float) -> np.ndarray:
     return hsv_to_rgb(hsv)
 
 
+@functools.lru_cache(maxsize=32)
 def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
     if radius <= 0:
         return np.array([1.0], dtype=np.float32)
@@ -925,6 +929,30 @@ def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
     kernel = np.exp(-(ax ** 2) / (2.0 * sigma ** 2))
     kernel /= np.sum(kernel)
     return kernel.astype(np.float32)
+
+
+def gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
+    """
+    Retrieve a cached 1D Gaussian kernel for the given radius and sigma.
+
+    Parameters
+    ----------
+    radius : int
+        The radius of the kernel. Must be >= 0.
+    sigma : Optional[float]
+        The standard deviation of the Gaussian. If None, a default based on radius is used.
+
+    Returns
+    -------
+    np.ndarray
+        A 1D numpy array containing the Gaussian kernel, normalized to sum to 1.
+
+    Notes
+    -----
+    The returned kernel is cached for each (radius, sigma) combination to improve performance.
+    The kernel must not be mutated; callers should copy it if mutation is required.
+    """
+    return gaussian_kernel(radius, sigma)
 
 
 def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
@@ -937,7 +965,7 @@ def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.nda
 
 
 def gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    kernel = gaussian_kernel(radius, sigma)
+    kernel = gaussian_kernel_cached(radius, sigma)
     blurred = separable_convolve(arr, kernel, axis=0)
     blurred = separable_convolve(blurred, kernel, axis=1)
     return blurred
