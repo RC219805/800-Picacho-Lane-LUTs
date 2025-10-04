@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+from typing import Any, Dict
 
 import pytest
 
@@ -120,6 +121,64 @@ def test_run_pipeline_dry_run_creates_no_outputs(tmp_path: Path):
     assert not any(output_dir.rglob("*.tif"))
 
 
+def _create_sample_image(path: Path) -> None:
+    image = Image.new("RGB", (2, 2), color=(32, 64, 96))
+    image.save(path)
+
+
+def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    sample = input_dir / "frame.tif"
+    _create_sample_image(sample)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run"])
+
+    calls: Dict[str, Any] = {"called": False, "items": []}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        calls["called"] = True
+        calls["total"] = total
+        calls["description"] = description
+        for item in iterable:
+            calls["items"].append(item)
+            yield item
+
+    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+
+    processed = ltiff.run_pipeline(args)
+
+    assert processed == 0
+    assert calls["called"] is True
+    assert calls["total"] == 1
+    assert calls["items"] == [sample]
+    assert "Processing" in (calls["description"] or "")
+
+
+def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    _create_sample_image(input_dir / "frame.tif")
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run", "--no-progress"])
+
+    calls = {"called": False}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        calls["called"] = True
+        yield from iterable
+
+    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+
+    ltiff.run_pipeline(args)
+
+    assert calls["called"] is False
+
+
 @documents("Filesystem discovery respects operator scope selections")
 def test_collect_images_handles_recursive(tmp_path):
     input_root = tmp_path
@@ -205,6 +264,57 @@ def test_build_adjustments_applies_overrides(tmp_path):
     assert adjustments.shadow_lift == ltiff.LUXURY_PRESETS["signature"].shadow_lift
 
 
+def test_adjustment_settings_validation_accepts_reasonable_ranges():
+    settings = ltiff.AdjustmentSettings(
+        exposure=1.5,
+        white_balance_temp=6500,
+        white_balance_tint=10,
+        shadow_lift=0.3,
+        highlight_recovery=0.6,
+        midtone_contrast=0.2,
+        vibrance=0.4,
+        saturation=-0.2,
+        clarity=0.1,
+        chroma_denoise=0.5,
+        glow=0.2,
+    )
+
+    assert settings.exposure == pytest.approx(1.5)
+    assert settings.saturation == pytest.approx(-0.2)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"exposure": 6.0},
+        {"shadow_lift": -0.1},
+        {"shadow_lift": 1.5},
+        {"chroma_denoise": 1.1},
+        {"glow": -0.5},
+        {"white_balance_temp": 40000},
+    ],
+)
+def test_adjustment_settings_validation_rejects_invalid_ranges(kwargs):
+    with pytest.raises(ValueError):
+        ltiff.AdjustmentSettings(**kwargs)
+
+
+def test_build_adjustments_rejects_invalid_override(tmp_path):
+    args = ltiff.parse_args(
+        [
+            str(tmp_path / "input"),
+            str(tmp_path / "output"),
+            "--preset",
+            "signature",
+            "--shadow-lift",
+            "-0.5",
+        ]
+    )
+
+    with pytest.raises(ValueError):
+        ltiff.build_adjustments(args)
+
+
 @documents("Golden Hour Courtyard preset translates coastal warm scene guidance into defaults")
 def test_golden_hour_courtyard_preset_matches_material_response_brief():
     preset = ltiff.LUXURY_PRESETS["golden_hour_courtyard"]
@@ -236,7 +346,9 @@ def test_image_roundtrip_uint16_with_alpha():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(data, mode="RGBA")
 
-    base_float, base_dtype, alpha, base_channels = ltiff.image_to_float(image)
+    base_float, base_dtype, alpha, base_channels = ltiff.image_to_float(
+        image, return_format="tuple4"
+    )
     assert base_float.dtype == np.float32
     # PIL converts uint16 RGBA to uint8, so base_dtype will be uint8
     assert base_dtype == np.uint8
