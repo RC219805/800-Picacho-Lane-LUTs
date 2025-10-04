@@ -30,6 +30,24 @@ try:  # Optional high-fidelity TIFF writer
 except Exception:  # pragma: no cover - optional dependency
     tifffile = None
 
+try:  # Optional progress bar for batch runs
+    from tqdm import tqdm as _tqdm  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    _tqdm = None
+
+
+def _tqdm_progress(
+    iterable: Iterable[Any], *, total: Optional[int], description: Optional[str]
+) -> Iterable[Any]:
+    """Wrap *iterable* with :mod:`tqdm` if available."""
+
+    if _tqdm is None:  # pragma: no cover - defensive fallback
+        return iterable
+    return _tqdm(iterable, total=total, desc=description, unit="image")
+
+
+_PROGRESS_WRAPPER = _tqdm_progress if _tqdm is not None else None
+
 
 class LuxuryGradeException(RuntimeError):
     """Raised when the processing environment cannot meet luxury standards."""
@@ -116,6 +134,30 @@ __all__ = [
     "run_pipeline",
     "save_image",
 ]
+
+
+def _wrap_with_progress(
+    iterable: Iterable[Any],
+    *,
+    total: Optional[int],
+    description: str,
+    enabled: bool,
+) -> Iterable[Any]:
+    """Return an iterable wrapped with a progress helper when available."""
+
+    if not enabled:
+        return iterable
+
+    helper = _PROGRESS_WRAPPER
+    if helper is None:
+        LOGGER.debug("Progress helper not available; install tqdm for progress reporting.")
+        return iterable
+
+    try:
+        return helper(iterable, total=total, description=description)
+    except Exception:  # pragma: no cover - defensive fallback
+        LOGGER.exception("Progress helper failed; continuing without progress display.")
+        return iterable
 
 
 @dataclasses.dataclass
@@ -359,6 +401,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Optionally resize the longest image edge to this many pixels while preserving aspect ratio",
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview the work without writing any files")
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable progress reporting (useful for minimal or non-interactive environments)",
+    )
 
     # Fine control overrides.
     parser.add_argument("--exposure", type=float, default=None, help="Exposure adjustment in stops")
@@ -1134,7 +1181,14 @@ def run_pipeline(args: argparse.Namespace) -> int:
     LOGGER.info("Found %s image(s) to process", len(images))
     processed = 0
 
-    for image_path in images:
+    progress_iterable = _wrap_with_progress(
+        images,
+        total=len(images),
+        description="Processing images",
+        enabled=not getattr(args, "no_progress", False),
+    )
+
+    for image_path in progress_iterable:
         destination = ensure_output_path(
             input_root,
             output_root,
@@ -1146,6 +1200,8 @@ def run_pipeline(args: argparse.Namespace) -> int:
         if destination.exists() and not args.overwrite and not args.dry_run:
             LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
             continue
+        if args.dry_run:
+            LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
         process_single_image(
             image_path,
             destination,
