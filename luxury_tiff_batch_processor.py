@@ -898,7 +898,7 @@ def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.nda
 
 
 def gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    kernel = gaussian_kernel_cached(radius, sigma).copy()
+    kernel = gaussian_kernel_cached(radius, sigma)
     blurred = separable_convolve(arr, kernel, axis=0)
     blurred = separable_convolve(blurred, kernel, axis=1)
     return blurred
