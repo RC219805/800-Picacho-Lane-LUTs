@@ -149,7 +149,7 @@ def test_gaussian_blur_matches_reference():
 
 
 def test_gaussian_blur_reuses_cached_kernel():
-    gaussian_kernel.cache_clear()
+    ltiff.gaussian_kernel.cache_clear()
     rng = np.random.default_rng(123)
     data = rng.random((16, 12, 3), dtype=np.float32)
     radius = 2
