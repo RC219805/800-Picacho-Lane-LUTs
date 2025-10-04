@@ -170,6 +170,13 @@ def apply_material_response_finishing(
     highlight_warmth: float = 0.08,
     haze_strength: float = 0.06,
     haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96),
+    floor_plank_contrast: float = 0.12,
+    floor_specular: float = 0.18,
+    textile_contrast: float = 0.18,
+    leather_sheen: float = 0.16,
+    fireplace_glow: float = 0.18,
+    fireplace_glow_radius: float = 45.0,
+    window_reflection: float = 0.12,
 ) -> np.ndarray:
     """Empirical material response layer to emphasize texture, shadowing, and atmosphere."""
 
@@ -184,6 +191,11 @@ def apply_material_response_finishing(
         rgb = np.clip(rgb + texture_boost * detail, 0.0, 1.0)
 
     lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
+    sat = np.maximum(rgb.max(axis=2) - rgb.min(axis=2), 1e-6)
+
+    h, w = lum.shape
+    yy, _ = np.mgrid[0:h, 0:w]
+    y_norm = yy.astype(np.float32) / max(1, h - 1)
 
     if ambient_occlusion > 0:
         # Edge-based occlusion mask to ground furniture with the floor
@@ -197,6 +209,62 @@ def apply_material_response_finishing(
         shadow = 1.0 - ambient_occlusion * occlusion
         rgb = np.clip(rgb * shadow[..., None], 0.0, 1.0)
 
+    # Floor plank definition + specular streaks guided by perspective gradient
+    floor_mask = np.clip((y_norm - 0.55) / 0.45, 0.0, 1.0)
+    if floor_plank_contrast > 0:
+        floor_detail = rgb * floor_mask[..., None]
+        blurred_floor = gaussian_filter(floor_detail, sigma=(1.6, 1.2, 0))
+        plank_detail = floor_detail - blurred_floor
+        rgb = np.clip(rgb + floor_plank_contrast * plank_detail * floor_mask[..., None], 0.0, 1.0)
+
+    if floor_specular > 0:
+        grad_floor = sobel(lum * floor_mask, axis=1)
+        grad_floor = np.abs(grad_floor)
+        if grad_floor.max() > 0:
+            grad_floor /= grad_floor.max()
+        streaks = gaussian_filter(grad_floor, sigma=(2.2, 6.0))
+        streaks = np.clip(streaks, 0.0, 1.0)
+        spec_color = np.array([1.0, 0.93, 0.78], dtype=np.float32)
+        rgb = np.clip(rgb + floor_specular * streaks[..., None] * floor_mask[..., None] * (spec_color - rgb), 0.0, 1.0)
+
+    if textile_contrast > 0:
+        # Identify whites/neutrals with low saturation for linen separation
+        textile_mask = np.clip((lum - 0.45) / 0.35, 0.0, 1.0) * np.clip(0.28 - sat, 0.0, 1.0) / 0.28
+        textile_mask = gaussian_filter(textile_mask, sigma=1.1)
+        textile_detail = rgb - gaussian_filter(rgb, sigma=(1.4, 1.4, 0))
+        rgb = np.clip(rgb + textile_contrast * textile_mask[..., None] * textile_detail, 0.0, 1.0)
+
+    if leather_sheen > 0:
+        # Neutral mid-tone mask for leather upholstery
+        leather_mask = np.clip((0.55 - lum) / 0.35, 0.0, 1.0) * np.clip((0.22 - sat), 0.0, 1.0) / 0.22
+        leather_mask = gaussian_filter(leather_mask, sigma=1.6)
+        sheen = gaussian_filter(lum, sigma=3.0)
+        if sheen.max() > 0:
+            sheen = np.clip((sheen - 0.25) / 0.5, 0.0, 1.0)
+        sheen_color = np.array([0.82, 0.73, 0.62], dtype=np.float32)
+        rgb = np.clip(rgb * (1.0 - leather_sheen * leather_mask[..., None]) + sheen_color * leather_sheen * leather_mask[..., None] * sheen[..., None], 0.0, 1.0)
+
+    if fireplace_glow > 0:
+        warm_mask = ((rgb[..., 0] > 0.55) & (rgb[..., 0] - rgb[..., 1] > 0.08) & (rgb[..., 1] > rgb[..., 2])).astype(np.float32)
+        warm_mask = gaussian_filter(warm_mask, sigma=1.5)
+        sigma = max(1.5, fireplace_glow_radius / 18.0)
+        glow = gaussian_filter(warm_mask, sigma=sigma)
+        if glow.max() > 0:
+            glow /= glow.max()
+        glow_color = np.array([1.0, 0.68, 0.42], dtype=np.float32)
+        rgb = np.clip(rgb + fireplace_glow * glow[..., None] * (glow_color - rgb), 0.0, 1.0)
+
+    if window_reflection > 0:
+        bright_columns = np.mean(np.clip(lum - 0.65, 0.0, 1.0), axis=0)
+        bright_columns = gaussian_filter(bright_columns, sigma=4.0)
+        if bright_columns.max() > 0:
+            bright_columns /= bright_columns.max()
+        reflection = np.tile(bright_columns, (h, 1))
+        reflection = gaussian_filter(reflection, sigma=(5.0, 3.0))
+        reflection *= floor_mask
+        reflection_color = np.array([1.0, 0.98, 0.9], dtype=np.float32)
+        rgb = np.clip(rgb + window_reflection * reflection[..., None] * (reflection_color - rgb), 0.0, 1.0)
+
     if highlight_warmth > 0:
         # Warm the brightest values to simulate fireplace spill and sunlit reflections
         highlight_mask = np.clip((lum - 0.58) / 0.35, 0.0, 1.0)
@@ -208,9 +276,8 @@ def apply_material_response_finishing(
         )
 
     if haze_strength > 0:
-        h, w = lum.shape
         # Vertical gradient bias with gentle falloff toward window region
-        gradient = np.linspace(0.0, 1.0, h, dtype=np.float32)[:, None]
+        gradient = y_norm.astype(np.float32)
         haze = haze_strength * gradient
         tint = np.array(haze_tint, dtype=np.float32)
         tint = np.clip(tint, 0.0, 1.0)
@@ -309,6 +376,13 @@ class FinishConfig:
     highlight_warmth: float = 0.08
     haze_strength: float = 0.06
     haze_tint: Tuple[float, float, float] = (0.82, 0.88, 0.96)
+    floor_plank_contrast: float = 0.12
+    floor_specular: float = 0.18
+    textile_contrast: float = 0.18
+    leather_sheen: float = 0.16
+    fireplace_glow: float = 0.18
+    fireplace_glow_radius: float = 45.0
+    window_reflection: float = 0.12
 
 # --------------------------
 # Core pipeline
@@ -488,6 +562,13 @@ class LuxuryRenderPipeline:
                 highlight_warmth=finish.highlight_warmth,
                 haze_strength=finish.haze_strength,
                 haze_tint=finish.haze_tint,
+                floor_plank_contrast=finish.floor_plank_contrast,
+                floor_specular=finish.floor_specular,
+                textile_contrast=finish.textile_contrast,
+                leather_sheen=finish.leather_sheen,
+                fireplace_glow=finish.fireplace_glow,
+                fireplace_glow_radius=finish.fireplace_glow_radius,
+                window_reflection=finish.window_reflection,
             )
         out = np_to_pil(rgb)
 
@@ -546,6 +627,13 @@ def main(
     highlight_warmth: float = typer.Option(0.08, help="Material response: warm highlight mix"),
     haze_strength: float = typer.Option(0.06, help="Material response: volumetric haze blend"),
     haze_tint: str = typer.Option("0.82,0.88,0.96", help="Material response: haze tint (r,g,b in 0-1)"),
+    floor_plank_contrast: float = typer.Option(0.12, help="Material response: enhance floor plank definition"),
+    floor_specular: float = typer.Option(0.18, help="Material response: specular streak intensity on flooring"),
+    textile_contrast: float = typer.Option(0.18, help="Material response: linen/fabric separation"),
+    leather_sheen: float = typer.Option(0.16, help="Material response: leather sheen blend"),
+    fireplace_glow: float = typer.Option(0.18, help="Material response: fireplace spill intensity"),
+    fireplace_glow_radius: float = typer.Option(45.0, help="Material response: fireplace glow falloff radius"),
+    window_reflection: float = typer.Option(0.12, help="Material response: window reflection spill on flooring"),
     # Branding
     logo: Optional[str] = typer.Option(None, help="Path to PNG/SVG logo (PNG w/ alpha recommended)"),
     brand_text: Optional[str] = typer.Option(None, help="Caption, e.g. 'The Veridian | Penthouse 21B'"),
@@ -576,6 +664,13 @@ def main(
         highlight_warmth=highlight_warmth,
         haze_strength=haze_strength,
         haze_tint=parse_float_triplet(haze_tint),
+        floor_plank_contrast=floor_plank_contrast,
+        floor_specular=floor_specular,
+        textile_contrast=textile_contrast,
+        leather_sheen=leather_sheen,
+        fireplace_glow=fireplace_glow,
+        fireplace_glow_radius=fireplace_glow_radius,
+        window_reflection=window_reflection,
     )
 
     pipe = LuxuryRenderPipeline(
