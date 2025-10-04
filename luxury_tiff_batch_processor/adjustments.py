@@ -9,6 +9,8 @@ from typing import Optional
 
 import numpy as np
 
+from .profiles import ProcessingProfile
+
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
 
@@ -351,18 +353,25 @@ def apply_glow(arr: np.ndarray, amount: float) -> np.ndarray:
     return np.clip(arr * (1.0 - amount) + softened * amount, 0.0, 1.0)
 
 
-def apply_adjustments(arr: np.ndarray, adjustments: AdjustmentSettings) -> np.ndarray:
+def apply_adjustments(
+    arr: np.ndarray, adjustments: AdjustmentSettings, *, profile: ProcessingProfile | None = None
+) -> np.ndarray:
     arr = apply_white_balance(arr, adjustments.white_balance_temp, adjustments.white_balance_tint)
     arr = apply_exposure(arr, adjustments.exposure)
     arr = apply_shadow_lift(arr, adjustments.shadow_lift)
     arr = apply_highlight_recovery(arr, adjustments.highlight_recovery)
     arr = apply_midtone_contrast(arr, adjustments.midtone_contrast)
     arr = np.clip(arr, 0.0, 1.0)
-    arr = apply_chroma_denoise(arr, adjustments.chroma_denoise)
+    chroma_amount = adjustments.chroma_denoise
+    glow_amount = adjustments.glow
+    if profile is not None:
+        chroma_amount = profile.resolve_chroma_denoise(chroma_amount)
+        glow_amount = profile.resolve_glow(glow_amount)
+    arr = apply_chroma_denoise(arr, chroma_amount)
     arr = apply_vibrance(arr, adjustments.vibrance)
     arr = apply_saturation(arr, adjustments.saturation)
     arr = apply_clarity(arr, adjustments.clarity)
-    arr = apply_glow(arr, adjustments.glow)
+    arr = apply_glow(arr, glow_amount)
     return np.clip(arr, 0.0, 1.0)
 
 

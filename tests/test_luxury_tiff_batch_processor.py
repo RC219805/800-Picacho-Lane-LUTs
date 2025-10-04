@@ -63,6 +63,29 @@ def test_apply_adjustments_vibrance_boosts_muted_colors_more():
     assert muted_gain > saturated_gain
 
 
+def test_processing_profiles_balance_costly_filters():
+    rng = np.random.default_rng(2024)
+    arr = rng.random((12, 12, 3), dtype=np.float32)
+    adjustments = ltiff.AdjustmentSettings(chroma_denoise=0.7, glow=0.5)
+
+    quality = ltiff.PROCESSING_PROFILES["quality"]
+    balanced = ltiff.PROCESSING_PROFILES["balanced"]
+    performance = ltiff.PROCESSING_PROFILES["performance"]
+
+    quality_result = ltiff.apply_adjustments(arr, adjustments, profile=quality)
+    balanced_result = ltiff.apply_adjustments(arr, adjustments, profile=balanced)
+    performance_result = ltiff.apply_adjustments(arr, adjustments, profile=performance)
+
+    assert not np.allclose(quality_result, arr)
+    assert not np.allclose(balanced_result, arr)
+    assert np.allclose(performance_result, arr, atol=1e-6)
+
+    quality_delta = float(np.mean(np.abs(quality_result - arr)))
+    balanced_delta = float(np.mean(np.abs(balanced_result - arr)))
+    assert balanced_delta < quality_delta
+    assert balanced_delta > 0.0
+
+
 @documents("Pipeline preserves authored intent while optimizing logistics")
 def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
     source_dir = tmp_path / "input"
@@ -97,6 +120,52 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
         tags = getattr(processed, "tag_v2", {})
         assert tags.get(270) == "Luxury scene"
         assert np.array(processed).dtype == np.uint8
+
+
+def test_process_single_image_profile_overrides_dtype_and_compression(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    source_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    source_dir.mkdir()
+    output_dir.mkdir()
+
+    image = Image.new("RGB", (4, 4), color=(32, 64, 96))
+    source_path = source_dir / "frame.tif"
+    image.save(source_path)
+
+    original_float_to_dtype = pipeline.float_to_dtype_array
+    captured_dtypes: list[np.dtype] = []
+
+    def spy_float_to_dtype_array(*args, **kwargs):
+        dtype = np.dtype(args[1])
+        captured_dtypes.append(dtype)
+        return original_float_to_dtype(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "float_to_dtype_array", spy_float_to_dtype_array)
+
+    original_save_image = pipeline.save_image
+    captured_compressions: list[str] = []
+
+    def spy_save_image(destination, arr_int, dtype, metadata, icc_profile, compression):
+        captured_compressions.append(compression)
+        return original_save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
+
+    monkeypatch.setattr(pipeline, "save_image", spy_save_image)
+
+    for profile_name in ("quality", "balanced", "performance"):
+        profile = ltiff.PROCESSING_PROFILES[profile_name]
+        dest_path = output_dir / f"{profile_name}.tif"
+        ltiff.process_single_image(
+            source_path,
+            dest_path,
+            ltiff.AdjustmentSettings(),
+            compression=profile.resolve_compression("tiff_lzw"),
+            profile=profile,
+        )
+
+    assert [dtype.type for dtype in captured_dtypes] == [np.uint8, np.uint16, np.uint8]
+    assert captured_compressions == ["tiff_lzw", "tiff_lzw", "tiff_jpeg"]
 
 
 def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

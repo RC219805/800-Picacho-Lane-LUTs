@@ -109,6 +109,25 @@ python luxury_tiff_batch_processor.py /path/to/raw_tiffs /path/to/output \
   --preset signature --resize-long-edge 7000 --overwrite
 ```
 
+#### Processing profiles
+
+The TIFF pipeline now offers lightweight processing profiles so you can tune
+fidelity against turnaround directly from the CLI:
+
+- `quality` (default) keeps every adjustment active and preserves the source
+  bit depth and compression choices for maximum latitude.
+- `balanced` retains most tonal work but applies a softened glow/denoise pass
+  and promotes output to 16-bit precision when available so files grade well
+  without the full render cost of the quality profile.
+- `performance` disables the most expensive spatial filters, targets an
+  8-bit export, and switches to JPEG-compressed TIFF output for extremely fast
+  client previews.
+
+Select a profile with `--profile quality|balanced|performance` or set it in a
+configuration file. All presets and manual overrides continue to work, while
+the profile determines how aggressively the high-cost filters run and the
+bit-depth/compression of the exported files.
+
 #### Configuration files
 
 Every command-line flag (other than `--config` itself) can be provided through a
