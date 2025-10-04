@@ -14,6 +14,7 @@ import argparse
 import ast
 import dataclasses
 import dis
+import functools
 import inspect
 import logging
 import math
@@ -111,6 +112,9 @@ __all__ = [
     "build_adjustments",
     "collect_images",
     "float_to_dtype_array",
+    "gaussian_blur",
+    "gaussian_kernel",
+    "gaussian_kernel_cached",
     "image_to_float",
     "main",
     "parse_args",
@@ -927,6 +931,7 @@ def apply_saturation(arr: np.ndarray, amount: float) -> np.ndarray:
     return hsv_to_rgb(hsv)
 
 
+@functools.lru_cache(maxsize=32)
 def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
     if radius <= 0:
         return np.array([1.0], dtype=np.float32)
@@ -935,6 +940,13 @@ def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
     kernel = np.exp(-(ax ** 2) / (2.0 * sigma ** 2))
     kernel /= np.sum(kernel)
     return kernel.astype(np.float32)
+
+
+def gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
+    """Return the cached Gaussian kernel for ``radius``/``sigma`` combinations."""
+
+    # The cached kernel must not be mutated; callers should copy when mutation is needed.
+    return gaussian_kernel(radius, sigma)
 
 
 def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
@@ -947,7 +959,7 @@ def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.nda
 
 
 def gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    kernel = gaussian_kernel(radius, sigma)
+    kernel = gaussian_kernel_cached(radius, sigma).copy()
     blurred = separable_convolve(arr, kernel, axis=0)
     blurred = separable_convolve(blurred, kernel, axis=1)
     return blurred
