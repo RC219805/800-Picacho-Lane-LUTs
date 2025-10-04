@@ -1114,11 +1114,10 @@ def process_single_image(
                 arr, dtype, alpha, base_channels = float_result  # type: ignore[misc]
             float_norm = None
         adjusted = apply_adjustments(arr, adjustments)
-        resize_target = resize_long_edge
-        if resize_target is not None:
-            adjusted = resize_long_edge_array(adjusted, resize_target)
+        if resize_long_edge is not None:
+            adjusted = resize_long_edge_array(adjusted, resize_long_edge)
             if alpha is not None:
-                alpha = resize_long_edge_array(alpha, resize_target)
+                alpha = resize_long_edge_array(alpha, resize_long_edge)
         arr_int = float_to_dtype_array(
             adjusted,
             dtype,
