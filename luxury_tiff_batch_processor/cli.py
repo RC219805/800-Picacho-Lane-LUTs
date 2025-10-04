@@ -67,7 +67,9 @@ def _build_parser_aliases(parser: argparse.ArgumentParser) -> tuple[dict[str, ar
 
     dest_to_action: dict[str, argparse.Action] = {}
     alias_to_dest: dict[str, str] = {}
-    for action in parser._actions:
+    # Use public methods to get all actions
+    actions = list(parser._get_positional_actions()) + list(parser._get_optional_actions())
+    for action in actions:
         if action.dest in {argparse.SUPPRESS, "help", "config"}:
             continue
         dest_to_action[action.dest] = action
