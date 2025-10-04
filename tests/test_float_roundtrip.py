@@ -58,7 +58,7 @@ def test_image_to_float_roundtrip_signed_int_image():
     gradient = np.linspace(-5000, 5000, 49, dtype=np.int32).reshape(7, 7)
     image = Image.fromarray(gradient)
 
-    rgb_float, dtype, alpha, _ = image_to_float(image)
+    rgb_float, dtype, alpha, _ = image_to_float(image, return_format="tuple4")
 
     assert dtype == np.int32
     assert alpha is None
@@ -78,15 +78,21 @@ def test_image_to_float_float_dynamic_range_restored():
     image = Image.fromarray(data, mode="F")
 
     result = ltiff.image_to_float(image)
-    if isinstance(result, ltiff.ImageToFloatResult):
-        arr = result.array
-        dtype = result.dtype
-        alpha = result.alpha
-        base_channels = result.base_channels
-        float_norm = result.float_normalisation
+    assert isinstance(result, ltiff.ImageToFloatResult)
+    arr = result.array
+    dtype = result.dtype
+    alpha = result.alpha
+    base_channels = result.base_channels
+    float_norm = result.float_normalisation
+
+    rgb_only, dtype_only, alpha_only = ltiff.image_to_float(image, return_format="tuple3")
+    np.testing.assert_allclose(rgb_only, arr)
+    assert dtype_only == dtype
+    if alpha is None:
+        assert alpha_only is None
     else:
-        arr, dtype, alpha, base_channels = result
-        float_norm = None
+        assert alpha_only is not None
+        np.testing.assert_allclose(alpha_only, alpha)
 
     assert np.issubdtype(dtype, np.floating)
     assert float_norm is not None
