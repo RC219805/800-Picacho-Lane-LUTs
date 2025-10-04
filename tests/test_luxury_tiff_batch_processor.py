@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import sys
 from typing import Any, Dict
@@ -243,6 +244,34 @@ def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
     ltiff.run_pipeline(args)
 
     assert calls["called"] is False
+
+
+def test_run_pipeline_supports_legacy_resize_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    sample = input_dir / "frame.tif"
+    _create_sample_image(sample)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run"])
+    # Simulate older integrations that provided ``resize_target`` but not ``resize_long_edge``.
+    setattr(args, "resize_target", 2)
+    delattr(args, "resize_long_edge")
+
+    progress_calls = {"count": 0}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        progress_calls["count"] += 1
+        yield from iterable
+
+    monkeypatch.setattr(pipeline, "_PROGRESS_WRAPPER", stub_progress)
+
+    processed = ltiff.run_pipeline(args)
+
+    assert processed == 0
+    # Ensure we still invoked progress with the expected number of items.
+    assert progress_calls["count"] == 1
 
 
 @documents("Filesystem discovery respects operator scope selections")
