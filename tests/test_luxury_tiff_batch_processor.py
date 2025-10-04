@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import sys
 from typing import Any, Dict
@@ -170,6 +171,28 @@ def _create_sample_image(path: Path) -> None:
     image.save(path)
 
 
+def test_run_pipeline_parallel_execution(tmp_path: Path):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    for index in range(3):
+        _create_sample_image(input_dir / f"frame_{index}.tif")
+
+    args = ltiff.parse_args([
+        str(input_dir),
+        str(output_dir),
+        "--workers",
+        "2",
+    ])
+
+    processed = ltiff.run_pipeline(args)
+
+    outputs = sorted(p.name for p in output_dir.glob("*.tif"))
+    assert processed == 3
+    assert outputs == [f"frame_{i}_lux.tif" for i in range(3)]
+
+
 def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -223,6 +246,34 @@ def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
     assert calls["called"] is False
 
 
+def test_run_pipeline_supports_legacy_resize_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_dir.mkdir()
+
+    sample = input_dir / "frame.tif"
+    _create_sample_image(sample)
+
+    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run"])
+    # Simulate older integrations that provided ``resize_target`` but not ``resize_long_edge``.
+    setattr(args, "resize_target", 2)
+    delattr(args, "resize_long_edge")
+
+    progress_calls = {"count": 0}
+
+    def stub_progress(iterable, *, total=None, description=None):
+        progress_calls["count"] += 1
+        yield from iterable
+
+    monkeypatch.setattr(pipeline, "_PROGRESS_WRAPPER", stub_progress)
+
+    processed = ltiff.run_pipeline(args)
+
+    assert processed == 0
+    # Ensure we still invoked progress with the expected number of items.
+    assert progress_calls["count"] == 1
+
+
 @documents("Filesystem discovery respects operator scope selections")
 def test_collect_images_handles_recursive(tmp_path):
     input_root = tmp_path
@@ -254,6 +305,17 @@ def test_parse_args_sets_default_output(tmp_path: Path):
     args = ltiff.parse_args([str(input_dir)])
 
     assert args.output == input_dir.parent / "SV-Stills_lux"
+
+
+def test_parse_args_workers_default_and_override(tmp_path: Path):
+    input_dir = tmp_path / "source"
+    input_dir.mkdir()
+
+    args_default = ltiff.parse_args([str(input_dir)])
+    assert args_default.workers == 1
+
+    args_override = ltiff.parse_args([str(input_dir), "--workers", "4"])
+    assert args_override.workers == 4
 
 
 def test_run_pipeline_rejects_nested_output(tmp_path: Path):
