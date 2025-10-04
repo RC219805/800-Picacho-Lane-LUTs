@@ -94,6 +94,7 @@ The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch w
 - Offers presets that mirror the LUT families (Signature, Golden Hour, Heritage, etc.) for rapid client alignment.
 - Supports per-run overrides for exposure, midtone contrast, vibrance, clarity, glow, and more to accommodate creative direction.
 - Provides non-destructive previews with `--dry-run` and mirrors directory trees with `--recursive` for large productions.
+- Scales across CPU cores with `--workers` for accelerated delivery while preserving dry-run and overwrite safeguards.
 
 ### TIFF Batch Processor Requirements
 - Python 3.11+
