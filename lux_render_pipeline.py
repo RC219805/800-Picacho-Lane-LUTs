@@ -177,6 +177,11 @@ def apply_material_response_finishing(
     fireplace_glow: float = 0.18,
     fireplace_glow_radius: float = 45.0,
     window_reflection: float = 0.12,
+    bedding_relief: float = 0.16,
+    wall_texture: float = 0.1,
+    painting_integration: float = 0.1,
+    window_light_wrap: float = 0.14,
+    exterior_atmosphere: float = 0.12,
 ) -> np.ndarray:
     """Empirical material response layer to emphasize texture, shadowing, and atmosphere."""
 
@@ -194,8 +199,9 @@ def apply_material_response_finishing(
     sat = np.maximum(rgb.max(axis=2) - rgb.min(axis=2), 1e-6)
 
     h, w = lum.shape
-    yy, _ = np.mgrid[0:h, 0:w]
+    yy, xx = np.mgrid[0:h, 0:w]
     y_norm = yy.astype(np.float32) / max(1, h - 1)
+    x_norm = xx.astype(np.float32) / max(1, w - 1)
 
     if ambient_occlusion > 0:
         # Edge-based occlusion mask to ground furniture with the floor
@@ -206,7 +212,9 @@ def apply_material_response_finishing(
             edge_mag /= edge_mag.max()
         occlusion = gaussian_filter(edge_mag, sigma=1.2)
         occlusion = np.clip(occlusion, 0.0, 1.0)
-        shadow = 1.0 - ambient_occlusion * occlusion
+        floor_contact = gaussian_filter(floor_mask * (1.0 - floor_mask), sigma=2.0)
+        contact_weight = np.clip(floor_contact, 0.0, 1.0)
+        shadow = 1.0 - ambient_occlusion * (occlusion + 0.6 * contact_weight)
         rgb = np.clip(rgb * shadow[..., None], 0.0, 1.0)
 
     # Floor plank definition + specular streaks guided by perspective gradient
@@ -216,6 +224,13 @@ def apply_material_response_finishing(
         blurred_floor = gaussian_filter(floor_detail, sigma=(1.6, 1.2, 0))
         plank_detail = floor_detail - blurred_floor
         rgb = np.clip(rgb + floor_plank_contrast * plank_detail * floor_mask[..., None], 0.0, 1.0)
+        wood_luma = gaussian_filter(lum * floor_mask, sigma=(0.8, 3.2))
+        grain = np.abs(sobel(wood_luma, axis=1))
+        if grain.max() > 0:
+            grain /= grain.max()
+        grain = gaussian_filter(grain, sigma=(0.8, 1.6)) * floor_mask
+        warm_wood = np.array([0.86, 0.74, 0.58], dtype=np.float32)
+        rgb = np.clip(rgb + 0.12 * floor_plank_contrast * grain[..., None] * (warm_wood - rgb), 0.0, 1.0)
 
     if floor_specular > 0:
         grad_floor = sobel(lum * floor_mask, axis=1)
@@ -251,6 +266,8 @@ def apply_material_response_finishing(
         glow = gaussian_filter(warm_mask, sigma=sigma)
         if glow.max() > 0:
             glow /= glow.max()
+        fireplace_bias = np.clip((x_norm - 0.48) / 0.52, 0.0, 1.0)
+        glow *= fireplace_bias
         glow_color = np.array([1.0, 0.68, 0.42], dtype=np.float32)
         rgb = np.clip(rgb + fireplace_glow * glow[..., None] * (glow_color - rgb), 0.0, 1.0)
 
@@ -264,6 +281,23 @@ def apply_material_response_finishing(
         reflection *= floor_mask
         reflection_color = np.array([1.0, 0.98, 0.9], dtype=np.float32)
         rgb = np.clip(rgb + window_reflection * reflection[..., None] * (reflection_color - rgb), 0.0, 1.0)
+
+    if window_light_wrap > 0:
+        window_side = np.clip((x_norm - 0.45) / 0.55, 0.0, 1.0)
+        wrap = gaussian_filter(lum * window_side, sigma=3.2)
+        if wrap.max() > 0:
+            wrap = np.clip((wrap - wrap.min()) / (wrap.max() - wrap.min() + 1e-6), 0.0, 1.0)
+        wrap_color = np.array([1.0, 0.95, 0.82], dtype=np.float32)
+        rgb = np.clip(rgb + window_light_wrap * wrap[..., None] * (wrap_color - rgb), 0.0, 1.0)
+
+    if exterior_atmosphere > 0:
+        exterior_mask = np.clip((sat - 0.18) / 0.6, 0.0, 1.0) * np.clip((lum - 0.28) / 0.72, 0.0, 1.0)
+        exterior_mask *= np.clip((x_norm - 0.38) / 0.62, 0.0, 1.0)
+        exterior_mask = gaussian_filter(exterior_mask, sigma=3.5)
+        depth_falloff = np.clip(1.0 - y_norm, 0.0, 1.0)
+        haze = exterior_atmosphere * exterior_mask * depth_falloff
+        sky_tint = np.array([0.78, 0.86, 0.92], dtype=np.float32)
+        rgb = np.clip(rgb * (1.0 - haze[..., None]) + sky_tint * haze[..., None], 0.0, 1.0)
 
     if highlight_warmth > 0:
         # Warm the brightest values to simulate fireplace spill and sunlit reflections
@@ -282,6 +316,42 @@ def apply_material_response_finishing(
         tint = np.array(haze_tint, dtype=np.float32)
         tint = np.clip(tint, 0.0, 1.0)
         rgb = np.clip(rgb * (1.0 - haze[..., None]) + tint * haze[..., None], 0.0, 1.0)
+
+    if bedding_relief > 0:
+        bedding_mask = np.clip((lum - 0.35) / 0.35, 0.0, 1.0) * np.clip((0.3 - sat) / 0.3, 0.0, 1.0)
+        bedding_mask *= np.clip((0.75 - y_norm) / 0.75, 0.0, 1.0)
+        bedding_mask = gaussian_filter(bedding_mask, sigma=1.0)
+        bedding_detail = rgb - gaussian_filter(rgb, sigma=(1.0, 1.0, 0))
+        shading = gaussian_filter(lum, sigma=1.6) - gaussian_filter(lum, sigma=4.2)
+        shading = np.clip(shading, -0.25, 0.25)
+        rgb = np.clip(rgb + bedding_relief * bedding_mask[..., None] * bedding_detail, 0.0, 1.0)
+        rgb = np.clip(rgb - bedding_relief * 0.35 * bedding_mask[..., None] * shading[..., None], 0.0, 1.0)
+
+    if wall_texture > 0:
+        wall_mask = np.clip((lum - 0.32) / 0.45, 0.0, 1.0) * np.clip((0.26 - sat) / 0.26, 0.0, 1.0)
+        wall_mask *= np.clip(1.0 - floor_mask, 0.0, 1.0)
+        wall_mask = gaussian_filter(wall_mask, sigma=1.4)
+        wall_detail = rgb - gaussian_filter(rgb, sigma=(2.6, 2.6, 0))
+        wall_detail = gaussian_filter(wall_detail, sigma=(0.9, 0.9, 0))
+        rng = np.random.default_rng(42)
+        noise = rng.normal(0.0, 1.0, size=lum.shape).astype(np.float32)
+        noise = gaussian_filter(noise, sigma=3.0)
+        if noise.max() > noise.min():
+            noise = (noise - noise.min()) / (noise.max() - noise.min() + 1e-6) - 0.5
+        wall_detail += noise[..., None] * 0.06
+        rgb = np.clip(rgb + wall_texture * wall_mask[..., None] * wall_detail, 0.0, 1.0)
+
+    if painting_integration > 0:
+        art_mask = np.clip((sat - 0.24) / 0.5, 0.0, 1.0) * np.clip((lum - 0.2) / 0.7, 0.0, 1.0)
+        art_mask *= np.clip((0.6 - x_norm) / 0.6, 0.0, 1.0)
+        art_mask *= np.clip(1.0 - floor_mask, 0.0, 1.0)
+        art_mask = gaussian_filter(art_mask, sigma=1.3)
+        rim = gaussian_filter(art_mask, sigma=0.9) - gaussian_filter(art_mask, sigma=2.2)
+        rim = np.clip(rim, 0.0, 1.0)
+        warm_fill = np.array([1.0, 0.84, 0.68], dtype=np.float32)
+        rgb = np.clip(rgb + painting_integration * rim[..., None] * (warm_fill - rgb), 0.0, 1.0)
+        canvas_shadow = gaussian_filter(art_mask, sigma=3.0)
+        rgb = np.clip(rgb * (1.0 - painting_integration * 0.12 * canvas_shadow[..., None]), 0.0, 1.0)
 
     return rgb
 
@@ -383,6 +453,11 @@ class FinishConfig:
     fireplace_glow: float = 0.18
     fireplace_glow_radius: float = 45.0
     window_reflection: float = 0.12
+    bedding_relief: float = 0.16
+    wall_texture: float = 0.1
+    painting_integration: float = 0.1
+    window_light_wrap: float = 0.14
+    exterior_atmosphere: float = 0.12
 
 # --------------------------
 # Core pipeline
@@ -569,6 +644,11 @@ class LuxuryRenderPipeline:
                 fireplace_glow=finish.fireplace_glow,
                 fireplace_glow_radius=finish.fireplace_glow_radius,
                 window_reflection=finish.window_reflection,
+                bedding_relief=finish.bedding_relief,
+                wall_texture=finish.wall_texture,
+                painting_integration=finish.painting_integration,
+                window_light_wrap=finish.window_light_wrap,
+                exterior_atmosphere=finish.exterior_atmosphere,
             )
         out = np_to_pil(rgb)
 
@@ -634,6 +714,11 @@ def main(
     fireplace_glow: float = typer.Option(0.18, help="Material response: fireplace spill intensity"),
     fireplace_glow_radius: float = typer.Option(45.0, help="Material response: fireplace glow falloff radius"),
     window_reflection: float = typer.Option(0.12, help="Material response: window reflection spill on flooring"),
+    bedding_relief: float = typer.Option(0.16, help="Material response: bedding wrinkle relief and occlusion"),
+    wall_texture: float = typer.Option(0.1, help="Material response: wall microtexture strength"),
+    painting_integration: float = typer.Option(0.1, help="Material response: wall art integration and rim light"),
+    window_light_wrap: float = typer.Option(0.14, help="Material response: window light wrap onto interior surfaces"),
+    exterior_atmosphere: float = typer.Option(0.12, help="Material response: exterior haze and atmospheric blend"),
     # Branding
     logo: Optional[str] = typer.Option(None, help="Path to PNG/SVG logo (PNG w/ alpha recommended)"),
     brand_text: Optional[str] = typer.Option(None, help="Caption, e.g. 'The Veridian | Penthouse 21B'"),
@@ -671,6 +756,11 @@ def main(
         fireplace_glow=fireplace_glow,
         fireplace_glow_radius=fireplace_glow_radius,
         window_reflection=window_reflection,
+        bedding_relief=bedding_relief,
+        wall_texture=wall_texture,
+        painting_integration=painting_integration,
+        window_light_wrap=window_light_wrap,
+        exterior_atmosphere=exterior_atmosphere,
     )
 
     pipe = LuxuryRenderPipeline(

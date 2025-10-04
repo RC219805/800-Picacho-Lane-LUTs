@@ -57,7 +57,8 @@ python lux_render_pipeline.py \
   --material-response --texture-boost 0.28 --ambient-occlusion 0.14 --highlight-warmth 0.1 --haze-strength 0.08 \
   --floor-plank-contrast 0.16 --floor-specular 0.22 --textile-contrast 0.24 \
   --leather-sheen 0.18 --fireplace-glow 0.26 --fireplace-glow-radius 60 \
-  --window-reflection 0.18 \
+  --window-reflection 0.18 --bedding-relief 0.22 --wall-texture 0.14 \
+  --painting-integration 0.16 --window-light-wrap 0.2 --exterior-atmosphere 0.18 \
   --no-depth
 ```
 
@@ -71,6 +72,11 @@ micro-responses:
 - **Leather sheen** – restores supple specular roll-off on benches and accent seating.
 - **Fireplace glow** – diffuses a warm gradient from the flame box onto adjacent floors and walls for believable integration.
 - **Window reflection** – projects soft mullion reflections and light spill onto the flooring while respecting ambient occlusion.
+- **Bedding relief** – adds micro-wrinkle contrast and fold occlusion so duvets, throws, and pillows feel dimensional.
+- **Wall texture** – injects subtle plaster/builder noise into bright painted surfaces so walls avoid a CG-flat read.
+- **Painting integration** – pulls wall art into the room's lighting with rim glow and soft shadow falloff.
+- **Window light wrap** – feathers panoramic daylight across floor, bed, and bench for cohesive lighting.
+- **Exterior atmosphere** – harmonizes the exterior vista with interior haze for believable depth continuity.
 
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow for polishing large-format TIFF photography prior to digital launch. The script preserves metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/) is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for ultra-luxury real-estate storytelling.
