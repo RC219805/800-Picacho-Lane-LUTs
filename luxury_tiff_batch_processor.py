@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import argparse
 import ast
-import dis
 import dataclasses
+import dis
+import inspect
 import logging
 import math
 from pathlib import Path
-import inspect
 from typing import Any as _Any
 from typing import Dict as _Dict
 from typing import Iterable, Iterator, List, Optional, Tuple, Union
@@ -101,6 +101,26 @@ class ProcessingCapabilities:
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
 
+__all__ = [
+    "AdjustmentSettings",
+    "FloatDynamicRange",
+    "ImageToFloatResult",
+    "LUXURY_PRESETS",
+    "ProcessingCapabilities",
+    "apply_adjustments",
+    "build_adjustments",
+    "collect_images",
+    "float_to_dtype_array",
+    "image_to_float",
+    "main",
+    "parse_args",
+    "process_image",
+    "process_single_image",
+    "run_pipeline",
+    "save_image",
+]
+
+
 @dataclasses.dataclass
 class AdjustmentSettings:
     """Holds the image adjustment parameters for a processing run."""
@@ -117,6 +137,104 @@ class AdjustmentSettings:
     chroma_denoise: float = 0.0
     glow: float = 0.0
 
+
+# --- Float handling primitives -------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class FloatDynamicRange:
+    """Describes how floating point image data was normalised."""
+
+    offset: np.ndarray
+    scale: np.ndarray
+    scale_recip: np.ndarray
+
+    @classmethod
+    def from_array(cls, arr: np.ndarray) -> Optional["FloatDynamicRange"]:
+        """Create a descriptor capturing per-channel offset and scale."""
+
+        if arr.size == 0:
+            return None
+
+        if arr.ndim == 2:
+            working = arr[:, :, None]
+        else:
+            working = arr
+
+        channels = working.shape[-1]
+        flattened = working.reshape(-1, channels)
+
+        offsets = np.zeros(channels, dtype=np.float32)
+        scales = np.ones(channels, dtype=np.float32)
+        saw_finite = False
+
+        for idx in range(channels):
+            channel = flattened[:, idx]
+            finite = channel[np.isfinite(channel)]
+            if finite.size == 0:
+                offsets[idx] = 0.0
+                scales[idx] = 1.0
+                continue
+
+            saw_finite = True
+            min_val = float(np.min(finite))
+            max_val = float(np.max(finite))
+            offsets[idx] = np.float32(min_val)
+            diff = float(max_val - min_val)
+            if diff <= 0.0 or not math.isfinite(diff):
+                scales[idx] = 1.0
+            else:
+                scales[idx] = np.float32(diff)
+
+        if not saw_finite:
+            return None
+
+        scale_recip = np.where(scales == 0.0, 1.0, 1.0 / scales).astype(np.float32)
+        return cls(offset=offsets, scale=scales.astype(np.float32), scale_recip=scale_recip)
+
+    @staticmethod
+    def _prepare(arr: np.ndarray) -> Tuple[np.ndarray, bool]:
+        working = np.asarray(arr, dtype=np.float32)
+        squeezed = False
+        if working.ndim == 2:
+            working = working[:, :, None]
+            squeezed = True
+        return working, squeezed
+
+    def normalise(self, arr: np.ndarray) -> np.ndarray:
+        working, squeezed = self._prepare(arr)
+        offset = self.offset.reshape((1, 1, -1))
+        scale = self.scale_recip.reshape((1, 1, -1))
+        normalised = (working - offset) * scale
+        if squeezed:
+            return normalised[:, :, 0]
+        return normalised
+
+    def denormalise(self, arr: np.ndarray) -> np.ndarray:
+        working, squeezed = self._prepare(arr)
+        offset = self.offset.reshape((1, 1, -1))
+        scale = self.scale.reshape((1, 1, -1))
+        restored = working * scale + offset
+        if squeezed:
+            return restored[:, :, 0]
+        return restored
+
+
+@dataclasses.dataclass(frozen=True)
+class ImageToFloatResult:
+    """Container for :func:`image_to_float` results with metadata."""
+
+    array: np.ndarray
+    dtype: np.dtype
+    alpha: Optional[np.ndarray]
+    base_channels: int
+    float_normalisation: Optional[FloatDynamicRange] = None
+
+    def __iter__(self):
+        yield self.array
+        yield self.dtype
+        yield self.alpha
+        yield self.base_channels
 
 # Signature looks tailored to the 800 Picacho Lane collection.
 LUXURY_PRESETS = {
@@ -408,6 +526,7 @@ def image_to_float(
 ) -> Union[
     Tuple[np.ndarray, np.dtype, Optional[np.ndarray]],
     Tuple[np.ndarray, np.dtype, Optional[np.ndarray], int],
+    ImageToFloatResult,
 ]:
     """Converts a PIL image to an RGB float32 array in the 0-1 range."""
 
@@ -428,46 +547,72 @@ def image_to_float(
 
     arr = np.array(image)
     alpha_channel: Optional[np.ndarray] = None
-    base_channels: int
 
     if arr.ndim == 2:
         base_channels = 1
-        arr = np.repeat(arr[:, :, None], 3, axis=2)
+        color_data = arr[:, :, None]
     else:
         if arr.shape[2] == 4:
             alpha_channel = arr[:, :, 3]
             base_channels = 3
-            arr = arr[:, :, :3]
+            color_data = arr[:, :, :3]
         elif arr.shape[2] == 2:
             alpha_channel = arr[:, :, 1]
             base_channels = 1
-            arr = np.repeat(arr[:, :, :1], 3, axis=2)
+            color_data = arr[:, :, :1]
         else:
             base_channels = arr.shape[2]
+            color_data = arr[:, :, :base_channels]
 
-    if np.issubdtype(arr.dtype, np.integer):
-        dtype_info = np.iinfo(arr.dtype)
+    color_float = color_data.astype(np.float32, copy=False)
+    alpha_float = alpha_channel.astype(np.float32, copy=False) if alpha_channel is not None else None
+
+    float_norm: Optional[FloatDynamicRange] = None
+    if np.issubdtype(color_data.dtype, np.integer):
+        dtype_info = np.iinfo(color_data.dtype)
         scale = dtype_info.max - dtype_info.min
         if scale == 0:
-            arr_float = np.zeros_like(arr, dtype=np.float32)
+            normalised = np.zeros_like(color_float, dtype=np.float32)
+            if alpha_float is not None:
+                alpha_float = np.zeros_like(alpha_float, dtype=np.float32)
         else:
-            arr_float = (arr.astype(np.float32) - dtype_info.min) / float(scale)
-        if alpha_channel is not None:
-            alpha_channel = (alpha_channel.astype(np.float32) - dtype_info.min) / float(scale)
-        arr_float = np.clip(arr_float, 0.0, 1.0)
-        if alpha_channel is not None:
-            alpha_channel = np.clip(alpha_channel, 0.0, 1.0)
+            offset = float(dtype_info.min)
+            inv_scale = 1.0 / float(scale)
+            normalised = (color_float - offset) * inv_scale
+            if alpha_float is not None:
+                alpha_float = (alpha_float - offset) * inv_scale
+        normalised = np.clip(normalised, 0.0, 1.0)
+        if alpha_float is not None:
+            alpha_float = np.clip(alpha_float, 0.0, 1.0)
     else:
-        arr_float = arr.astype(np.float32)
-        if alpha_channel is not None:
-            alpha_channel = alpha_channel.astype(np.float32)
-        arr_float = np.clip(arr_float, 0.0, 1.0)
-        if alpha_channel is not None:
-            alpha_channel = np.clip(alpha_channel, 0.0, 1.0)
+        float_norm = FloatDynamicRange.from_array(color_float)
+        if float_norm is not None:
+            normalised = float_norm.normalise(color_float)
+        else:
+            normalised = color_float
+        normalised = np.clip(normalised, 0.0, 1.0)
+        if alpha_float is not None:
+            alpha_float = np.clip(alpha_float, 0.0, 1.0)
+
+    if base_channels == 1:
+        working = np.repeat(normalised, 3, axis=2)
+    else:
+        working = normalised
+
+    result = ImageToFloatResult(
+        array=np.ascontiguousarray(working, dtype=np.float32),
+        dtype=np.dtype(color_data.dtype),
+        alpha=None if alpha_float is None else np.ascontiguousarray(alpha_float, dtype=np.float32),
+        base_channels=base_channels,
+        float_normalisation=float_norm,
+    )
+
     expected = _expected_unpack_count()
     if expected == 3:
-        return arr_float, arr.dtype, alpha_channel
-    return arr_float, arr.dtype, alpha_channel, base_channels
+        return result.array, result.dtype, result.alpha
+    if expected == 4:
+        return result.array, result.dtype, result.alpha, result.base_channels
+    return result
 
 
 def float_to_dtype_array(
@@ -475,6 +620,8 @@ def float_to_dtype_array(
     dtype: np.dtype,
     alpha: Optional[np.ndarray],
     base_channels: Optional[int] = None,
+    *,
+    float_normalisation: Optional[FloatDynamicRange] = None,
 ) -> np.ndarray:
     arr = np.clip(arr, 0.0, 1.0)
     if arr.ndim == 2:
@@ -495,6 +642,8 @@ def float_to_dtype_array(
         else:
             color_int = np.round(color * scale + dtype_info.min).astype(np_dtype)
     else:
+        if float_normalisation is not None and np.issubdtype(np_dtype, np.floating):
+            color = float_normalisation.denormalise(color)
         color_int = color.astype(np_dtype, copy=False)
 
     channels: list[np.ndarray] = [color_int]
@@ -950,14 +1099,33 @@ def process_single_image(
     with Image.open(source) as image:
         metadata = getattr(image, "tag_v2", None)
         icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
-        arr, dtype, alpha, base_channels = image_to_float(image)
+        float_result = image_to_float(image)
+        if isinstance(float_result, ImageToFloatResult):
+            arr = float_result.array
+            dtype = float_result.dtype
+            alpha = float_result.alpha
+            base_channels = float_result.base_channels
+            float_norm = float_result.float_normalisation
+        else:
+            if len(float_result) == 3:
+                arr, dtype, alpha = float_result
+                base_channels = arr.shape[2] if arr.ndim == 3 else 1
+            else:
+                arr, dtype, alpha, base_channels = float_result  # type: ignore[misc]
+            float_norm = None
         adjusted = apply_adjustments(arr, adjustments)
         resize_target = resize_long_edge
         if resize_target is not None:
             adjusted = resize_long_edge_array(adjusted, resize_target)
             if alpha is not None:
                 alpha = resize_long_edge_array(alpha, resize_target)
-        arr_int = float_to_dtype_array(adjusted, dtype, alpha, base_channels)
+        arr_int = float_to_dtype_array(
+            adjusted,
+            dtype,
+            alpha,
+            base_channels,
+            float_normalisation=float_norm,
+        )
         if dry_run:
             LOGGER.info("Dry run enabled, skipping save for %s", destination)
             return

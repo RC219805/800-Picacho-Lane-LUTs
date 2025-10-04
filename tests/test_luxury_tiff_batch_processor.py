@@ -17,6 +17,11 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 import luxury_tiff_batch_processor as ltiff
 
 
+def test_run_pipeline_exposed_in_dunder_all():
+    exported = getattr(ltiff, "__all__", ())
+    assert "run_pipeline" in exported
+
+
 def _saturation(rgb: np.ndarray) -> np.ndarray:
     maxc = rgb.max(axis=2)
     minc = rgb.min(axis=2)
