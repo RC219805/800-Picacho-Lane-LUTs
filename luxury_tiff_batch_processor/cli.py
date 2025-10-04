@@ -3,11 +3,17 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import json
 import logging
 import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Mapping, Optional
+
+try:  # pragma: no cover - optional dependency
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    yaml = None
 
 from .adjustments import AdjustmentSettings, LUXURY_PRESETS
 from .pipeline import (
@@ -19,6 +25,107 @@ from .pipeline import (
 )
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
+
+
+def _load_config_data(path: Path) -> Mapping[str, Any]:
+    """Return the mapping contained in the configuration file at *path*."""
+
+    if not path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {path}")
+
+    suffix = path.suffix.lower()
+    try:
+        if suffix in {".yaml", ".yml"}:
+            if yaml is None:
+                raise RuntimeError("YAML configuration files require the optional 'pyyaml' dependency")
+            data = yaml.safe_load(path.read_text())  # type: ignore[no-untyped-call]
+        else:
+            data = json.loads(path.read_text())
+    except Exception as exc:  # pragma: no cover - exact exception varies by backend
+        raise ValueError(f"Unable to parse configuration file {path}: {exc}") from exc
+
+    if data is None:
+        return {}
+    if not isinstance(data, Mapping):
+        raise ValueError(f"Configuration file {path} must contain a mapping of option names to values")
+    return data
+
+
+def _normalise_config_keys(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalise mapping keys to CLI-compatible names (underscored)."""
+
+    normalised: dict[str, Any] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str):
+            raise ValueError("Configuration keys must be strings")
+        normalised[key.replace("-", "_")] = value
+    return normalised
+
+
+def _build_parser_aliases(parser: argparse.ArgumentParser) -> tuple[dict[str, argparse.Action], dict[str, str]]:
+    """Return lookup tables for actions and their normalised aliases."""
+
+    dest_to_action: dict[str, argparse.Action] = {}
+    alias_to_dest: dict[str, str] = {}
+    for action in parser._actions:
+        if action.dest in {argparse.SUPPRESS, "help", "config"}:
+            continue
+        dest_to_action[action.dest] = action
+        alias_to_dest[action.dest.replace("-", "_")] = action.dest
+        for option_string in action.option_strings:
+            alias = option_string.lstrip("-").replace("-", "_")
+            alias_to_dest[alias] = action.dest
+    return dest_to_action, alias_to_dest
+
+
+def _coerce_config_value(
+    action: argparse.Action, value: Any, *, source: Path, key: str
+) -> Any:  # pragma: no cover - thin wrapper around argparse semantics
+    """Convert configuration values so they match argparse expectations."""
+
+    if value is None:
+        return None
+
+    if isinstance(action, argparse._StoreTrueAction):  # type: ignore[attr-defined]
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes", "on"}:
+                return True
+            if lowered in {"0", "false", "no", "off"}:
+                return False
+        raise ValueError(
+            f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}"
+        )
+
+    if isinstance(action, argparse._StoreFalseAction):  # type: ignore[attr-defined]
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"1", "true", "yes", "on"}:
+                return True
+            if lowered in {"0", "false", "no", "off"}:
+                return False
+        raise ValueError(
+            f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}"
+        )
+
+    if action.type is not None:
+        try:
+            converted = action.type(value)
+        except Exception as exc:  # pragma: no cover - delegated to argparse
+            raise ValueError(f"Invalid value for '{key}' in {source}: {exc}") from exc
+    else:
+        converted = value
+
+    if action.choices is not None and converted not in action.choices:
+        raise ValueError(
+            f"Invalid value for '{key}' in {source}: {converted!r} (choose from {sorted(action.choices)})"
+        )
+
+    return converted
 
 
 def default_output_folder(input_folder: Path) -> Path:
@@ -33,6 +140,12 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Batch enhance TIFF files for ultra-luxury marketing output.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Optional configuration file (JSON by default, YAML when 'pyyaml' is installed)",
     )
     parser.add_argument("input", type=Path, help="Folder that contains source TIFF files")
     parser.add_argument(
@@ -134,7 +247,32 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Logging verbosity",
     )
 
-    args = parser.parse_args(list(argv) if argv is not None else None)
+    argv_list = list(argv) if argv is not None else None
+
+    config_probe, _ = parser.parse_known_args(argv_list)
+    if config_probe.config is not None:
+        try:
+            raw_config = _load_config_data(config_probe.config)
+            normalised_config = _normalise_config_keys(raw_config)
+            dest_to_action, alias_to_dest = _build_parser_aliases(parser)
+
+            converted_defaults: dict[str, Any] = {}
+            for key, value in normalised_config.items():
+                dest = alias_to_dest.get(key)
+                if dest is None:
+                    raise ValueError(
+                        f"Unknown configuration option '{key}' in {config_probe.config}"
+                    )
+                action = dest_to_action[dest]
+                converted_defaults[dest] = _coerce_config_value(
+                    action, value, source=config_probe.config, key=key
+                )
+
+            parser.set_defaults(**converted_defaults)
+        except (OSError, ValueError, RuntimeError) as exc:
+            parser.error(str(exc))
+
+    args = parser.parse_args(argv_list)
     if args.workers < 1:
         parser.error("--workers must be a positive integer")
     if args.output is None:
