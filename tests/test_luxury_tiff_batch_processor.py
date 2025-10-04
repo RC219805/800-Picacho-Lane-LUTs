@@ -16,6 +16,7 @@ from PIL import Image, TiffImagePlugin
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import luxury_tiff_batch_processor as ltiff
+import luxury_tiff_batch_processor.pipeline as pipeline
 
 
 def test_run_pipeline_exposed_in_dunder_all():
@@ -123,6 +124,7 @@ def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: py
         Path(path).write_bytes(b"partial")
         raise Boom("simulated failure")
 
+    monkeypatch.setattr(pipeline, "save_image", failing_save)
     monkeypatch.setattr(ltiff, "save_image", failing_save)
 
     with pytest.raises(Boom):
@@ -188,7 +190,7 @@ def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch):
             calls["items"].append(item)
             yield item
 
-    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+    monkeypatch.setattr(pipeline, "_PROGRESS_WRAPPER", stub_progress)
 
     processed = ltiff.run_pipeline(args)
 
@@ -214,7 +216,7 @@ def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
         calls["called"] = True
         yield from iterable
 
-    monkeypatch.setattr(ltiff, "_PROGRESS_WRAPPER", stub_progress)
+    monkeypatch.setattr(pipeline, "_PROGRESS_WRAPPER", stub_progress)
 
     ltiff.run_pipeline(args)
 
