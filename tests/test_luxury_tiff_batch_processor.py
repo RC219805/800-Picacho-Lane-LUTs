@@ -236,7 +236,9 @@ def test_image_roundtrip_uint16_with_alpha():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(data, mode="RGBA")
 
-    base_float, base_dtype, alpha, base_channels = ltiff.image_to_float(image)
+    base_float, base_dtype, alpha, base_channels = ltiff.image_to_float(
+        image, return_format="tuple4"
+    )
     assert base_float.dtype == np.float32
     # PIL converts uint16 RGBA to uint8, so base_dtype will be uint8
     assert base_dtype == np.uint8
