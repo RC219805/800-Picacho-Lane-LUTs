@@ -56,7 +56,7 @@ def test_image_to_float_roundtrip_signed_int_image():
     gradient = np.linspace(-5000, 5000, 49, dtype=np.int32).reshape(7, 7)
     image = Image.fromarray(gradient)
 
-    rgb_float, dtype, alpha = image_to_float(image)
+    rgb_float, dtype, alpha, _ = image_to_float(image)
 
     assert dtype == np.int32
     assert alpha is None

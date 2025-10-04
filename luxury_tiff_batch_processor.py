@@ -298,10 +298,19 @@ def collect_images(folder: Path, recursive: bool) -> Iterator[Path]:
             yield from folder.glob(pattern)
 
 
-def ensure_output_path(input_root: Path, output_root: Path, source: Path, suffix: str, recursive: bool) -> Path:
+def ensure_output_path(
+    input_root: Path,
+    output_root: Path,
+    source: Path,
+    suffix: str,
+    recursive: bool,
+    *,
+    create: bool = True,
+) -> Path:
     relative = source.relative_to(input_root) if recursive else Path(source.name)
     destination = output_root / relative
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    if create:
+        destination.parent.mkdir(parents=True, exist_ok=True)
     new_name = destination.stem + suffix + destination.suffix
     return destination.with_name(new_name)
 
@@ -522,10 +531,11 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
 
 
 def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, Any]]:
-    if raw_metadata is ((None)):
+    if raw_metadata is None:
         return None
     safe: Dict[int, Any] = {}
     try:
+        forbidden = {256, 257, 273, 279, 322, 323, 324, 325}
         for tag in raw_metadata:
             if tag in ({256, 257, 273, 279, 322, 323, 324, 325}):
                 continue
@@ -908,13 +918,14 @@ def apply_adjustments(arr: np.ndarray, adjustments: AdjustmentSettings) -> np.nd
     return np.clip(arr, 0.0, 1.0)
 
 
-def process_image(
+def process_single_image(
     source: Path,
     destination: Path,
     adjustments: AdjustmentSettings,
+    *,
     compression: str,
-    resize_target: Optional[int],
-    dry_run: bool,
+    resize_long_edge: Optional[int] = None,
+    dry_run: bool = False,
 ) -> None:
     LOGGER.info("Processing %s -> %s", source, destination)
     if destination.exists() and not dry_run:
@@ -926,8 +937,8 @@ def process_image(
         icc_profile = image.info.get("icc_profile") if isinstance(image.info, dict) else None
         arr, dtype, alpha, base_channels = image_to_float(image)
         adjusted = apply_adjustments(arr, adjustments)
-        if resize_target is not None:
-            adjusted = resize_long_edge_array(adjusted, resize_target)
+        if resize_long_edge is not None:
+            adjusted = resize_long_edge_array(adjusted, resize_long_edge)
             if alpha is not None:
                 alpha = resize_long_edge_array(alpha, resize_target)
         arr_int = float_to_dtype_array(adjusted, dtype, alpha, base_channels)
@@ -974,6 +985,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
     if not input_root.is_dir():
         raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
 
+def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
     def _contains(parent: Path, child: Path) -> bool:
         try:
             child.relative_to(parent)
@@ -1001,20 +1013,28 @@ def run_pipeline(args: argparse.Namespace) -> int:
         output_root.mkdir(parents=True, exist_ok=True)
 
     LOGGER.info("Found %s image(s) to process", len(images))
+    processed = 0
 
     processed = 0
     for image_path in images:
-        destination = ensure_output_path(input_root, output_root, image_path, args.suffix, args.recursive)
+        destination = ensure_output_path(
+            input_root,
+            output_root,
+            image_path,
+            args.suffix,
+            args.recursive,
+            create=not args.dry_run,
+        )
         if destination.exists() and not args.overwrite and not args.dry_run:
             LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
             continue
-        process_image(
+        process_single_image(
             image_path,
             destination,
             adjustments,
-            args.compression,
-            args.resize_long_edge,
-            args.dry_run,
+            compression=args.compression,
+            resize_long_edge=args.resize_long_edge,
+            dry_run=args.dry_run,
         )
         if not args.dry_run:
             processed += 1
