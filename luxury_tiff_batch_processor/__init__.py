@@ -34,6 +34,7 @@ from .io_utils import (
     image_to_float,
     save_image,
 )
+from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
 from .pipeline import (
     _PROGRESS_WRAPPER,
     _wrap_with_progress,
@@ -53,6 +54,7 @@ __all__ = [
     "LuxuryGradeException",
     "ProcessingCapabilities",
     "ProcessingContext",
+    "ProcessingProfile",
     "apply_adjustments",
     "build_adjustments",
     "collect_images",
@@ -66,6 +68,8 @@ __all__ = [
     "parse_args",
     "process_image",
     "process_single_image",
+    "PROCESSING_PROFILES",
+    "DEFAULT_PROFILE_NAME",
     "run_pipeline",
     "save_image",
 ]

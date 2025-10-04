@@ -16,6 +16,13 @@ from .io_utils import (
     image_to_float,
     save_image,
 )
+from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
+
+
+def _ensure_profile(profile: ProcessingProfile | None) -> ProcessingProfile:
+    if profile is None:
+        return PROCESSING_PROFILES[DEFAULT_PROFILE_NAME]
+    return profile
 
 try:  # Optional progress bar for batch runs
     from tqdm import tqdm as _tqdm  # type: ignore
@@ -158,6 +165,7 @@ def _process_image_worker(
     resize_long_edge: Optional[int] = None,
     resize_target: Optional[int] = None,
     dry_run: bool = False,
+    profile: ProcessingProfile,
 ) -> bool:
     """Core implementation for processing a single image.
 
@@ -191,15 +199,17 @@ def _process_image_worker(
         alpha = float_result.alpha
         base_channels = float_result.base_channels
         float_norm = float_result.float_normalisation
-        adjusted = apply_adjustments(arr, adjustments)
+        effective_profile = _ensure_profile(profile)
+        adjusted = apply_adjustments(arr, adjustments, profile=effective_profile)
         target = _coerce_resize_target(resize_long_edge, resize_target)
         if target is not None:
             adjusted = resize_long_edge_array(adjusted, target)
             if alpha is not None:
                 alpha = resize_long_edge_array(alpha, target)
+        target_dtype = effective_profile.target_dtype(dtype)
         arr_int = float_to_dtype_array(
             adjusted,
-            dtype,
+            target_dtype,
             alpha,
             base_channels,
             float_normalisation=float_norm,
@@ -208,7 +218,7 @@ def _process_image_worker(
             WORKER_LOGGER.info("Dry run enabled, skipping save for %s", destination)
             return False
         with ProcessingContext(destination) as staged_path:
-            save_image(staged_path, arr_int, dtype, metadata, icc_profile, compression)
+            save_image(staged_path, arr_int, target_dtype, metadata, icc_profile, compression)
     return True
 
 
@@ -221,6 +231,7 @@ def process_single_image(
     resize_long_edge: Optional[int] = None,
     resize_target: Optional[int] = None,
     dry_run: bool = False,
+    profile: ProcessingProfile | None = None,
 ) -> None:
     """Public wrapper around :func:`_process_image_worker`."""
 
@@ -232,6 +243,7 @@ def process_single_image(
         resize_long_edge=resize_long_edge,
         resize_target=resize_target,
         dry_run=dry_run,
+        profile=_ensure_profile(profile),
     )
 
 
