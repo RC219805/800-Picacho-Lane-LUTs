@@ -265,18 +265,20 @@ def run_pipeline(args: argparse.Namespace) -> int:
                     continue
                 if args.dry_run:
                     LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
-                futures.append(
-                    executor.submit(
-                        _process_image_worker,
-                        image_path,
-                        destination,
-                        adjustments,
-                        compression=args.compression,
-                        resize_long_edge=args.resize_long_edge,
-                        resize_target=args.resize_target,
-                        dry_run=args.dry_run,
+                    advance_progress()
+                else:
+                    futures.append(
+                        executor.submit(
+                            _process_image_worker,
+                            image_path,
+                            destination,
+                            adjustments,
+                            compression=args.compression,
+                            resize_long_edge=args.resize_long_edge,
+                            resize_target=args.resize_target,
+                            dry_run=args.dry_run,
+                        )
                     )
-                )
 
             for future in as_completed(futures):
                 try:
