@@ -48,6 +48,7 @@ class GradePreset:
     deband: Optional[str] = None
     halation_intensity: float = 0.0
     halation_radius: float = 18.0
+    halation_threshold: float = 0.6
 
     def to_dict(self) -> Dict[str, object]:
         """Return a mutable dictionary representation for override merging."""
@@ -67,6 +68,7 @@ class GradePreset:
             "deband": self.deband,
             "halation_intensity": self.halation_intensity,
             "halation_radius": self.halation_radius,
+            "halation_threshold": self.halation_threshold,
         }
         return data
 
@@ -86,6 +88,10 @@ PRESETS: Dict[str, GradePreset] = {
         cool=-0.010,
         sharpen="medium",
         grain=6.0,
+        deband="fine",
+        halation_intensity=0.14,
+        halation_radius=20.0,
+        halation_threshold=0.52,
         notes="Primary hero look for exterior fly-throughs and architectural establishing shots.",
     ),
     "golden_hour_courtyard": GradePreset(
@@ -105,6 +111,9 @@ PRESETS: Dict[str, GradePreset] = {
         cool=-0.015,
         sharpen="soft",
         grain=4.0,
+        halation_intensity=0.10,
+        halation_radius=18.0,
+        halation_threshold=0.50,
         notes="Use for west-facing terraces, pool decks and garden lifestyle coverage.",
     ),
     "interior_neutral_luxe": GradePreset(
@@ -124,6 +133,8 @@ PRESETS: Dict[str, GradePreset] = {
         cool=0.0,
         sharpen="strong",
         grain=0.0,
+        deband="fine",
+        halation_threshold=0.60,
         notes="Ideal for natural light interiors where texture detail and neutrality are paramount.",
     ),
 }
@@ -210,6 +221,20 @@ def probe_source(path: Path) -> Dict[str, object]:
         raise RuntimeError("Unable to parse ffprobe output") from exc
 
 
+def _parse_probe_duration(raw: object) -> Optional[float]:
+    """Return a finite float duration from ffprobe metadata when possible."""
+
+    if raw in (None, ""):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
 def summarize_probe(data: Dict[str, object]) -> str:
     fmt = data.get("format", {})
     duration = fmt.get("duration")
@@ -217,8 +242,9 @@ def summarize_probe(data: Dict[str, object]) -> str:
     video = next((s for s in streams if s.get("codec_type") == "video"), {})
     audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
     pieces = []
-    if duration:
-        pieces.append(f"duration {float(duration):.2f}s")
+    numeric_duration = _parse_probe_duration(duration)
+    if numeric_duration is not None:
+        pieces.append(f"duration {numeric_duration:.2f}s")
     if video:
         w = video.get("width")
         h = video.get("height")
@@ -250,7 +276,7 @@ def summarize_probe(data: Dict[str, object]) -> str:
         color_parts = []
         color_primaries = normalise_color_tag(video.get("color_primaries"))
         color_trc = normalise_color_tag(video.get("color_trc"))
-        colorspace = normalise_color_tag(video.get("colorspace"))
+        colorspace = normalise_color_tag(get_color_space_tag(video))
 
         if color_primaries:
             color_parts.append(f"primaries={color_primaries}")
@@ -298,6 +324,15 @@ def normalise_color_tag(value: Optional[str]) -> Optional[str]:
     return lowered
 
 
+def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
+    """Fetch the reported color space tag, handling legacy ffprobe key variants."""
+
+    value = stream.get("color_space")
+    if value is None:
+        value = stream.get("colorspace")
+    return value
+
+
 def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> ToneMapPlan:
     """Determine whether tone mapping should run for this clip."""
 
@@ -311,7 +346,7 @@ def plan_tone_mapping(args: argparse.Namespace, probe: Dict[str, object]) -> Ton
     video = extract_video_stream(probe)
     transfer = (video.get("color_trc") or "").lower()
     primaries = (video.get("color_primaries") or "").lower()
-    matrix = (video.get("colorspace") or "").lower()
+    matrix = (get_color_space_tag(video) or "").lower()
 
     hdr_indicators: List[str] = []
     if transfer in HDR_TRANSFERS:
@@ -511,18 +546,15 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
     tone_map = config.get("tone_map")
     if tone_map and str(tone_map).lower() != "off":
-        zscale_args = [
-            "primaries=bt709",
-            "transfer=bt709",
-            "matrix=bt709",
-            "range=tv",
-        ]
+        tone_map_peak = config.get("tone_map_peak")
+        pre_tonemap_args = ["transfer=linear"]
+        if tone_map_peak is not None:
+            pre_tonemap_args.append(f"npl={float(tone_map_peak):.4f}")
         new_label = next_label()
-        nodes.append(f"[{current}]zscale={':'.join(zscale_args)}[{new_label}]")
+        nodes.append(f"[{current}]zscale={':'.join(pre_tonemap_args)}[{new_label}]")
         current = new_label
 
-        tonemap_args = [f"tonemap={tone_map}"]
-        tone_map_peak = config.get("tone_map_peak")
+        tonemap_args = [str(tone_map)]
         if tone_map_peak is not None:
             tonemap_args.append(f"peak={float(tone_map_peak):.4f}")
         tone_map_desat = config.get("tone_map_desat")
@@ -530,6 +562,16 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
             tonemap_args.append(f"desat={float(tone_map_desat):.4f}")
         new_label = next_label()
         nodes.append(f"[{current}]tonemap={':'.join(tonemap_args)}[{new_label}]")
+        current = new_label
+
+        post_tonemap_args = [
+            "primaries=bt709",
+            "transfer=bt709",
+            "matrix=bt709",
+            "range=tv",
+        ]
+        new_label = next_label()
+        nodes.append(f"[{current}]zscale={':'.join(post_tonemap_args)}[{new_label}]")
         current = new_label
 
     denoise = config.get("denoise")
@@ -545,7 +587,6 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     new_label = next_label()
     nodes.append(f"[{current}]format=gbrpf32le[{new_label}]")
     current = new_label
-    pre_grade_label = current
 
     eq_parts: List[str] = []
     contrast = float(config.get("contrast", 1.0))
@@ -562,13 +603,16 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     if not math.isclose(brightness, 0.0, abs_tol=1e-4):
         eq_parts.append(f"brightness={brightness:.4f}")
 
+    post_eq_label = current
     if eq_parts:
         new_label = next_label()
         nodes.append(f"[{current}]eq={':'.join(eq_parts)}[{new_label}]")
         current = new_label
+    post_eq_label = current
 
     warmth = float(config.get("warmth", 0.0))
     cool = float(config.get("cool", 0.0))
+    post_color_label = post_eq_label
     if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(cool, 0.0, abs_tol=1e-4):
         new_label = next_label()
         # Clamp values to [-0.5, 0.5] to stay within tasteful limits.
@@ -578,6 +622,11 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
             f"[{current}]colorbalance=rm={warmth_c:.4f}:gm=0.0000:bm={cool_c:.4f}[{new_label}]"
         )
         current = new_label
+        post_color_label = current
+    else:
+        current = post_color_label
+
+    pre_lut_label = post_color_label
 
     lut_path: Path = Path(config["lut"]).resolve()
     if not lut_path.exists():
@@ -594,7 +643,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     if lut_strength < 0.999:
         blend_label = next_label()
         nodes.append(
-            f"[{pre_grade_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
+            f"[{pre_lut_label}][{graded_label}]blend=all_expr='A*(1-{lut_strength:.4f})+B*{lut_strength:.4f}'[{blend_label}]"
         )
         current = blend_label
 
@@ -623,16 +672,32 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     halation_intensity = float(config.get("halation_intensity", 0.0))
-    halation_radius = float(config.get("halation_radius", 0.0))
-    if halation_intensity > 0.0 and halation_radius > 0.0:
-        halation_intensity = clamp(halation_intensity, 0.0, 1.0)
-        halation_radius = clamp(halation_radius, 0.0, 128.0)
-        base_label = current
+    if halation_intensity > 0.0:
+        intensity = clamp(halation_intensity, 0.0, 1.0)
+        radius = clamp(float(config.get("halation_radius", 18.0)), 0.0, 128.0)
+        radius = max(radius, 1.0)
+        threshold = clamp(float(config.get("halation_threshold", 0.6)), 0.0, 1.0)
+
+        base_label = next_label()
+        halo_label = next_label()
+        nodes.append(f"[{current}]split=2[{base_label}][{halo_label}]")
+
+        highlight_label = next_label()
+        nodes.append(
+            f"[{halo_label}]colorlevels=rimin={threshold:.3f}:gimin={threshold:.3f}:bimin={threshold:.3f}[{highlight_label}]"
+        )
+
         blur_label = next_label()
-        nodes.append(f"[{base_label}]gblur=sigma={halation_radius:.4f}[{blur_label}]")
+        nodes.append(f"[{highlight_label}]gblur=sigma={radius:.2f}:steps=2[{blur_label}]")
+
+        tint_label = next_label()
+        nodes.append(
+            f"[{blur_label}]colorbalance=rm={intensity * 0.55:.4f}:gm={intensity * 0.25:.4f}:bm={-intensity * 0.15:.4f}[{tint_label}]"
+        )
+
         blend_label = next_label()
         nodes.append(
-            f"[{base_label}][{blur_label}]blend=all_mode='screen':all_opacity={halation_intensity:.4f}[{blend_label}]"
+            f"[{base_label}][{tint_label}]blend=all_expr='A+({intensity:.3f}*B)'[{blend_label}]"
         )
         current = blend_label
 
@@ -647,16 +712,8 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     return graph, "vout"
 
 
-def determine_color_metadata(
-    args: argparse.Namespace, probe: Dict[str, object]
-) -> tuple[Optional[str], Optional[str], Optional[str]]:
-    """Determine color metadata based on priority: explicit > color-from-source > none.
-
-    Consolidates multiple historical implementations by normalising the ffprobe
-    metadata when inheriting tags from source clips.  This avoids leaking values
-    such as ``"unknown"``/``"unspecified"`` and ensures the caller receives
-    consistently lower-cased identifiers.
-    """
+def determine_color_metadata(args: argparse.Namespace, probe: Dict[str, object]) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Determine color metadata based on priority: explicit > color-from-source > none."""
 
     # Priority 1: Explicit overrides
     if args.color_primaries or args.color_transfer or args.color_space:
@@ -668,7 +725,7 @@ def determine_color_metadata(
         if video:
             primaries = normalise_color_tag(video.get("color_primaries"))
             transfer = normalise_color_tag(video.get("color_trc"))
-            space = normalise_color_tag(video.get("colorspace"))
+            space = normalise_color_tag(get_color_space_tag(video))
             return primaries, transfer, space
 
     # Priority 3: None (default behavior - no color tags set)
@@ -831,6 +888,11 @@ def parse_arguments(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default=18.0,
         help="Radius of the halation blur kernel when enabled.",
     )
+    parser.add_argument(
+        "--halation-threshold",
+        type=float,
+        help="Luminance threshold (0-1) before highlights feed the halation pass.",
+    )
     parser.add_argument("--video-codec", default="prores_ks", help="Video mezzanine codec to use.")
     parser.add_argument(
         "--prores-profile",
@@ -926,6 +988,8 @@ def build_config(
         config["halation_intensity"] = args.halation_intensity
     if args.halation_radius is not None:
         config["halation_radius"] = args.halation_radius
+    if args.halation_threshold is not None:
+        config["halation_threshold"] = args.halation_threshold
     if target_fps is not None:
         config["target_fps"] = target_fps
     if tone_map_plan and tone_map_plan.enabled:
@@ -1007,6 +1071,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         if halation_radius < 0.0:
             raise ValueError("halation_radius must be non-negative")
         config["halation_radius"] = clamp(halation_radius, 0.0, 128.0)
+        threshold_value = float(config.get("halation_threshold", 0.6))
+        if not 0.0 <= threshold_value <= 1.0:
+            raise ValueError("halation_threshold must be within [0.0, 1.0]")
+        config["halation_threshold"] = clamp(threshold_value, 0.0, 1.0)
     except ValueError as exc:
         print(f"Parameter validation error: {exc}", file=sys.stderr)
         return 7
