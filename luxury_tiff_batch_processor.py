@@ -948,7 +948,7 @@ def process_single_image(
         if resize_long_edge is not None:
             adjusted = resize_long_edge_array(adjusted, resize_long_edge)
             if alpha is not None:
-                alpha = resize_long_edge_array(alpha, resize_target)
+                alpha = resize_long_edge_array(alpha, resize_long_edge)
         arr_int = float_to_dtype_array(adjusted, dtype, alpha, base_channels)
         if dry_run:
             LOGGER.info("Dry run enabled, skipping save for %s", destination)
@@ -956,42 +956,10 @@ def process_single_image(
         save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
 
 
-def process_single_image(
-    source: Path,
-    destination: Path,
-    adjustments: AdjustmentSettings,
-    compression: str,
-    resize_long_edge: Optional[int],
-) -> None:
-    """Process a single image and write it to the destination path."""
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    process_image(
-        source,
-        destination,
-        adjustments,
-        compression,
-        resize_long_edge,
-        dry_run=False,
-    )
-
-
 def main(argv: Optional[Iterable[str]] = None) -> None:
     args = parse_args(argv)
     run_pipeline(args)
 
-
-def run_pipeline(args: argparse.Namespace) -> int:
-    """Run the batch processor with the provided arguments."""
-
-    adjustments = build_adjustments(args)
-    input_root = args.input.resolve()
-    output_root = args.output.resolve()
-
-    if not input_root.exists():
-        raise FileNotFoundError(f"Input folder not found: {input_root}")
-    if not input_root.is_dir():
-        raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
 
 def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
     def _contains(parent: Path, child: Path) -> bool:
@@ -1012,6 +980,21 @@ def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
             "Input folder cannot be located inside the output folder; choose non-overlapping directories."
         )
 
+
+def run_pipeline(args: argparse.Namespace) -> int:
+    """Run the batch processor with the provided arguments."""
+
+    adjustments = build_adjustments(args)
+    input_root = args.input.resolve()
+    output_root = args.output.resolve()
+
+    if not input_root.exists():
+        raise FileNotFoundError(f"Input folder not found: {input_root}")
+    if not input_root.is_dir():
+        raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
+
+    _ensure_non_overlapping(input_root, output_root)
+
     images = sorted(collect_images(input_root, args.recursive))
     if not images:
         LOGGER.warning("No TIFF images found in %s", input_root)
@@ -1023,7 +1006,6 @@ def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
     LOGGER.info("Found %s image(s) to process", len(images))
     processed = 0
 
-    processed = 0
     for image_path in images:
         destination = ensure_output_path(
             input_root,
