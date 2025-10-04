@@ -23,6 +23,7 @@ except Exception:  # pragma: no cover - optional dependency
     _tqdm = None
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
+WORKER_LOGGER = LOGGER.getChild("worker")
 
 
 def _tqdm_progress(
@@ -148,7 +149,7 @@ def _coerce_resize_target(
     raise ValueError("Conflicting resize targets provided; choose one value")
 
 
-def process_single_image(
+def _process_image_worker(
     source: Path,
     destination: Path,
     adjustments: AdjustmentSettings,
@@ -157,8 +158,14 @@ def process_single_image(
     resize_long_edge: Optional[int] = None,
     resize_target: Optional[int] = None,
     dry_run: bool = False,
-) -> None:
-    LOGGER.info("Processing %s -> %s", source, destination)
+) -> bool:
+    """Core implementation for processing a single image.
+
+    Returns ``True`` when an output file was written. This helper is isolated so it
+    can be safely used with :class:`concurrent.futures.ProcessPoolExecutor`.
+    """
+
+    WORKER_LOGGER.info("Processing %s -> %s", source, destination)
     if destination.exists() and not dry_run and not destination.is_file():
         if destination.is_dir():
             path_type = "directory"
@@ -198,10 +205,34 @@ def process_single_image(
             float_normalisation=float_norm,
         )
         if dry_run:
-            LOGGER.info("Dry run enabled, skipping save for %s", destination)
-            return
+            WORKER_LOGGER.info("Dry run enabled, skipping save for %s", destination)
+            return False
         with ProcessingContext(destination) as staged_path:
             save_image(staged_path, arr_int, dtype, metadata, icc_profile, compression)
+    return True
+
+
+def process_single_image(
+    source: Path,
+    destination: Path,
+    adjustments: AdjustmentSettings,
+    *,
+    compression: str,
+    resize_long_edge: Optional[int] = None,
+    resize_target: Optional[int] = None,
+    dry_run: bool = False,
+) -> None:
+    """Public wrapper around :func:`_process_image_worker`."""
+
+    _process_image_worker(
+        source,
+        destination,
+        adjustments,
+        compression=compression,
+        resize_long_edge=resize_long_edge,
+        resize_target=resize_target,
+        dry_run=dry_run,
+    )
 
 
 # Backwards compatibility shim for older integrations expecting the previous helper name.
