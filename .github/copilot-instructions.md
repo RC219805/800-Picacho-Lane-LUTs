@@ -40,7 +40,10 @@ This repository contains a professional LUT (Look-Up Table) collection and video
 git clone https://github.com/RC219805/800-Picacho-Lane-LUTs.git
 cd 800-Picacho-Lane-LUTs
 
-# Install Python dependencies
+# Install Python dependencies (installs project metadata requirements)
+pip install .
+
+# Alternatively, mirror CI exactly
 pip install -r requirements.txt
 
 # Install development dependencies
