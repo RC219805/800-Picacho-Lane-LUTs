@@ -929,7 +929,13 @@ def process_single_image(
 ) -> None:
     LOGGER.info("Processing %s -> %s", source, destination)
     if destination.exists() and not dry_run and not destination.is_file():
-        raise ValueError(f"Destination path is not a file: {destination}")
+        if destination.is_dir():
+            path_type = "directory"
+        elif destination.is_symlink():
+            path_type = "symlink"
+        else:
+            path_type = "non-file"
+        raise ValueError(f"Destination path exists but is a {path_type}: {destination}")
 
     if not dry_run:
         destination.parent.mkdir(parents=True, exist_ok=True)
