@@ -273,7 +273,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
                         adjustments,
                         compression=args.compression,
                         resize_long_edge=args.resize_long_edge,
-                        resize_target=None,
+                        resize_target=args.resize_target,
                         dry_run=args.dry_run,
                     )
                 )
