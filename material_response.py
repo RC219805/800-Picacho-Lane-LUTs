@@ -1220,7 +1220,10 @@ class QuantumMaterialResponse:
         for index, row in enumerate(matrix):
             mean_reflectance = float(np.mean(row))
             variance = float(np.var(row))
-            coherence = float(np.mean(coherence_map[index]))
+            if index < len(coherence_map):
+                coherence = float(np.mean(coherence_map[index]))
+            else:
+                coherence = 0.0
             states.append(
                 {
                     "surface_index": index,
