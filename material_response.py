@@ -1165,7 +1165,7 @@ class QuantumMaterialResponse:
                 weights[key] = weights.get(key, 0.0) + float(value)
             elif isinstance(value, str):
                 textual_components.append(value)
-            elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            elif isinstance(value, SequenceABC) and not isinstance(value, (str, bytes)):
                 textual_components.extend(str(component) for component in value)
             else:
                 weights[key] = weights.get(key, 0.0) + 0.1
