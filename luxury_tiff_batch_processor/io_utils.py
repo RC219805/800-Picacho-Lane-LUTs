@@ -412,10 +412,20 @@ def save_image(
     )
 
     array_to_write = arr_int
+    extrasample_needed = False
     if array_to_write.ndim == 2:
         photometric = "minisblack"
     else:
-        photometric = "rgb" if array_to_write.shape[2] >= 3 else "minisblack"
+        channels = array_to_write.shape[2]
+        if channels == 2:
+            photometric = "minisblack"
+            extrasample_needed = True
+        elif channels >= 3:
+            photometric = "rgb"
+            if channels > 3:
+                extrasample_needed = True
+        else:
+            photometric = "minisblack"
 
     if use_tifffile:
         tiff_kwargs = {
@@ -423,7 +433,9 @@ def save_image(
             "compression": compression_for_tifffile(compression),
             "metadata": None,
         }
-        if array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
+        if extrasample_needed or (
+            array_to_write.ndim == 3 and array_to_write.shape[2] > 3
+        ):
             tiff_kwargs["extrasamples"] = "unassoc"
         extratags = []
         if icc_profile:
@@ -443,19 +455,20 @@ def save_image(
             "Falling back to Pillow for 16-bit save; output will be 8-bit. Install 'tifffile' for full 16-bit support."
         )
         scale = dtype_info.max / 255.0 if dtype_info.max else 1.0
-        rgb = np.clip(array_to_write[..., :3], 0, dtype_info.max).astype(np.float32) / scale
-        rgb8 = np.clip(np.round(rgb), 0, 255).astype(np.uint8)
-        if array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
-            alpha = np.clip(array_to_write[..., 3], 0, dtype_info.max).astype(np.float32) / scale
-            alpha8 = np.clip(np.round(alpha), 0, 255).astype(np.uint8)
-            array_to_write = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
-        else:
-            array_to_write = rgb8
+        clipped = np.clip(array_to_write, 0, dtype_info.max).astype(np.float32)
+        converted = np.clip(np.round(clipped / scale), 0, 255).astype(np.uint8)
+        if converted.ndim == 3 and converted.shape[2] > 3:
+            rgb8 = converted[..., :3]
+            alpha8 = converted[..., 3]
+            converted = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
+        array_to_write = converted
     elif dtype_info and dtype_info.bits < 16 and array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
         array_to_write = array_to_write.astype(np.uint8)
 
     if array_to_write.ndim == 3 and array_to_write.shape[2] == 4:
         mode = "RGBA"
+    elif array_to_write.ndim == 3 and array_to_write.shape[2] == 2:
+        mode = "LA"
     elif array_to_write.ndim == 3 and array_to_write.shape[2] == 3:
         mode = "RGB"
     else:
