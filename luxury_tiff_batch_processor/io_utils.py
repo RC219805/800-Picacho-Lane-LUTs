@@ -457,7 +457,7 @@ def save_image(
         scale = dtype_info.max / 255.0 if dtype_info.max else 1.0
         clipped = np.clip(array_to_write, 0, dtype_info.max).astype(np.float32)
         converted = np.clip(np.round(clipped / scale), 0, 255).astype(np.uint8)
-        if converted.ndim == 3 and converted.shape[2] > 4:
+        if converted.ndim == 3 and converted.shape[2] > 3:
             rgb8 = converted[..., :3]
             alpha8 = converted[..., 3]
             converted = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
