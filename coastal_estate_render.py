@@ -134,8 +134,6 @@ def render_coastal_estate(
             raise ValueError(f"extra option {formatted} conflicts with managed argument")
 
         for key, value in extra_options.items():
-            if key in options:
-                raise ValueError(f"extra option '{key}' conflicts with managed argument")
             options[key] = value
 
     pipeline_module.main(**options)
