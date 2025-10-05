@@ -13,7 +13,9 @@ from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
 import re
-from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
+
+import numpy as np
 
 
 def _is_sequence(value: object) -> bool:
@@ -724,6 +726,8 @@ __all__ = [
     "CognitiveMaterialResponse",
     "MarketingClaimValidator",
     "MaterialResponseValidator",
+    "compose_operations",
+    "apply_transformation_tensor",
     "violates",
 ]
 
@@ -829,6 +833,177 @@ class MaterialResponseValidator:
         slope, _ = _linear_regression(xs, ys)
         dimension = max(-slope, 0.0)
         return float(dimension)
+
+
+OperationLike = Any
+
+
+def compose_operations(*operations: OperationLike, size: int = 3, dtype: np.dtype | None = None) -> np.ndarray:
+    """Return a composite linear transformation for channel-wise operations.
+
+    Parameters
+    ----------
+    operations:
+        Arbitrary operation descriptors that can be converted into channel
+        transformation matrices.  Supported inputs include:
+
+        * ``None`` – ignored.
+        * Scalars – interpreted as uniform channel scales.
+        * 1-D sequences – treated as per-channel scale factors.
+        * 2-D square matrices – applied directly.
+        * Mappings with ``"matrix"``/``"mix"`` keys (matrix) or ``"scale"``/
+          ``"diag"`` keys (diagonal factors).  Optional ``"name"``/``"type"``
+          metadata is used to coalesce duplicated operations.
+        * Callables returning any of the above when invoked with ``size``.
+
+    size:
+        Channel dimensionality.  Defaults to ``3`` for RGB imagery.
+
+    dtype:
+        Optional :mod:`numpy` dtype for the returned tensor.  ``float32`` is
+        used by default to match the codebase's image processing conventions.
+
+    The helper performs conflict detection by coalescing repeated named
+    operations.  When two operations share the same ``name``/``type`` metadata
+    they are multiplied together in the order encountered so that the overall
+    effect matches the sequential application that previously existed in the
+    pipeline.
+    """
+
+    matrix_dtype = np.dtype(dtype) if dtype is not None else np.float32
+    identity = np.eye(size, dtype=np.float64)
+
+    if not operations:
+        return identity.astype(matrix_dtype, copy=False)
+
+    def _normalise(operation: OperationLike) -> Tuple[np.ndarray, str | None]:
+        if operation is None:
+            raise ValueError("compose_operations received an empty operation placeholder")
+
+        name: str | None = None
+
+        if callable(operation):  # type: ignore[call-arg]
+            resolved = operation(size)  # type: ignore[misc]
+            name = getattr(operation, "__name__", None)
+            return _ensure_matrix(resolved, size), name
+
+        if isinstance(operation, Mapping):
+            maybe_name = (
+                operation.get("name")
+                or operation.get("type")
+                or operation.get("label")
+                or operation.get("id")
+                or operation.get("kind")
+            )
+            if maybe_name is not None:
+                name = str(maybe_name)
+
+            if "matrix" in operation:
+                return _ensure_matrix(operation["matrix"], size), name
+            if "mix" in operation:
+                return _ensure_matrix(operation["mix"], size), name
+            if "scale" in operation or "diag" in operation:
+                diag_source = operation.get("scale", operation.get("diag"))
+                return _coerce_diagonal(diag_source, size), name
+            if "weights" in operation:
+                return _coerce_diagonal(operation["weights"], size), name
+            raise ValueError(
+                "operation mapping must contain 'matrix', 'mix', 'scale', 'diag', or 'weights'"
+            )
+
+        return _ensure_matrix(operation, size), None
+
+    composed: List[np.ndarray] = []
+    name_index: Dict[str, int] = {}
+
+    for operation in operations:
+        if operation is None:
+            continue
+        matrix, name = _normalise(operation)
+        if name is not None:
+            index = name_index.get(name)
+            if index is not None:
+                composed[index] = composed[index] @ matrix
+                continue
+            name_index[name] = len(composed)
+        composed.append(matrix)
+
+    if not composed:
+        return identity.astype(matrix_dtype, copy=False)
+
+    result = identity
+    for matrix in composed:
+        if matrix.shape != (size, size):
+            raise ValueError(
+                "operation matrix must be square with side length matching the channel size"
+            )
+        result = result @ matrix
+
+    return result.astype(matrix_dtype, copy=False)
+
+
+def _coerce_diagonal(operation: object, size: int) -> np.ndarray:
+    if operation is None:
+        raise ValueError("diagonal operation cannot be None")
+
+    diag = np.asarray(operation, dtype=np.float64)
+    if diag.ndim == 0:
+        return np.eye(size, dtype=np.float64) * float(diag)
+    if diag.ndim != 1:
+        raise ValueError("diagonal operation must be a scalar or a 1-D sequence")
+    if diag.shape[0] != size:
+        raise ValueError(
+            f"diagonal operation expects {size} coefficients; received {diag.shape[0]}"
+        )
+    return np.diag(diag)
+
+
+def _ensure_matrix(operation: object, size: int) -> np.ndarray:
+    matrix = np.asarray(operation, dtype=np.float64)
+
+    if matrix.ndim == 0:
+        # Treat scalar matrices as uniform scale factors across channels.
+        return np.eye(size, dtype=np.float64) * float(matrix)
+
+    if matrix.ndim == 1:
+        if matrix.shape[0] == size:
+            return np.diag(matrix)
+        raise ValueError(
+            f"matrix operation expects a vector of length {size}; received {matrix.shape[0]}"
+        )
+
+    if matrix.ndim != 2:
+        raise ValueError("matrix operation must be 1-D or 2-D")
+
+    if matrix.shape != (size, size):
+        coerced = _coerce_matrix(operation)  # type: ignore[arg-type]
+        coerced_array = np.asarray(coerced, dtype=np.float64)
+        if coerced_array.shape == (size, size):
+            return coerced_array
+        raise ValueError(
+            "operation matrix must be square with side length matching the channel size"
+        )
+
+    return matrix
+
+
+def apply_transformation_tensor(
+    image: np.ndarray,
+    *operations: OperationLike,
+    clip: bool = True,
+    dtype: np.dtype | None = None,
+) -> np.ndarray:
+    """Apply composed operations to ``image`` using a unified tensor multiply."""
+
+    if image.ndim != 3:
+        raise ValueError("image must be a H×W×C array")
+
+    channels = image.shape[2]
+    matrix = compose_operations(*operations, size=channels, dtype=dtype or image.dtype)
+    transformed = np.einsum("hwc,cd->hwd", image, matrix, dtype=dtype or image.dtype)
+    if clip:
+        return np.clip(transformed, 0.0, 1.0)
+    return transformed
 
     @staticmethod
     def _boxcount(binary: Sequence[Sequence[bool]], size: int) -> int:
