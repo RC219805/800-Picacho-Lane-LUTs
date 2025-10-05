@@ -1037,3 +1037,234 @@ def apply_transformation_tensor(
                     count += 1
 
         return count
+
+
+class QuantumMaterialResponse:
+    """Treats each material surface as a quantum field.
+
+    The class orchestrates aesthetic reasoning using a quantum metaphor where
+    surface qualities are represented as wavefunctions. Material adjustments
+    exist in superposition until collapsed by a cultural observation context.
+    The implementation leans on existing cognitive subsystems while layering in
+    additional coherence heuristics to emulate non-local creative decisions.
+    """
+
+    def __init__(self, coherence_gain: float = 0.68) -> None:
+        if not 0.0 <= coherence_gain <= 1.0:
+            raise ValueError(
+                "coherence_gain must be between 0.0 and 1.0 inclusive; "
+                f"received {coherence_gain!r}"
+            )
+
+        self.coherence_gain = coherence_gain
+        self.cognitive_engine = CognitiveMaterialResponse()
+
+    def entangle_surfaces(
+        self,
+        material_tensor: Sequence[Sequence[float]],
+        observation_context: Mapping[str, Any],
+    ) -> Dict[str, object]:
+        """Return an entangled aesthetic appraisal for multiple materials."""
+
+        matrix = np.asarray(_coerce_matrix(material_tensor), dtype=np.float64)
+
+        if matrix.size == 0:
+            raise ValueError("material_tensor must contain at least one value")
+
+        if not isinstance(observation_context, Mapping):
+            raise TypeError("observation_context must be a mapping")
+
+        context_wave = self._contextual_wavefunction(observation_context)
+        # Use 1D FFT if input is a single row (from 1D input), otherwise use 2D FFT
+        if matrix.shape[0] == 1 or matrix.shape[1] == 1:
+            frequency_domain = np.fft.fft(matrix.flatten())
+            amplitude = np.abs(frequency_domain)
+        else:
+            frequency_domain = np.fft.fft2(matrix)
+            amplitude = np.abs(frequency_domain)
+        amplitude_sum = float(amplitude.sum())
+
+        if math.isclose(amplitude_sum, 0.0):
+            amplitude_normalised = np.zeros_like(amplitude)
+        else:
+            amplitude_normalised = amplitude / amplitude_sum
+
+        coherence_map = self._apply_coherence(amplitude_normalised, context_wave)
+        entanglement_matrix = self._entanglement_matrix(coherence_map, frequency_domain)
+        conflict_resolution = self.identify_and_resolve_conflicts(coherence_map, context_wave)
+
+        collapse_guidance = self._collapse_guidance(conflict_resolution, context_wave)
+
+        return {
+            "superposition_states": self._superposition_states(matrix, coherence_map),
+            "contextual_weights": context_wave,
+            "coherence_map": coherence_map.tolist(),
+            "entanglement_matrix": entanglement_matrix.tolist(),
+            "conflict_resolution": conflict_resolution,
+            "collapse_guidance": collapse_guidance,
+        }
+
+    def identify_and_resolve_conflicts(
+        self,
+        coherence_map: Sequence[Sequence[float]],
+        context_wave: Mapping[str, float],
+        threshold: float = 0.12,
+    ) -> Dict[str, object]:
+        """Highlight and resolve non-local conflicts across surfaces."""
+
+        np_map = np.asarray(coherence_map, dtype=np.float64)
+        if np_map.size == 0:
+            raise ValueError("coherence_map cannot be empty")
+
+        mean_value = float(np_map.mean())
+        deviations = np_map - mean_value
+        conflicts: List[str] = []
+        resolutions: List[str] = []
+
+        sorted_context = sorted(
+            context_wave.items(), key=lambda item: item[1], reverse=True
+        )
+
+        for index, deviation in np.ndenumerate(deviations):
+            if abs(float(deviation)) > threshold:
+                descriptor = f"surface[{index[0]}][{index[1]}]"
+                direction = "dominates" if deviation > 0 else "lags"
+                conflicts.append(
+                    f"{descriptor} {direction} the quantum palette by {deviation:+.3f}."
+                )
+
+                if sorted_context:
+                    anchor_keyword = sorted_context[0][0]
+                    resolutions.append(
+                        "Channel excess from "
+                        f"{descriptor} into {anchor_keyword} narratives to restore balance."
+                    )
+                else:
+                    resolutions.append(
+                        f"Apply decoherence damping to {descriptor} to restore equilibrium."
+                    )
+
+        max_deviation = float(np.max(np.abs(deviations))) if np_map.size else 0.0
+        if math.isclose(max_deviation, 0.0):
+            stability_index = 1.0
+        else:
+            mean_deviation = float(np.mean(np.abs(deviations)))
+            normalised = mean_deviation / max_deviation if max_deviation else 0.0
+            stability_index = float(_clamp(1.0 - normalised))
+
+        return {
+            "conflicts": conflicts,
+            "resolutions": resolutions,
+            "stability_index": stability_index,
+        }
+
+    @staticmethod
+    def _contextual_wavefunction(context: Mapping[str, Any]) -> Dict[str, float]:
+        """Return a normalised mapping describing contextual influence weights."""
+
+        weights: Dict[str, float] = {}
+        textual_components: List[str] = []
+
+        for key, value in context.items():
+            if isinstance(value, (int, float)):
+                weights[key] = weights.get(key, 0.0) + float(value)
+            elif isinstance(value, str):
+                textual_components.append(value)
+            elif isinstance(value, SequenceABC) and not isinstance(value, (str, bytes)):
+                textual_components.extend(str(component) for component in value)
+            else:
+                weights[key] = weights.get(key, 0.0) + 0.1
+
+        if textual_components:
+            extracted = _extract_keywords(" ".join(textual_components))
+            if extracted:
+                keyword_weight = 1.0 / len(extracted)
+                for keyword in extracted:
+                    weights[keyword] = weights.get(keyword, 0.0) + keyword_weight
+
+        total = sum(weights.values())
+        if math.isclose(total, 0.0):
+            return {"baseline": 1.0}
+
+        return {key: value / total for key, value in weights.items()}
+
+    def _apply_coherence(
+        self, amplitude_normalised: np.ndarray, context_wave: Mapping[str, float]
+    ) -> np.ndarray:
+        """Blend amplitude data with context weights to produce coherence."""
+
+        contextual_intensity = sum(context_wave.values())
+        scaled = amplitude_normalised * (1.0 + self.coherence_gain * contextual_intensity)
+        maximum = np.max(scaled) if scaled.size else 0.0
+        if math.isclose(float(maximum), 0.0):
+            return np.zeros_like(amplitude_normalised)
+
+        return np.clip(scaled / maximum, 0.0, 1.0)
+
+    @staticmethod
+    def _entanglement_matrix(
+        coherence_map: np.ndarray, frequency_domain: np.ndarray
+    ) -> np.ndarray:
+        """Return a matrix describing coupled surface influence."""
+
+        phase = np.angle(frequency_domain)
+        entangled = np.cos(phase) * coherence_map
+        normaliser = np.max(np.abs(entangled)) if entangled.size else 0.0
+        if math.isclose(float(normaliser), 0.0):
+            return np.zeros_like(coherence_map)
+
+        return entangled / normaliser
+
+    @staticmethod
+    def _superposition_states(
+        matrix: np.ndarray, coherence_map: np.ndarray
+    ) -> List[Dict[str, float]]:
+        """Return descriptors for each surface prior to observation."""
+
+        states: List[Dict[str, float]] = []
+        for index, row in enumerate(matrix):
+            mean_reflectance = float(np.mean(row))
+            variance = float(np.var(row))
+            if index < len(coherence_map):
+                coherence = float(np.mean(coherence_map[index]))
+            else:
+                coherence = 0.0
+            states.append(
+                {
+                    "surface_index": index,
+                    "mean_reflectance": mean_reflectance,
+                    "phase_variance": variance,
+                    "coherence": coherence,
+                }
+            )
+
+        return states
+
+    @staticmethod
+    def _collapse_guidance(
+        conflict_resolution: Mapping[str, Any], context_wave: Mapping[str, float]
+    ) -> str:
+        """Return narrative guidance for collapsing the quantum aesthetic state."""
+
+        conflicts = conflict_resolution.get("conflicts", [])
+        top_context = None
+        if context_wave:
+            top_context = max(context_wave.items(), key=lambda item: item[1])[0]
+
+        if conflicts:
+            pivot = top_context or "the prevailing narrative"
+            return (
+                "Stabilise decoherence by articulating "
+                f"{pivot} themes while applying the proposed resolutions."
+            )
+
+        if top_context:
+            return (
+                "Observation can proceed smoothly; anchor the reveal in "
+                f"{top_context} storytelling to preserve coherence."
+            )
+
+        return (
+            "Observation can proceed smoothly; employ a neutral cultural frame "
+            "to preserve the entangled aesthetic state."
+        )
