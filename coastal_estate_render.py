@@ -36,6 +36,23 @@ def _load_pipeline_module() -> ModuleType:
     return import_module("lux_render_pipeline")
 
 
+_MANAGED_OPTION_PARAMS: Mapping[str, str] = {
+    "input": "input_image",
+    "out": "output_dir",
+    "prompt": "prompt",
+    "width": "width",
+    "height": "height",
+    "strength": "strength",
+    "gs": "guidance_scale",
+    "w4k": "export_4k",
+    "use_realesrgan": "use_realesrgan",
+    "brand_text": "brand_text",
+    "logo": "brand_logo",
+    "seed": "seed",
+    "neg": "negative_prompt",
+}
+
+
 def render_coastal_estate(
     input_image: str,
     output_dir: str = "./transcended",
@@ -111,9 +128,12 @@ def render_coastal_estate(
         options["neg"] = negative_prompt
 
     if extra_options is not None:
+        conflicting_keys = [key for key in extra_options if key in _MANAGED_OPTION_PARAMS]
+        if conflicting_keys:
+            formatted = ", ".join(sorted(f"'{key}'" for key in conflicting_keys))
+            raise ValueError(f"extra option {formatted} conflicts with managed argument")
+
         for key, value in extra_options.items():
-            if key in options and options[key] is not None:
-                raise ValueError(f"extra option '{key}' conflicts with managed argument")
             options[key] = value
 
     pipeline_module.main(**options)

@@ -82,3 +82,14 @@ def test_render_coastal_estate_rejects_conflicting_extra_options(stub_pipeline: 
         cer.render_coastal_estate("estate.tif", extra_options={"input": "other"})
 
     assert "conflicts" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "extra_key",
+    ["brand_text", "logo", "seed", "neg"],
+)
+def test_render_coastal_estate_rejects_optional_managed_keys(extra_key: str, stub_pipeline: StubPipeline):
+    with pytest.raises(ValueError) as excinfo:
+        cer.render_coastal_estate("estate.jpg", extra_options={extra_key: "value"})
+
+    assert "conflicts" in str(excinfo.value)
