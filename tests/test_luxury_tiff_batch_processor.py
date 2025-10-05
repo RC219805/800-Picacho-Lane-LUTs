@@ -18,6 +18,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import luxury_tiff_batch_processor as ltiff
 import luxury_tiff_batch_processor.pipeline as pipeline
+import luxury_tiff_batch_processor.io_utils as io_utils
 
 
 def test_run_pipeline_exposed_in_dunder_all():
@@ -209,6 +210,24 @@ def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: py
     assert dest_path.read_bytes() == original_bytes
     temp_artifacts = list(dest_path.parent.glob(f".{dest_path.name}.tmp*"))
     assert temp_artifacts == []
+
+
+def test_save_image_round_trip_la_mode_pillow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(io_utils, "tifffile", None)
+
+    luminance = np.arange(16, dtype=np.uint8).reshape((4, 4))
+    alpha = np.flipud(luminance)
+    arr = np.stack([luminance, alpha], axis=2)
+
+    destination = tmp_path / "la.tif"
+    ltiff.save_image(destination, arr, arr.dtype, metadata=None, icc_profile=None, compression="tiff_lzw")
+
+    with Image.open(destination) as image:
+        assert image.mode == "LA"
+        restored = np.array(image)
+
+    assert restored.shape == arr.shape
+    assert np.array_equal(restored, arr)
 
 
 @documents("Dry runs provide planning insight without side effects")
