@@ -1075,8 +1075,13 @@ class QuantumMaterialResponse:
             raise TypeError("observation_context must be a mapping")
 
         context_wave = self._contextual_wavefunction(observation_context)
-        frequency_domain = np.fft.fft2(matrix)
-        amplitude = np.abs(frequency_domain)
+        # Use 1D FFT if input is a single row (from 1D input), otherwise use 2D FFT
+        if matrix.shape[0] == 1 or matrix.shape[1] == 1:
+            frequency_domain = np.fft.fft(matrix.flatten())
+            amplitude = np.abs(frequency_domain)
+        else:
+            frequency_domain = np.fft.fft2(matrix)
+            amplitude = np.abs(frequency_domain)
         amplitude_sum = float(amplitude.sum())
 
         if math.isclose(amplitude_sum, 0.0):
