@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any, Dict
 
@@ -24,6 +25,21 @@ import luxury_tiff_batch_processor.io_utils as io_utils
 def test_run_pipeline_exposed_in_dunder_all():
     exported = getattr(ltiff, "__all__", ())
     assert "run_pipeline" in exported
+
+
+def test_top_level_script_still_invokable(tmp_path: Path):
+    script = Path(__file__).resolve().parent.parent / "luxury_tiff_batch_processor.py"
+    assert script.exists(), "shim script missing"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Batch enhance TIFF files" in result.stdout
 
 
 def _saturation(rgb: np.ndarray) -> np.ndarray:
