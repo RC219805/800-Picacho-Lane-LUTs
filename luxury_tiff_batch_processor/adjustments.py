@@ -202,9 +202,15 @@ def rgb_to_hsv(arr: np.ndarray) -> np.ndarray:
     # it harder to audit the processing pipeline.  By keeping the computation
     # within the masked region, we maintain identical results without the
     # noisy warnings.
-    np.divide(maxc - r, diff, out=rc, where=mask)
-    np.divide(maxc - g, diff, out=gc, where=mask)
-    np.divide(maxc - b, diff, out=bc, where=mask)
+    np.copyto(rc, maxc)
+    rc -= r
+    np.divide(rc, diff, out=rc, where=mask)
+    np.copyto(gc, maxc)
+    gc -= g
+    np.divide(gc, diff, out=gc, where=mask)
+    np.copyto(bc, maxc)
+    bc -= b
+    np.divide(bc, diff, out=bc, where=mask)
 
     hue[maxc == r] = (bc - gc)[maxc == r]
     hue[maxc == g] = 2.0 + (rc - bc)[maxc == g]
