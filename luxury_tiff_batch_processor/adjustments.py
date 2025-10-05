@@ -274,18 +274,37 @@ def apply_saturation(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 @functools.lru_cache(maxsize=32)
-def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
+def _gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
     if radius <= 0:
         return np.array([1.0], dtype=np.float32)
     sigma = sigma or max(radius / 3.0, 1e-6)
     ax = np.arange(-radius, radius + 1, dtype=np.float32)
     kernel = np.exp(-(ax ** 2) / (2.0 * sigma ** 2))
     kernel /= np.sum(kernel)
-    return kernel.astype(np.float32)
+    cached = kernel.astype(np.float32)
+    cached.setflags(write=False)
+    return cached
+
+
+def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
+    """Return a Gaussian kernel while protecting cached values from mutation.
+
+    The internal cached kernel is stored in a read-only array.  This function
+    provides callers with a writable copy so that downstream code can safely
+    adjust the kernel without corrupting the cached value that other callers
+    may rely on.
+    """
+
+    return _gaussian_kernel_cached(radius, sigma).copy()
 
 
 def gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    return gaussian_kernel(radius, sigma)
+    return _gaussian_kernel_cached(radius, sigma)
+
+
+# Preserve the cache management helpers for existing callers.
+gaussian_kernel.cache_clear = _gaussian_kernel_cached.cache_clear  # type: ignore[attr-defined]
+gaussian_kernel.cache_info = _gaussian_kernel_cached.cache_info  # type: ignore[attr-defined]
 
 
 def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.ndarray:
