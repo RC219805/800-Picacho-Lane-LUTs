@@ -23,7 +23,7 @@ help:
 
 venv:
 	@if [ ! -x .venv/bin/python ]; then \
-		"$(PY)" -m venv .venv && echo "Created .venv" || true; \
+		"$(PY)" -m venv .venv && echo "Created .venv"; \
 	else \
 		echo ".venv already present"; \
 	fi
