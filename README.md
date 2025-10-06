@@ -10,6 +10,9 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 - [Innovation](#innovation)
 - [Usage](#usage)
     - [Material Response Finishing for Neural Renders](#material-response-finishing-for-neural-renders)
+- [Developer Setup](#developer-setup)
+    - [Install Dependencies](#install-dependencies)
+    - [Test Shortcuts](#test-shortcuts)
 - [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
     - [TIFF Batch Processor Key Features](#tiff-batch-processor-key-features)
     - [TIFF Batch Processor Requirements](#tiff-batch-processor-requirements)
@@ -19,6 +22,7 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
     - [Luxury Video Master Grader Key Features](#luxury-video-master-grader-key-features)
     - [Luxury Video Master Grader Requirements](#luxury-video-master-grader-requirements)
     - [Luxury Video Master Grader Examples](#luxury-video-master-grader-examples)
+    - [Replacing the Test Stub](#replacing-the-test-stub)
 - [HDR Production Pipeline](#hdr-production-pipeline)
     - [HDR Production Pipeline Key Features](#hdr-production-pipeline-key-features)
     - [HDR Production Pipeline Highlights](#hdr-production-pipeline-highlights)
@@ -84,6 +88,25 @@ micro-responses:
 - **Painting integration** – pulls wall art into the room's lighting with rim glow and soft shadow falloff.
 - **Window light wrap** – feathers panoramic daylight across floor, bed, and bench for cohesive lighting.
 - **Exterior atmosphere** – harmonizes the exterior vista with interior haze for believable depth continuity.
+
+## Developer Setup
+
+### Install Dependencies
+
+- Create an isolated environment (optional but recommended):
+  - `python -m venv .venv`
+- Install the project runtime requirements:
+  - `python -m pip install -r requirements.txt`
+- Add the developer extras (pytest, pytest-xdist, numpy pin for tests):
+  - `python -m pip install -r requirements-dev.txt`
+
+### Test Shortcuts
+
+Use the bundled `Makefile` to run repeatable subsets during development:
+
+- `make test-fast` – runs the material response suite plus the light-weight image processing tests.
+- `make test-novideo` – executes every test except the FFmpeg-heavy video grader coverage.
+- `make test-full` – runs the full suite, automatically parallelising with `pytest-xdist` when available.
 
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow for polishing large-format TIFF photography prior to digital launch. The script preserves metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/) is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for ultra-luxury real-estate storytelling.
@@ -246,6 +269,15 @@ python luxury_video_master_grader.py hdr.mov hdr_sdr_master.mov \
 ```
 
 Use `--custom-lut` to feed bespoke `.cube` files, tweak parameters such as `--contrast` or `--grain`, layer in `--deband` smoothing or halation controls, and enable `--dry-run` to inspect the underlying FFmpeg command without rendering. The script automatically probes the source to surface resolution, frame-rate metadata and audio configuration before processing, then monitors for drift or variable frame-rate clips. When necessary it conforms delivery to the nearest cinema broadcast standard (or a user-specified `--target-fps`) to guarantee smooth, continuous playback. HDR clips are further analyzed so the tool can apply tasteful tone mapping automatically, while explicit `--tone-map` overrides give you authoritative control whenever a specific operator is required.
+
+### Replacing the Test Stub
+
+The repository bundles a minimal `luxury_video_master_grader.py` so the automated tests can validate CLI glue even when the production module is unavailable. To exercise your real grader instead:
+
+1. Install the production package that provides the `luxury_video_master_grader` import in the active environment.
+2. Rename or remove the repository stub (it lives at the repo root) so Python resolves the installed package first.
+3. Confirm the import path: `python -c "import luxury_video_master_grader, inspect; print(luxury_video_master_grader.__file__)"`.
+4. Run `make test-full` (or `pytest -q`) to ensure the video tests execute against the real implementation.
 
 ## HDR Production Pipeline
 
