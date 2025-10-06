@@ -35,7 +35,7 @@ test-novideo:
 	@"$(PY)" -m pytest -q -k 'not video_master_grader'
 
 test-full:
-	@if "$(PY)" -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('xdist') else 1)"; then \
+	@if "$(PY)" -m pip list | grep -q pytest-xdist; then \
 		"$(PY)" -m pytest -q -n auto tests; \
 	else \
 		"$(PY)" -m pytest -q tests; \
