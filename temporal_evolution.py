@@ -100,7 +100,14 @@ class TemporalEvolutionRoadmap:
             raise TypeError("temporal_evolution payload must be a mapping")
 
         disciplines: MutableSequence[EvolutionDiscipline] = []
-        for name, directives in root.items():
+        for raw_name, directives in root.items():
+            if not isinstance(raw_name, str):
+                raise TypeError("Discipline names must be strings")
+
+            name = raw_name.strip()
+            if not name:
+                raise TypeError("Discipline names must not be empty")
+
             normalized = _normalise_directives(name, directives)
             disciplines.append(EvolutionDiscipline(name=name, directives=tuple(normalized)))
 
@@ -135,7 +142,12 @@ def _normalise_directives(name: str, directives: object) -> List[EvolutionDirect
                 raise TypeError(
                     f"Directive mapping for discipline '{name}' must map strings to strings"
                 )
-            result.append(EvolutionDirective(summary.strip(), detail.strip()))
+            stripped_summary = summary.strip()
+            if not stripped_summary:
+                raise TypeError(
+                    f"Directive mapping for discipline '{name}' must include a summary"
+                )
+            result.append(EvolutionDirective(stripped_summary, detail.strip()))
         elif isinstance(entry, str):
             stripped = entry.strip()
             if not stripped:

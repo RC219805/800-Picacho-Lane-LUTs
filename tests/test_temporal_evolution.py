@@ -56,6 +56,7 @@ def test_from_mapping_parses_nested_temporal_evolution_block() -> None:
         [123],
         [{"Monitor": 10}],
         [{"Monitor": "ok", "Extra": "nope"}],
+        [{"   ": "detail"}],
     ],
 )
 def test_from_mapping_validates_directive_structure(invalid_directives) -> None:
@@ -70,4 +71,15 @@ def test_serialise_round_trip() -> None:
     roadmap = TemporalEvolutionRoadmap.from_mapping(payload)
 
     assert roadmap.serialise() == payload["temporal_evolution"]
+
+
+@pytest.mark.parametrize(
+    "invalid_name",
+    [42, "   "],
+)
+def test_from_mapping_validates_discipline_names(invalid_name) -> None:
+    payload = {"temporal_evolution": {invalid_name: []}}
+
+    with pytest.raises(TypeError):
+        TemporalEvolutionRoadmap.from_mapping(payload)
 
