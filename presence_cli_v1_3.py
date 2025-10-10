@@ -128,8 +128,10 @@ def verify_manifest(manifest_path: str, hero: str=None, web: str=None,
             "web_sha256": base64.b64encode(_sha256_file(web)).decode(),
         }
         ser = json.dumps(payload, sort_keys=True).encode("utf-8")
-        sig = base64.b64decode(open(signature_path,"rb").read())
-        vk  = VerifyKey(open(public_key,"rb").read())
+        with open(signature_path, "rb") as sig_file:
+            sig = base64.b64decode(sig_file.read())
+        with open(public_key, "rb") as pub_file:
+            vk  = VerifyKey(pub_file.read())
         try:
             vk.verify(ser, sig)
         except BadSignatureError:
