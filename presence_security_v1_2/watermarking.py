@@ -27,7 +27,10 @@ def embed_lsb_rgb(img: Image.Image, manifest_hash_hex: str, session_id: str) -> 
     return Image.fromarray(out)
 
 
-# 8x8 DCT helpers (JPEG-like) — naive implementation
+# 8x8 DCT helpers (JPEG-like) — naive implementation.
+# WARNING: These DCT/IDCT functions use nested loops and have O(N²) time complexity.
+# They are suitable for educational/reference use only and are inefficient for large data or production.
+# For production or performance-critical code, use scipy.fft.dct and scipy.fft.idct instead.
 def _dct_1d(x):
     N = x.shape[0]
     X = np.zeros_like(x, dtype=np.float64)
