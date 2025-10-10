@@ -24,7 +24,7 @@ class PresenceParameters:
         self.salt = hashlib.sha256(sk).digest()
         self.locale = locale if locale in _LOCALE_BOUNDS else "US_EN"
         # derive RNG
-        seed = int.from_bytes(self.salt[:8], "big")
+        seed = int.from_bytes(self.salt, "big")
         self._rng = random.Random(seed)
 
     def _interp(self, lo, hi, b2):
