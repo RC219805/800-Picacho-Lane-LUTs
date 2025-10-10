@@ -8,7 +8,13 @@ New in v1.3:
 
 Requires: Pillow, numpy, (optional) PyNaCl for signature verification
 """
-import argparse, json, sys, os, base64, hashlib, math
+import argparse
+import json
+import sys
+import os
+import base64
+import hashlib
+import math
 from typing import Tuple, Dict
 from PIL import Image
 import numpy as np
