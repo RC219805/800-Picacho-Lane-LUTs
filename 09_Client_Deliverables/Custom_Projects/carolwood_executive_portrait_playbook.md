@@ -2,8 +2,13 @@
 
 The Carolwood executive portrait is no longer a best-effort shoot; it is a compiled artifact. Every controllable input—composition, light, expression, timing, and finishing—functions as an op-code that produces a predictable state of leadership presence. Ship this blueprint to any studio and expect the same output: decisive yet approachable, precise yet human.
 
-**Canonical Spec**  
+**Canonical Spec**
 Download and operate from the line-numbered codex: [`presence_compiler_spec_v1.1.txt`](presence_compiler_spec_v1.1.txt). Key anchors: lines 037–041 define `compilePresence(..)`, line 066 locks the t* echo-of-decision rule, and lines 134–135 articulate the intentional-authenticity verdict.
+
+**Annex Stack**
+- [`presence_compiler_annexes_v1.2.txt`](presence_compiler_annexes_v1.2.txt) — localization, consent-gated detection, adaptation metrics, subject-first modes, API contracts, and constructive imperfection grammar.
+- [`presence_compiler_locales.yml`](presence_compiler_locales.yml) — machine-readable locale overrides and prompt lexicon for regional deployments.
+- [`presence_manifest_schema.json`](presence_manifest_schema.json) & [`presence_manifest_example.json`](presence_manifest_example.json) — governance manifest schema and filled sample for audits, detection gating, and consent logging.
 
 ---
 
@@ -194,13 +199,54 @@ The compiler doesn’t fake authenticity—it **intentionally assembles** the ve
 
 ## 11. Market Adaptation — Managing Competence Inflation
 
-- **Monitor drift:** track average compiled C:W mixes over time. If the market normalizes at C ≥ 0.60, recalibrate baselines so the brand still signals above-category presence without sliding into severity.
-- **Refresh primitives:** introduce minor expression or lighting variations each quarter (e.g., shift chin translation by ±1 mm) to avoid a homogenized look as competitors imitate the recipe.
-- **Scenario differentiation:** keep distinct recipes for authority-heavy vs. warmth-forward deliverables so the language retains expressive range instead of collapsing into a single “default executive.”
+- **Drift and scarcity metrics:** calculate `drift_index` (rolling mean of compiled C) and `scarcity_index` (1 ÷ variance of delivered K) each quarter. If `drift_index > 0.58`, raise warmth intent by +0.03 or deploy sanctioned micro-imperfections per Annex C.
+- **Presence budget:** enforce portfolio targets — minimum 30% warmth-led and 30% authority-led portraits per quarter — to stop the roster from converging on one compiled expression.
+- **Refresh primitives:** introduce minor expression or lighting variations each quarter (e.g., ±1 mm chin translation, ±0.1 stop fill) to keep differentiation ahead of imitators.
+- **Scenario differentiation:** maintain discrete recipes for authority-heavy vs. warmth-forward deliverables so the language stays expressive rather than collapsing into a single “default executive.”
 
 ---
 
-## 12. Reverse Compilation Safeguards — Sword and Shield
+## 12. Localization — Cultural Profiles & Prompts
+
+- **Locale selection order:** honor subject-declared locale first, then organizational default, otherwise fall back to `US_EN` (Annex A).
+- **Override map:** apply only the sanctioned primitives in [`presence_compiler_locales.yml`](presence_compiler_locales.yml) — mouth delta, lower-lid tension, fill, lean, and prompt lexicon — while keeping geometry gates constant.
+- **Audit trail:** log the selected profile, override values, and reviewer in the manifest `locale` block; update prompts annually with regional leads.
+
+---
+
+## 13. Subject-First Compilation Modes
+
+- **Lambda blending:** choose `balance` (λ = 0.2) when institutional parity matters, or `faithful` (λ = 0.5) when amplifying innate warmth/authority (Annex D).
+- **Dual deliveries:** when λ differs by ≥0.15 between balance and faithful renders, deliver both to the subject and log their selection in the manifest.
+- **Context vector:** record `{scenario, risk}` for every session so governance can trace why a given mode or intent was chosen.
+
+---
+
+## 14. Detection Governance & Consent Controls
+
+- **Consent-gated analysis:** detection mode may only run when the manifest records `consent.detect = granted`; clients must poll manifests for revocations before every scan (Annex B).
+- **Quantized outputs:** detection reports express C/W/K as ranges, not precise floats, and include anomaly flags when provenance hashes or t* signatures are missing.
+- **Watermark binding:** embed the manifest hash or invisible watermark to link hero frames to their disruption sets without exposing raw alternates.
+
+---
+
+## 15. Constructive Decompilation Grammar
+
+- **Approved patterns:** deploy only the codified deviations — `deliberate_breath`, `sleeve_crease`, `brand_offset_9pct`, `timed_eye_avert`, `desk_reflection_keep` — and cap usage at one per campaign unless governance approves (Annex F).
+- **Rationale logging:** every pattern requires a documented narrative trigger and reviewer sign-off in the manifest `decompilation` block.
+- **No geometry breaks:** if a pattern pulls eye-line, gutters, or brand band outside tolerance, revert to the compliant render.
+
+---
+
+## 16. Manifest & API Integration
+
+- **Schema compliance:** every delivery ships with a manifest validated against [`presence_manifest_schema.json`](presence_manifest_schema.json); use [`presence_manifest_example.json`](presence_manifest_example.json) as a reference implementation.
+- **API handshake:** compile/validate/detect requests hit the `/v1/compile`, `/v1/validate`, and `/v1/detect` endpoints with `X-Presence-Signature` headers and version tag `1.2` (Annex E).
+- **Telemetry discipline:** persist API `trace_id` values alongside disruption hashes so audits can trace every compiled frame from request to delivery.
+
+---
+
+## 17. Reverse Compilation Safeguards — Sword and Shield
 
 - **Detection awareness:** the same primitives that build presence can profile existing portraits. Assume analysts can reverse-engineer C:W intent from your outputs.
 - **Provenance tagging:** embed metadata hashes (`presence.hash`) tying each hero frame to its disruption set so authenticity can be verified without exposing private assets.
@@ -208,15 +254,15 @@ The compiler doesn’t fake authenticity—it **intentionally assembles** the ve
 
 ---
 
-## 13. Intentional Decompilation — Authenticity Through Controlled Breakage
+## 18. Intentional Decompilation — Authenticity Through Controlled Breakage
 
-- **Purposeful drift:** for leaders who need to telegraph vulnerability or renegade energy, deliberately break one parameter (e.g., widen gutters to 18% or relax lower-lid tension) while keeping others inside spec. Flag the deviation in metadata so stakeholders read it as a chosen signal, not an execution error.
-- **Failure drills:** run quarterly sessions where the team compiles both perfect and intentionally imperfect frames to keep sensitivity high for when to deploy each.
-- **Story alignment:** only decompile when the narrative supports it (e.g., innovation sprints, philanthropic messaging). Otherwise the break reads as sloppiness.
+- **Pattern discipline:** choose from the sanctioned Annex F deviations (`deliberate_breath`, `sleeve_crease`, `brand_offset_9pct`, `timed_eye_avert`, `desk_reflection_keep`) when the narrative calls for vulnerability or renegade energy.
+- **Manifest receipts:** log each deployed pattern with rationale, approver, and intended audience in the manifest `decompilation` block so stakeholders read the cue as intentional.
+- **Failure drills:** run quarterly sessions where the team compiles both standard and decompiled frames to keep sensitivity high for when to deploy each cue.
 
 ---
 
-## 14. Cognitive Alignment — Photographing the P300 Moment
+## 19. Cognitive Alignment — Photographing the P300 Moment
 
 - **Neural resonance:** the t* selection window (t₀ + 0.25–0.35 s) aligns with the P300 response—the brain’s decision-confirmation signal. You are literally capturing the instant cognition crystallizes into commitment.
 - **Behavioral proof:** referencing this correlation in briefs reassures analytical stakeholders that the temporal protocol isn’t stylistic flourish but perception science.
