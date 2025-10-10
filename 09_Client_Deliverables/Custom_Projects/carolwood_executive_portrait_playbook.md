@@ -59,8 +59,8 @@ Using the provided four monochrome frames (A–D, left to right):
 - **Frame D**: The broadest smile and subtly raised shoulders trade precision for approachability; keep for informal communications only.
 
 ## Shot List to Bank
-1. **Boardroom Credible** – cooler mouth tone, identical eye authority (Frame A analogue).
-2. **In-Conversation** – micro-smile with direct eyes (Frame B analogue).
+1. **Boardroom Credible** – cooler mouth tone, identical eye authority (Frame A analog).
+2. **In-Conversation** – micro-smile with direct eyes (Frame B analog).
 3. **Environmental Press** – 2:3 ratio with signage and desk anchors.
 
 ## Quick On-Set Checklist
