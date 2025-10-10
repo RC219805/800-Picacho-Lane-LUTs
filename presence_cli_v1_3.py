@@ -107,7 +107,8 @@ def verify_manifest(manifest_path: str, hero: str=None, web: str=None,
        PASS only if: consent.status == 'granted' AND 'detect' in consent.scope.
        If require_signature, also verifies Ed25519 signature over JSON payload of sha256 files.
     """
-    m = json.load(open(manifest_path, "r"))
+    with open(manifest_path, "r") as f:
+        m = json.load(f)
     consent = m.get("consent", {})
     if consent.get("status") != "granted":
         return False, "Consent not granted"
