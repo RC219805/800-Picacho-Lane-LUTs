@@ -53,7 +53,9 @@ def measure_image(path: str, aspect: str="4:5") -> Dict[str,float]:
         chest_row = int(0.78*h)
 
     # Vertical gradient magnitude (row energy) in central 40% width
-    cw = int(0.40*w); x0 = (w-cw)//2; x1 = x0+cw
+    cw = int(0.40*w)
+    x0 = (w-cw)//2
+    x1 = x0+cw
     dy = np.abs(np.diff(arr, axis=0))
     row_energy = dy[y0:y1, x0:x1].sum(axis=1)
     idx = int(np.argmax(row_energy)) + y0
