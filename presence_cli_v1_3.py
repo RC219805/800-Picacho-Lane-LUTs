@@ -62,8 +62,15 @@ def measure_image(path: str, aspect: str="4:5") -> Dict[str,float]:
     eye_pct_raw = idx / h
     # blend with prior to stabilize: weighted toward measured when confident
     # confidence proxy = prominence over median
-    prom = (row_energy.max() - np.median(row_energy)) / (np.std(row_energy)+1e-6)
-    alpha = max(0.3, min(0.85, 0.45 + 0.08*prom))  # 0.30..0.85
+    # Small epsilon to avoid division by zero in normalization
+    EPSILON = 1e-6
+    # Minimum and maximum blend weights for measured value
+    ALPHA_MIN = 0.3      # Lower bound for confidence weight
+    ALPHA_MAX = 0.85     # Upper bound for confidence weight
+    ALPHA_BASE = 0.45    # Base confidence weight
+    ALPHA_PROM_SCALE = 0.08  # Scale factor for prominence influence
+    prom = (row_energy.max() - np.median(row_energy)) / (np.std(row_energy) + EPSILON)
+    alpha = max(ALPHA_MIN, min(ALPHA_MAX, ALPHA_BASE + ALPHA_PROM_SCALE * prom))  # Blend weight for measured vs prior
     eye_pct = alpha*eye_pct_raw + (1-alpha)*prior
 
     # Gutters via horizontal gradient at chest row
