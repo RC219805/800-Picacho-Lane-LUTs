@@ -79,7 +79,15 @@
             "required": ["parameter", "value"],
             "properties": {
               "parameter": {"type": "string"},
-              "value": {}
+              "value": {
+                "oneOf": [
+                  { "type": "string" },
+                  { "type": "number" },
+                  { "type": "boolean" },
+                  { "type": "object" },
+                  { "type": "array" }
+                ]
+              }
             }
           }
         }
