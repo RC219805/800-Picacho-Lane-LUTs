@@ -25,7 +25,7 @@
     25	BACKGROUND(B) default neutral gray drift #4a4c48→#8c8e8a held ⅓ stop under skin.
     26	NEG_FILL(n) default compact flag on shadow side preserving jawline cut.
     27	SECTION 3 · MACHINE-READABLE SPECIFICATION
-    28	Intent: competence 0.55, warmth 0.45.
+    28	Intent: as defined in Default intent vector (see line 10).
     29	Composition: aspect_ratio 4:5; eye_line 0.27 ±0.02; side_gutters 0.14 each.
     30	Branding: brand_band 0.12 (0.10–0.18); chest_band 0.68–0.80; centerline nose_on_vertical_center.
     31	Expression: mouth +2.5°, lower_lid micro, chin {out:7,down:7}, lean 3 cm.
