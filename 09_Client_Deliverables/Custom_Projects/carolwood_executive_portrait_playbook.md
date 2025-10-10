@@ -1,6 +1,9 @@
-# Carolwood Presence Compiler v1.0
+# Carolwood Presence Compiler v1.1
 
 The Carolwood executive portrait is no longer a best-effort shoot; it is a compiled artifact. Every controllable input—composition, light, expression, timing, and finishing—functions as an op-code that produces a predictable state of leadership presence. Ship this blueprint to any studio and expect the same output: decisive yet approachable, precise yet human.
+
+**Canonical Spec**  
+Download and operate from the line-numbered codex: [`presence_compiler_spec_v1.1.txt`](presence_compiler_spec_v1.1.txt). Key anchors: lines 037–041 define `compilePresence(..)`, line 066 locks the t* echo-of-decision rule, and lines 134–135 articulate the intentional-authenticity verdict.
 
 ---
 
@@ -173,13 +176,23 @@ These dials apply on top of the Frame-B anchor.
 
 ---
 
-## 9. Why This Settles Authentic vs. Manufactured
+## 9. Field Validation Loop — Prove the Output
+
+- **Bio page A/B/C:** run hero vs. warmth-forward vs. authority-forward variants; target a +8–12% lift to “Contact” CTR.  
+- **Forced-choice panel:** 30 neutral raters grade C/W/K (0–100). Require C ≥ 60, W ≥ 60, K ≥ 65 before ship.  
+- **Telemetry review:** confirm EXIF/XMP keys capture `presence.intent.*`, `presence.temporal.t_star`, compiler version, and disruption hash.  
+- **Feedback intake:** log qualitative subject notes within 24 hours to refine prompts and posture coaching.  
+- **Market drift watch:** compare observed perception vs. compiled intent; if the delta exceeds 0.05 in either axis, retune the recipe set.
+
+----
+
+## 10. Why This Settles Authentic vs. Manufactured
 
 The compiler doesn’t fake authenticity—it **intentionally assembles** the version of the leader that stakeholders already rely on. By aligning geometry, light, micro-expression, and time to perceptual truths, the portrait becomes evidence of decisiveness rather than a claim about it. You are not freezing a person; you are freezing a decision.
 
----
+----
 
-## 10. Market Adaptation — Managing Competence Inflation
+## 11. Market Adaptation — Managing Competence Inflation
 
 - **Monitor drift:** track average compiled C:W mixes over time. If the market normalizes at C ≥ 0.60, recalibrate baselines so the brand still signals above-category presence without sliding into severity.
 - **Refresh primitives:** introduce minor expression or lighting variations each quarter (e.g., shift chin translation by ±1 mm) to avoid a homogenized look as competitors imitate the recipe.
@@ -187,7 +200,7 @@ The compiler doesn’t fake authenticity—it **intentionally assembles** the ve
 
 ---
 
-## 11. Reverse Compilation Safeguards — Sword and Shield
+## 12. Reverse Compilation Safeguards — Sword and Shield
 
 - **Detection awareness:** the same primitives that build presence can profile existing portraits. Assume analysts can reverse-engineer C:W intent from your outputs.
 - **Provenance tagging:** embed metadata hashes (`presence.hash`) tying each hero frame to its disruption set so authenticity can be verified without exposing private assets.
@@ -195,7 +208,7 @@ The compiler doesn’t fake authenticity—it **intentionally assembles** the ve
 
 ---
 
-## 12. Intentional Decompilation — Authenticity Through Controlled Breakage
+## 13. Intentional Decompilation — Authenticity Through Controlled Breakage
 
 - **Purposeful drift:** for leaders who need to telegraph vulnerability or renegade energy, deliberately break one parameter (e.g., widen gutters to 18% or relax lower-lid tension) while keeping others inside spec. Flag the deviation in metadata so stakeholders read it as a chosen signal, not an execution error.
 - **Failure drills:** run quarterly sessions where the team compiles both perfect and intentionally imperfect frames to keep sensitivity high for when to deploy each.
@@ -203,7 +216,7 @@ The compiler doesn’t fake authenticity—it **intentionally assembles** the ve
 
 ---
 
-## 13. Cognitive Alignment — Photographing the P300 Moment
+## 14. Cognitive Alignment — Photographing the P300 Moment
 
 - **Neural resonance:** the t* selection window (t₀ + 0.25–0.35 s) aligns with the P300 response—the brain’s decision-confirmation signal. You are literally capturing the instant cognition crystallizes into commitment.
 - **Behavioral proof:** referencing this correlation in briefs reassures analytical stakeholders that the temporal protocol isn’t stylistic flourish but perception science.

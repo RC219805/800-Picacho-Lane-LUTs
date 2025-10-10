@@ -1,0 +1,135 @@
+001 | # Carolwood Presence Compiler Spec v1.1
+002 | Executable codex for compiling leadership presence into reproducible Carolwood imagery.
+003 | Follow directives in order; later sections only override earlier ones when explicitly stated.
+004 | SECTION 1 · STATE MODEL AND GOAL VECTOR
+005 | C := competence; decisiveness, structural clarity, steadiness.
+006 | W := warmth; empathy, accessibility, rapport.
+007 | K := credibility; emergent trust derived from consistent C × W execution.
+008 | A := attention efficiency; measures gaze landing speed and retention on the face.
+009 | Default intent vector := {C:0.55, W:0.45} unless subject elects otherwise.
+010 | Objective := maximize K and A while honoring declared intent and governance constraints.
+011 | SECTION 2 · PRIMITIVE OPCODES AND DEFAULTS
+012 | EYE(h) default 0.27H with ±0.02 tolerance; lowering raises C, raising softens.
+013 | KEY(θ) default 33° within [30°,35°]; <25° flattens (−C), >40° hardens (−W).
+014 | FILL(s) default −1.25 stops; more fill +W/−C contrast, less fill +C/−W.
+015 | MOUTH(Δ°) default +2.5°; >+5° reads performed, 0° risks coolness.
+016 | SQUINT(τ) default micro lower-lid tension; too much reads stern.
+017 | CHIN(d) default out 7 mm then down 7 mm; defines jaw without defiance.
+018 | LEAN(ℓ) default +3 cm forward; invites access without losing authority.
+019 | GUTTERS(g) default 0.14 per side; window 0.12–0.16 before presence feels crowded.
+020 | BRAND(t) default 0.12 band; acceptable range 0.10–0.18 for mark breathing room.
+021 | HANDS(b) default band 0.68H–0.80H; keeps narrative subordinate to face.
+022 | RIM(r) default subtle 3–5 L* separation from background.
+023 | CURVE(κ) default gentle S with +2% midtone lift; maintain texture fidelity.
+024 | BACKGROUND(B) default neutral gray drift #4a4c48→#8c8e8a held ⅓ stop under skin.
+025 | NEG_FILL(n) default compact flag on shadow side preserving jawline cut.
+026 | SECTION 3 · MACHINE-READABLE SPECIFICATION
+027 | Intent: competence 0.55, warmth 0.45.
+028 | Composition: aspect_ratio 4:5; eye_line 0.27 ±0.02; side_gutters 0.14 each.
+029 | Branding: brand_band 0.12 (0.10–0.18); chest_band 0.68–0.80; centerline nose_on_vertical_center.
+030 | Expression: mouth +2.5°, lower_lid micro, chin {out:7,down:7}, lean 3 cm.
+031 | Lighting: key 30–35°, height slightly_above_eyes, fill −1.25, rim subtle, background hex range set.
+032 | Temporal: cadence 12 fps, cue silent_yes, t_star_offset 0.25–0.35 s.
+033 | Temporal extras: selection corners_settle_and_eyes_hold_intent, median_stack true window 3 weights 0.7/1.0/0.7.
+034 | Finishing: curve gentle_S, midtone +2%, clarity eyes_cheeks_only, desk_glare_tame 8%.
+035 | Export: web 1065×1330 q90 sRGB; hero 2400×3000 q92 sRGB.
+036 | Compliance thresholds: eye_line error ≤0.02; gutters 0.12–0.16; brand 0.10–0.18; chest 0.68–0.80.
+037 | SECTION 4 · COMPILER SHORTHAND
+038 | compilePresence(intent, constraints) :=
+039 |     EYE(0.27H) + KEY(33°) + FILL(-1.25) +
+040 |     MOUTH(+2.5°) + SQUINT(micro) + CHIN(7 mm) + LEAN(3 cm) +
+041 |     GUTTERS(14%) + BRAND(12%) + CURVE(gentle_S) + HANDS(0.74H)
+042 |     → optimize(K,A | intent.C:intent.W) subject to governance.
+043 | Return value := portrait encoding decisive warmth with logged provenance.
+044 | SECTION 5 · FRAME B ANCHOR (EIGENFACE)
+045 | Anchor expression: direct gaze, micro-squint, mouth corners +2…+3°, relaxed orbicularis.
+046 | Anchor posture: shoulders open, chin articulated, hands in active rest, lean held at 3 cm.
+047 | Viewer projection principle: anchor occupies neutral-plus locus; audiences project warmth/authority delta.
+048 | Policy: compile to anchor by default; adjust primitives ±10% for scenario-specific C:W shifts.
+049 | Anchor geometry: maintain 27% eye-line, gutters 14%, brand band 12% to keep authority stable.
+050 | Asymmetry tolerance: hold 1–2% left/right variance so cognition reads as live.
+051 | Hands discipline: fingers soft, no white-knuckle grip; watch aligned; absence logs as deviation.
+052 | Breath control: inhale through nose, micro-exhale through mouth to relax jaw and temples.
+053 | Voice cue: silent 'yes' timed with breath to trigger micro-smile without exposing teeth.
+054 | Eye commitment: direct gaze sustained through burst; schedule blinks immediately before capture.
+055 | Rationale: anchor functions as universal solvent for authority or warmth overlays.
+056 | Application: investor decks keep anchor baseline while deepening contrast for competence weight.
+057 | Relational collateral: lighten fill and lean +1 cm while preserving anchor gaze for warmth-led work.
+058 | Fallback: if anchor fails after three bursts, reset posture, recalibrate chin, rerun prompts.
+059 | Logging: manifest must record anchor success or flagged deviation rationale.
+060 | Training note: rehearse anchor prompts with leader before call time to shorten on-set iteration.
+061 | Human factor: halt if expression locks; micro-break ensures authenticity stays intentional not forced.
+062 | SECTION 6 · TEMPORAL PROTOCOL (FOURTH DIMENSION)
+063 | Cue delivery: prompt “silent yes” while sustaining direct gaze and controlled breath.
+064 | Burst cadence: capture 10–12 fps for 0.8–1.2 s around the cue while logging 2 Hz audio ticks.
+065 | Define t0 := frame with maximal mouth-corner lift during burst.
+066 | Define t* := t0 + 0.25…0.35 s; this is the echo-of-decision capture window.
+067 | Reject frames with sclera dominance, gum flash, or pre-decision flatness; escalate to reshoot if repeated.
+068 | Optional micro-median: align frames (t*−1,t*,t*+1) via optical flow and blend 70/100/70 within ≤0.4 s span.
+069 | SECTION 7 · PRODUCTION SOP (FIELD WORKFLOW)
+070 | Prelight: background −0.33 stops vs. skin, top grad for brand band, key 5′ octa at 33°/f4, fill −1.25, subtle rim.
+071 | Pose: seat height for 27% eye-line, camera at collarbone <1° tilt, chin out/down 7 mm, lean 3 cm, shoulders open.
+072 | Hands: relaxed overlap or soft steeple; remove extraneous props; align watch face; maintain HANDS band tolerance.
+073 | Expression prompts: “silent yes,” “map first three steps,” “breathe out, eyes stay with me.”
+074 | Burst review: mark t0 verbally, flag t* frames, confirm geometry metrics before strike.
+075 | Finishing: gentle S-curve with lifted blacks, micro D&B eyes +2…+4, lint cleanup, desk glare −8%, optional 1/8 Pro-Mist.
+076 | Exports: hero 2400×3000 sRGB q92, web 1065×1330 sRGB q90, both with embedded compiler manifest.
+077 | SECTION 8 · COMPANION DISRUPTION FILE
+078 | Deliver alongside hero: frames at t*−0.20 s, t*, t*+0.25 s, mid-gesture (motion blur <1/60), relaxed reset.
+079 | Package: contact sheet PNG 2400 px tall + five individual JPGs with identical color grade.
+080 | Metadata sidecar: include intent vector, capture angles, t* index, primitive nudges, compiler version.
+081 | Usage guidance: frames 1&3 for press alternates, 4 for social proof, 5 for internal decks and audit.
+082 | SECTION 9 · TRUST COMPILER CONTROLS (SCENARIO KNOBS)
+083 | Investor/board recipe: FILL(-1.4), SQUINT(+1 notch), MOUTH(+1°), contrast +5%, maintain anchor posture.
+084 | Seller listing recipe: FILL(-1.2), LEAN(+1 cm), MOUTH(+2…+3°), midtone +3%.
+085 | Concierge/lifestyle recipe: EYE(0.28H), MOUTH(+3…+4°), FILL(-1.0), lighten background by +1/6 stop.
+086 | Record chosen recipe in metadata; deviations without log are noncompliant.
+087 | SECTION 10 · VALIDATION HARNESS
+088 | Geometry gate: eyes 27%±2%, gutters 12–16%, brand band 10–18%, HANDS band 68–80%; fail ⇒ reshoot or recrop.
+089 | Texture gate: forbid >10% local flatness increase; verify pores at 100% magnification; fail ⇒ regrade.
+090 | Temporal gate: confirm selected frame or blend references logged t*; fail ⇒ recapture burst.
+091 | Telemetry: embed EXIF/XMP keys presence.intent.C, presence.intent.W, presence.temporal.t_star, presence.gutters.
+092 | Provenance: manifest includes compiled_by, timestamp, operator, disruption_set_hash.
+093 | SECTION 11 · GOVERNANCE AND ETHICS
+094 | Intent declaration: brief subject that portrait presents them at their best through deliberate craft.
+095 | Consent: secure written, revocable consent; log version; store with manifest.
+096 | No masking of permanent traits; temporary blemish cleanup allowed with notation.
+097 | Subject agency: allow subject to set intent vector; non-default values must be recorded.
+098 | Context alignment: wardrobe, environment, and copy must reflect lived role to preserve credibility.
+099 | Audit trail: retain disruption file and manifests for verification cycles.
+100 | Bias review: quarterly audit detection metrics to ensure equitable competence/warmth renderings.
+101 | SECTION 12 · MARKET ADAPTATION (COMPETENCE INFLATION CONTROL)
+102 | Monitor rolling mean of compiled C; if mean_C > 0.58, raise warmth target by +0.03 for next sprint.
+103 | Introduce quarterly micro-variations (±1 mm chin, ±0.1 stop fill) to avoid homogenization as competitors imitate.
+104 | Maintain differentiated recipes so authority-heavy and warmth-heavy outputs remain distinct signals.
+105 | SECTION 13 · REVERSE COMPILATION SAFEGUARDS (DETECTION MODE)
+106 | Deploy analysis tool to measure geometry/light cues from third-party portraits and infer declared intent vectors.
+107 | Flag anomalies lacking t* signature or provenance metadata; treat as potential spoof attempts.
+108 | Embed presence.hash linking hero frame to disruption set for authenticity validation without raw release.
+109 | Share detection findings with governance board; unauthorized mimicry triggers brand defense protocol.
+110 | SECTION 14 · INTENTIONAL DECOMPILATION (CONSTRUCTIVE IMPERFECTION)
+111 | Decompilation patterns: deliberate_breath (slight asymmetry), sleeve_crease (texture retention), brand_offset_9pct (humility cue).
+112 | Deploy decompilation only when narrative supports vulnerability or renegade posture; log parameter breaks explicitly.
+113 | Run quarterly failure drills producing perfect vs. imperfect pairs to train recognition teams and maintain sensitivity.
+114 | SECTION 15 · COGNITIVE ALIGNMENT (P300 CORRELATE)
+115 | t* window 0.25…0.35 s post-peak aligns with P300 decision confirmation; cite in briefs to ground protocol in neuroscience.
+116 | Pair burst reviews with periodic EEG or eye-tracking studies when available to validate continued correlation.
+117 | Document findings in governance log; adjust cadence if empirical peak drifts >0.05 s.
+118 | SECTION 16 · ROLLOUT KIT (20-MINUTE PLAY)
+119 | Minute 0–10: prelight and framing grid alignment.
+120 | Minute 10–12: pose calibration (chin, shoulders, lean, hands).
+121 | Minute 12–13: expression prompts executed in sequence.
+122 | Minute 13–14: burst capture and on-set validation of geometry metrics.
+123 | Minute 14–17: select t*, capture disruption frames, log metadata.
+124 | Minute 17–20: grade, export, publish manifest, deliver hero + disruption package.
+125 | SECTION 17 · FIELD VALIDATION LOOP
+126 | Bio test: hero vs. warmth-forward vs. authority-forward; target +8–12% contact CTR uplift.
+127 | Forced-choice panel: 30 neutral raters scoring C/W/K 0–100; require C≥60, W≥60, K≥65.
+128 | Telemetry review: confirm EXIF manifest stores t_star, intent vector, compiler version, disruption hash.
+129 | Market drift watch: compare compiled intent vs. measured perception; retune recipes when gap >0.05.
+130 | Detection sync: feed reverse-compilation intel to governance board each month.
+131 | Subject feedback: capture qualitative notes within 24 h to refine prompts and posture coaching.
+132 | Update cadence: refresh specification quarterly or after significant market signal shifts.
+133 | SECTION 18 · VERDICT LINE
+134 | Not just a likeness; this is cognition resolving into action, frozen with intent and auditable proof.
+135 | Audit-ready proof: disruption set + manifest verify the decision moment on demand.
