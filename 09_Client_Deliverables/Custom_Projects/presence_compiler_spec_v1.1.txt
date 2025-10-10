@@ -1,5 +1,5 @@
      1	# Carolwood Presence Compiler Spec v1.1
-     2	Executable codex for compiling leadership presence into reproducible Carolwood imagery.
+     2	Executable code for compiling leadership presence into reproducible Carolwood imagery.
      3	Follow directives in order; later sections only override earlier ones when explicitly stated.
      4	Consult Annex stack v1.2 for locale overrides, subject-first modes, consent-gated detection, API contracts, and constructive imperfection grammar.
      5	SECTION 1 · STATE MODEL AND GOAL VECTOR
