@@ -158,7 +158,8 @@ def main():
         report = measure_image(args.image, args.aspect)
         txt = json.dumps(report, indent=2)
         if args.out:
-            open(args.out,"w").write(txt)
+            with open(args.out, "w") as f:
+                f.write(txt)
             print("Wrote", args.out)
         else:
             print(txt)
