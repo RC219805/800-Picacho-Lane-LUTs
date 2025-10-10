@@ -24,7 +24,7 @@ try:
     from nacl.signing import VerifyKey
     from nacl.exceptions import BadSignatureError
     NACL_OK = True
-except Exception:
+except ImportError:
     NACL_OK = False
 
 def _sha256_file(path):
