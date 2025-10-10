@@ -13,7 +13,7 @@
     13	EYE(h) default 0.27H with ±0.02 tolerance; lowering raises C, raising softens.
     14	KEY(θ) default 33° within [30°,35°]; <25° flattens (−C), >40° hardens (−W).
     15	FILL(s) default −1.25 stops; more fill +W/−C contrast, less fill +C/−W.
-    16	MOUTH(Δ°) default +2.5°; >+5° reads performed, 0° risks coolness.
+    16	MOUTH(Δ°) default +2.5°; >+5° reads performative, 0° risks coolness.
     17	SQUINT(τ) default micro lower-lid tension; too much reads stern.
     18	CHIN(d) default out 7 mm then down 7 mm; defines jaw without defiance.
     19	LEAN(ℓ) default +3 cm forward; invites access without losing authority.
