@@ -154,10 +154,11 @@ These dials apply on top of the Frame-B anchor.
 
 ## 7. Governance & Ethics — Keep It Human
 
-- **Intent declaration:** “We portray you as you are at your best.”
+- **Intent declaration:** “We portray you as you are at your best,” making explicit that authenticity here is intentional, not incidental.
 - **No masking of permanent features;** temporary blemish cleanup only.
 - **Audit trail:** retain the five-frame disruption set as documentary evidence.
-- **Subject agency:** allow leaders to set their own C:W slider; compile accordingly.
+- **Subject agency:** allow leaders to set their own C:W slider; compile accordingly and record the decision in metadata.
+- **Context alignment:** ensure wardrobe, set, and messaging reflect the subject’s lived role so manufactured intent still maps to reality.
 
 ---
 
@@ -175,3 +176,35 @@ These dials apply on top of the Frame-B anchor.
 ## 9. Why This Settles Authentic vs. Manufactured
 
 The compiler doesn’t fake authenticity—it **intentionally assembles** the version of the leader that stakeholders already rely on. By aligning geometry, light, micro-expression, and time to perceptual truths, the portrait becomes evidence of decisiveness rather than a claim about it. You are not freezing a person; you are freezing a decision.
+
+---
+
+## 10. Market Adaptation — Managing Competence Inflation
+
+- **Monitor drift:** track average compiled C:W mixes over time. If the market normalizes at C ≥ 0.60, recalibrate baselines so the brand still signals above-category presence without sliding into severity.
+- **Refresh primitives:** introduce minor expression or lighting variations each quarter (e.g., shift chin translation by ±1 mm) to avoid a homogenized look as competitors imitate the recipe.
+- **Scenario differentiation:** keep distinct recipes for authority-heavy vs. warmth-forward deliverables so the language retains expressive range instead of collapsing into a single “default executive.”
+
+---
+
+## 11. Reverse Compilation Safeguards — Sword and Shield
+
+- **Detection awareness:** the same primitives that build presence can profile existing portraits. Assume analysts can reverse-engineer C:W intent from your outputs.
+- **Provenance tagging:** embed metadata hashes (`presence.hash`) tying each hero frame to its disruption set so authenticity can be verified without exposing private assets.
+- **Anomaly flags:** watch for third-party images that mimic the geometry but not the temporal cue; absence of t* often reads uncanny. Use this to distinguish genuine Carolwood portraits from imitations.
+
+---
+
+## 12. Intentional Decompilation — Authenticity Through Controlled Breakage
+
+- **Purposeful drift:** for leaders who need to telegraph vulnerability or renegade energy, deliberately break one parameter (e.g., widen gutters to 18% or relax lower-lid tension) while keeping others inside spec. Flag the deviation in metadata so stakeholders read it as a chosen signal, not an execution error.
+- **Failure drills:** run quarterly sessions where the team compiles both perfect and intentionally imperfect frames to keep sensitivity high for when to deploy each.
+- **Story alignment:** only decompile when the narrative supports it (e.g., innovation sprints, philanthropic messaging). Otherwise the break reads as sloppiness.
+
+---
+
+## 13. Cognitive Alignment — Photographing the P300 Moment
+
+- **Neural resonance:** the t* selection window (t₀ + 0.25–0.35 s) aligns with the P300 response—the brain’s decision-confirmation signal. You are literally capturing the instant cognition crystallizes into commitment.
+- **Behavioral proof:** referencing this correlation in briefs reassures analytical stakeholders that the temporal protocol isn’t stylistic flourish but perception science.
+- **Continuous validation:** periodically review burst footage alongside EEG or eye-tracking studies (where available) to ensure the capture cadence keeps mapping to that cognitive inflection point.
