@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-presence_cli_v1_3.py — governance + measurement + consent gating (v1.3)
+presence_cli_v1_3.py - governance + measurement + consent gating (v1.3)
 
 New in v1.3:
-  • measure        — auto-estimate eye-line and side gutters from an image
-  • verify-manifest— enforce consent gating (and optionally signature) before detection
+  • measure        - auto-estimate eye-line and side gutters from an image
+  • verify-manifest- enforce consent gating (and optionally signature) before detection
 
 Requires: Pillow, numpy, (optional) PyNaCl for signature verification
 """
