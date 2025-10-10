@@ -1,269 +1,94 @@
-# Carolwood Presence Compiler v1.1
+# Carolwood "In-Command, In-Conversation" Portrait Playbook
 
-The Carolwood executive portrait is no longer a best-effort shoot; it is a compiled artifact. Every controllable input—composition, light, expression, timing, and finishing—functions as an op-code that produces a predictable state of leadership presence. Ship this blueprint to any studio and expect the same output: decisive yet approachable, precise yet human.
+## Presence Compiler Context
+Carolwood now treats the executive portrait as a compiled artifact rather than a best-effort capture. The v1.1 Presence Compiler spec sets precise geometry, expression, lighting, temporal, and finishing op-codes so any qualified studio can ship an image that reads as decisive yet approachable.
 
-**Canonical Spec**
-Download and operate from the line-numbered codex: [`presence_compiler_spec_v1.1.txt`](presence_compiler_spec_v1.1.txt). Key anchors: lines 037–041 define `compilePresence(..)`, line 066 locks the t* echo-of-decision rule, and lines 134–135 articulate the intentional-authenticity verdict.
+## Presence Compiler Blueprint (v1.1 Highlights)
+- **Intent mix**: compile for Competence 0.55 and Warmth 0.45 to stabilize credibility while keeping warmth in reserve.
+- **Geometry gates**: 4:5 aspect ratio with the eye-line pinned at 27% ±2%, side gutters at 14% (window 12–16%), brand band at 12% (window 10–18%), and chest band between 0.68–0.80 of frame height.
+- **Expression op-codes**: mouth corners lifted 2–3°, micro lower-lid tension, chin translated 7 mm out/down, and a 3 cm lean to keep the body language engaged.
+- **Lighting recipe**: key at 30–35° and just above the eye-line, fill at −1.25 stops, subtle rim separation, and background gray held between #4a4c48 and #8c8e8a.
+- **Temporal cadence**: shoot 12 fps bursts around the “silent yes,” locking on the t* echo-of-decision frame 0.25–0.35 s after the peak grin where the corners settle and intent holds.
+- **Finishing**: apply a gentle S-curve, +2% midtone lift, targeted clarity on eyes/cheeks, an 8% desk glare tame, and export 1065×1330 (web) plus 2400×3000 (hero) at high-quality sRGB.
 
-**Annex Stack**
-- [`presence_compiler_annexes_v1.2.txt`](presence_compiler_annexes_v1.2.txt) — localization, consent-gated detection, adaptation metrics, subject-first modes, API contracts, and constructive imperfection grammar.
-- [`presence_compiler_locales.yml`](presence_compiler_locales.yml) — machine-readable locale overrides and prompt lexicon for regional deployments.
-- [`presence_manifest_schema.json`](presence_manifest_schema.json) & [`presence_manifest_example.json`](presence_manifest_example.json) — governance manifest schema and filled sample for audits, detection gating, and consent logging.
+## Echo-of-Decision Capture Protocol
+1. Pre-light so the framing already satisfies the geometry gates.
+2. Prompt: “What would you do? Give me the I’ve-got-you look,” followed by a silent yes cue.
+3. Roll 0.8–1.2 s bursts at 10–12 fps; mark the peak grin (t0) audibly.
+4. Select t* = t0 + 0.25-0.35 s. Optionally median-stack t*-1, t*, t*+1 with 0.7/1.0/0.7 weights for micro-stability.
+5. Deliver the five-frame disruption set (t*-0.20, t*, t*+0.25, mid-gesture, relaxed reset) with metadata logging intent, angles, and parameter nudges.
 
----
-
-## 1. Presence Compiler — Machine-Readable Specification
-
-```yaml
-presence_compiler:
-  intent:
-    competence: 0.55    # target C
-    warmth:     0.45    # target W
-  composition:
-    aspect_ratio: 4:5
-    eye_line:
-      target_pct: 0.27  # eyes at 27% of frame height
-      tolerance: 0.02   # ±2% allowable
-    side_gutters_pct_each: 0.14   # acceptable window 0.12–0.16
-    brand_band_pct_top: 0.12      # acceptable window 0.10–0.18
-    chest_band_pct: [0.68, 0.80]
-    centerline: nose_on_vertical_center
-  expression:
-    mouth_corners_delta_deg: 2.5  # +2–3° lift
-    lower_lid_tension: micro
-    chin_translation_mm: {out: 7, down: 7}
-    lean_forward_cm: 3
-  lighting:
-    key_angle_deg: [30, 35]
-    key_height: slightly_above_eyes
-    fill_relative_stops: -1.25
-    rim: subtle_separation
-    background_gray_hex: ["#4a4c48", "#8c8e8a"]
-  temporal:
-    cadence_fps: 12
-    cue: silent_yes
-    t_star_offset_s: [0.25, 0.35]  # echo of decision after peak
-    selection_rule: corners_settle_and_eyes_hold_intent
-    median_stack:
-      enabled: true
-      window: 3
-      weights: [0.7, 1.0, 0.7]
-  finishing:
-    curve: gentle_S
-    midtone_lift_pct: 2
-    local_clarity_region: eyes_cheeks_only
-    desk_glare_tame_pct: 8
-    export:
-      web:  {size_px: [1065, 1330], color: sRGB, quality: 90}
-      hero: {size_px: [2400, 3000], color: sRGB, quality: 92}
-  compliance_thresholds:
-    eye_line_abs_error_pct: 0.02
-    gutters_pct_range_each: [0.12, 0.16]
-    brand_band_pct_range:  [0.10, 0.18]
-    chest_band_pct_range:  [0.68, 0.80]
-```
-
-### State vector (viewer response targets)
-- **Competence (C)** — decisiveness, clarity, steadiness
-- **Warmth (W)** — empathy, accessibility, rapport
-- **Credibility (K)** — emergent trust (C × W) stabilized by repeatable geometry
-- **Attention (A)** — how efficiently the eye lands on and stays with the face
-
-> 27% eye placement is not φ, but it behaves like a harmonic anchor below the rule-of-thirds, reading as calm authority.
-
-### Compiler shorthand
-
-```
-compile_presence(intent = {C:0.55, W:0.45}) =>
-    EYE(0.27H) + KEY(33°) + FILL(-1.25) +
-    MOUTH(+2.5°) + SQUINT(micro) + CHIN(7 mm) + LEAN(3 cm) +
-    GUTTERS(14%) + BRAND(12%) + CURVE(gentle_S) + HANDS(0.74H)
-→ portrait that maximizes A and K for the target C:W mix
-```
+## Governance Snapshot
+- **Validation**: auto-score eye-line, gutters, brand band, and chest band before ship; reject if outside tolerances. Confirm localized texture preservation (>90% pore retention at 100%).
+- **Field telemetry**: run A/B/C hero variants to validate CTR lift, and pairwise studies to keep C/W ≥60 with Credibility ≥65.
+- **Ethics**: declare intent, avoid masking permanent features, retain disruption frames, and log subject-selected C:W intent in the manifest. Record provenance via EXIF/XMP keys (`presence.intent.C`, `presence.temporal.t_star`, etc.).
 
 ---
+## Brand Objective
+Carolwood's executive portraiture must communicate a paradoxical blend of precision and approachability. The hero frame should feel decisive yet warm, exacting yet human—someone a client would both trust with a landmark estate and call first for counsel.
 
-## 2. Frame B — The Eigenface of Leadership
+## Expression Architecture
+- **Eyes set the authority**: direct gaze into the lens with a gentle micro-squint (lower-lid engagement, brows neutral).
+- **Mouth carries warmth**: corners lifted 2–3°, lips barely parted to read as engaged rather than posed.
+- **Favor asymmetry**: subtle left–right variation (e.g., half-smile toward one eye) conveys live cognition instead of a static photo-face.
+- **Prompt cadence**:
+  - “Picture a client asking, ‘What would you do?’—give me the I’ve-got-you look.”
+  - “Say a silent ‘yes’ as if the plan just clicked.”
+  - “Breathe in through the nose, soft exhale, eyes stay with me.”
 
-- **Anchor recipe:** direct gaze, micro-squint, mouth corners +2–3°, relaxed orbicularis tension, shoulders open, hands in active rest.
-- **Why it generalizes:** the expression occupies the mathematical center between authority and approachability. Viewers mentally project warmer or more formal reads based on need, making it a universal solvent across collateral.
-- **Policy:** default to Frame B, then nudge ±5–10% toward either pole (authority ↔ warmth) for specific campaigns (investor deck vs. concierge outreach).
+## Posture, Hands, and Body Language
+- Chin out, then 5–10 mm down to define the jaw without defiance.
+- Shoulders open with a 2–4 cm micro-lean toward camera to signal availability.
+- Hands in "active rest": soft steeple or relaxed overlap on the desk, no tension or props unless meaningful. Rotate the watch correctly.
 
----
+## Composition Framework
+- **Aspect ratio**: 4:5 for the leadership grid.
+- **Eye-line**: 27% ±2% from the top edge.
+- **Brand band**: reserve 10–18% of the frame for the CAROLWOOD / ESTATES wordmark.
+- **Side gutters**: 12–16% per side.
+- **Lower crop**: include upper chest; keep hands visible but below the primary attention band (~68–80% frame height).
+- **Centerline**: nose on the vertical center.
+- **Environmental press variant**: shift to 2:3, lift eye-line to 36%, retain signage and desk as narrative anchors.
 
-## 3. Fourth Dimension Protocol — Echo of Decision Capture
+## Light Design
+- **Key**: 5′ octa or 4×6 softbox, 30–35° off-axis, 10–15° above eye-line.
+- **Fill**: –1.0 to –1.5 stops relative to key to maintain contour without harsh contrast.
+- **Rim/Hair**: subtle edge light from camera-opposite, feathered to separate jacket and background by ~3–5 L* values.
+- **Background**: neutral gray gradient (#4a4c48 → #8c8e8a) held ~⅓ stop darker than skin; add a light top grad to protect the wordmark.
+- **Negative fill**: small black flag on the shadow side to keep the jawline crisp.
 
-Leadership is experienced in motion. Encode the decisive moment by sampling around the “silent yes,” not just at it.
+## Camera & Exposure Notes
+- Focal length 85–105 mm equivalent at f/3.5–f/4.5 (sharp face, gently softened background).
+- Camera height at the collarbone with a micro-tilt (<1°) downward to avoid nostril dominance.
+- Shutter ≤1/160–1/200, low ISO.
+- Optional: 1/8 Black Pro-Mist for subtle highlight bloom control.
 
-### Setup
-- Seat height and camera placement pre-set so eyes land at 27% in a 4×5 crop.
-- Key 30–35° at 10–15° above eye-line; fill −1.25 stops; subtle rim; background ⅓ stop under average skin tone; small negative fill on shadow side.
+## Wardrobe Calibration
+- Crisp white shirt with a medium-contrast jacket; matte lapels outperform high sheen in monochrome delivery.
+- Avoid tight herringbone or other patterns prone to moiré.
+- Remove pocket square unless it serves a specific brand cue.
 
-### Prompt & burst (≈1 s total)
-1. “Picture the client asking, *What would you do?* Give me the *I’ve got you* look.”
-2. Run a continuous burst at **10–12 fps** for **0.8–1.2 s**.
-3. Mark the peak grin frame (**t₀**) with a voice tick (“one”) or metronome click.
+## Retouching Principles
+- Preserve skin texture; remove distractions without plasticity.
+- Micro dodge & burn: lift eye sockets 2–4 points, soften under-eye lines without erasing.
+- Cool and lift teeth/sclera minimally—avoid paper white.
+- Clean dust and lint on the jacket; reduce cuff glare; even out specular highlights along the desk.
+- Apply a gentle S-curve grade with slightly lifted blacks; export sRGB.
 
-### Selection
-- Choose **t*** = **t₀ + 0.25–0.35 s** — the “echo of decision.” Mouth corners settle, lower-lid tension sustains, eyes stay intent.
-- Reject sclera-dominant, gum-heavy, or pre-decision flat frames.
+## Frame Selection Guidance
+Using the provided four monochrome frames (A–D, left to right):
+- **Frame B (Hero Recommendation)**: Direct gaze, balanced micro-squint, and a "silent yes" mouth position deliver the decisive-warm equilibrium. Shoulders are open, hands relaxed, and the brand band remains unobstructed—ideal as the universal portrait.
+- **Frame A**: Marginally cooler mouth expression; reserve for institutional trust collateral (board decks, investor packets) where authority should lead.
+- **Frame C**: Slightly wider smile diminishes the command presence; suitable for relational touchpoints when additional warmth is needed.
+- **Frame D**: The broadest smile and subtly raised shoulders trade precision for approachability; keep for informal communications only.
 
-### Optional micro-median blend
-- Align frames **t*−1**, **t***, **t*+1** via optical flow.
-- Blend at **70/100/70** weights. Never extend beyond 0.4 s total span; longer windows kill aliveness.
+## Shot List to Bank
+1. **Boardroom Credible** – cooler mouth tone, identical eye authority (Frame A analog).
+2. **In-Conversation** – micro-smile with direct eyes (Frame B analog).
+3. **Environmental Press** – 2:3 ratio with signage and desk anchors.
 
----
-
-## 4. Companion Disruption File — Proof-of-Life Set
-
-Ship reality alongside precision. Deliver five auxiliary frames with the hero portrait:
-
-1. **t*−0.20 s:** reflective pre-decision.
-2. **t***: echo-of-decision (hero-adjacent).
-3. **t*+0.25 s:** post-decision softening.
-4. **Mid-gesture:** watch adjustment or pen reach (motion blur <1/60).
-5. **Relaxed reset:** neutral mouth, steady eyes.
-
-**Packaging requirements**
-- One contact sheet PNG (2400 px tall) plus five individual JPGs.
-- Metadata sidecar (JSON or YAML) noting C:W intent, capture angles, t* index, and any parameter nudges.
-- Usage notes: frames 1 & 3 for press alternates, 4 for social proof, 5 for internal decks.
-
----
-
-## 5. Trust Compiler Controls — Ready Recipes
-
-| Scenario               | Target C:W | Parameter nudges                                                      |
-| ---------------------- | ---------- | -------------------------------------------------------------------- |
-| Investor / board deck  | 0.60:0.40  | Fill −1.4, contrast +5%, squint +1 notch, mouth corners +1°          |
-| Seller listing pitch   | 0.50:0.50  | Fill −1.2, midtone +3%, lean +1 cm                                    |
-| Concierge / lifestyle  | 0.45:0.55  | Eye-line 0.28H, mouth corners +3–4°, fill −1.0, background +⅙ stop   |
-
-These dials apply on top of the Frame-B anchor.
-
----
-
-## 6. Validation Harness — Measuring Efficacy
-
-### Perceptual QA (pre-ship)
-1. **Geometry gate:** auto-score eye-line, gutters, brand band, and chest band. Pass only if within thresholds.
-2. **Texture gate:** verify no >10% local flatness increase from noise reduction; pores remain at 100% view.
-
-### Field testing (post-ship)
-- **A/B/C bio page test:** hero vs. warmer vs. cooler variants; track CTR to “Contact” and dwell time.
-- **Pairwise forced-choice study:** 30 neutral raters score C/W/K on 0–100 sliders.
-- **Success target:** +8–12% CTR uplift vs. prior portrait; C & W ≥ 60 with K ≥ 65.
-
-### Telemetry (embedded)
-- Extend EXIF/XMP keys: `presence.intent.C=0.55`, `presence.temporal.t_star=0.31`, `presence.gutters=0.14`, etc.
-- Record provenance: `compiled_by=carolwood_presence_v1.0`.
-
----
-
-## 7. Governance & Ethics — Keep It Human
-
-- **Intent declaration:** “We portray you as you are at your best,” making explicit that authenticity here is intentional, not incidental.
-- **No masking of permanent features;** temporary blemish cleanup only.
-- **Audit trail:** retain the five-frame disruption set as documentary evidence.
-- **Subject agency:** allow leaders to set their own C:W slider; compile accordingly and record the decision in metadata.
-- **Context alignment:** ensure wardrobe, set, and messaging reflect the subject’s lived role so manufactured intent still maps to reality.
-
----
-
-## 8. Rollout Kit — 20-Minute Field Play
-
-1. **Pre-light (10 min):** set background level, dial key/fill/rim, confirm 4×5 framing grid.
-2. **Pose & micro-direction (2 min):** “Chin out 7 mm, down 7 mm; shoulders open; lean 3 cm.” Hands in active rest.
-3. **Expression prompts (45 s):** silent yes, think through first steps, breathe out with eyes locked.
-4. **Burst & pick (1 min):** capture for t*, confirm geometry, tag hero.
-5. **Disruption frames (3–4 min):** capture mid-gesture and reset frames.
-6. **Grade & export (5–7 min):** gentle S-curve, micro D&B, lint cleanup, export hero and web sizes, generate metadata.
-
----
-
-## 9. Field Validation Loop — Prove the Output
-
-- **Bio page A/B/C:** run hero vs. warmth-forward vs. authority-forward variants; target a +8–12% lift to “Contact” CTR.  
-- **Forced-choice panel:** 30 neutral raters grade C/W/K (0–100). Require C ≥ 60, W ≥ 60, K ≥ 65 before ship.  
-- **Telemetry review:** confirm EXIF/XMP keys capture `presence.intent.*`, `presence.temporal.t_star`, compiler version, and disruption hash.  
-- **Feedback intake:** log qualitative subject notes within 24 hours to refine prompts and posture coaching.  
-- **Market drift watch:** compare observed perception vs. compiled intent; if the delta exceeds 0.05 in either axis, retune the recipe set.
-
-----
-
-## 10. Why This Settles Authentic vs. Manufactured
-
-The compiler doesn’t fake authenticity—it **intentionally assembles** the version of the leader that stakeholders already rely on. By aligning geometry, light, micro-expression, and time to perceptual truths, the portrait becomes evidence of decisiveness rather than a claim about it. You are not freezing a person; you are freezing a decision.
-
-----
-
-## 11. Market Adaptation — Managing Competence Inflation
-
-- **Drift and scarcity metrics:** calculate `drift_index` (rolling mean of compiled C) and `scarcity_index` (1 ÷ variance of delivered K) each quarter. If `drift_index > 0.58`, raise warmth intent by +0.03 or deploy sanctioned micro-imperfections per Annex C.
-- **Presence budget:** enforce portfolio targets — minimum 30% warmth-led and 30% authority-led portraits per quarter — to stop the roster from converging on one compiled expression.
-- **Refresh primitives:** introduce minor expression or lighting variations each quarter (e.g., ±1 mm chin translation, ±0.1 stop fill) to keep differentiation ahead of imitators.
-- **Scenario differentiation:** maintain discrete recipes for authority-heavy vs. warmth-forward deliverables so the language stays expressive rather than collapsing into a single “default executive.”
-
----
-
-## 12. Localization — Cultural Profiles & Prompts
-
-- **Locale selection order:** honor subject-declared locale first, then organizational default, otherwise fall back to `US_EN` (Annex A).
-- **Override map:** apply only the sanctioned primitives in [`presence_compiler_locales.yml`](presence_compiler_locales.yml) — mouth delta, lower-lid tension, fill, lean, and prompt lexicon — while keeping geometry gates constant.
-- **Audit trail:** log the selected profile, override values, and reviewer in the manifest `locale` block; update prompts annually with regional leads.
-
----
-
-## 13. Subject-First Compilation Modes
-
-- **Lambda blending:** choose `balance` (λ = 0.2) when institutional parity matters, or `faithful` (λ = 0.5) when amplifying innate warmth/authority (Annex D).
-- **Dual deliveries:** when λ differs by ≥0.15 between balance and faithful renders, deliver both to the subject and log their selection in the manifest.
-- **Context vector:** record `{scenario, risk}` for every session so governance can trace why a given mode or intent was chosen.
-
----
-
-## 14. Detection Governance & Consent Controls
-
-- **Consent-gated analysis:** detection mode may only run when the manifest records `consent.detect = granted`; clients must poll manifests for revocations before every scan (Annex B).
-- **Quantized outputs:** detection reports express C/W/K as ranges, not precise floats, and include anomaly flags when provenance hashes or t* signatures are missing.
-- **Watermark binding:** embed the manifest hash or invisible watermark to link hero frames to their disruption sets without exposing raw alternates.
-
----
-
-## 15. Constructive Decompilation Grammar
-
-- **Approved patterns:** deploy only the codified deviations — `deliberate_breath`, `sleeve_crease`, `brand_offset_9pct`, `timed_eye_avert`, `desk_reflection_keep` — and cap usage at one per campaign unless governance approves (Annex F).
-- **Rationale logging:** every pattern requires a documented narrative trigger and reviewer sign-off in the manifest `decompilation` block.
-- **No geometry breaks:** if a pattern pulls eye-line, gutters, or brand band outside tolerance, revert to the compliant render.
-
----
-
-## 16. Manifest & API Integration
-
-- **Schema compliance:** every delivery ships with a manifest validated against [`presence_manifest_schema.json`](presence_manifest_schema.json); use [`presence_manifest_example.json`](presence_manifest_example.json) as a reference implementation.
-- **API handshake:** compile/validate/detect requests hit the `/v1/compile`, `/v1/validate`, and `/v1/detect` endpoints with `X-Presence-Signature` headers and version tag `1.2` (Annex E).
-- **Telemetry discipline:** persist API `trace_id` values alongside disruption hashes so audits can trace every compiled frame from request to delivery.
-
----
-
-## 17. Reverse Compilation Safeguards — Sword and Shield
-
-- **Detection awareness:** the same primitives that build presence can profile existing portraits. Assume analysts can reverse-engineer C:W intent from your outputs.
-- **Provenance tagging:** embed metadata hashes (`presence.hash`) tying each hero frame to its disruption set so authenticity can be verified without exposing private assets.
-- **Anomaly flags:** watch for third-party images that mimic the geometry but not the temporal cue; absence of t* often reads uncanny. Use this to distinguish genuine Carolwood portraits from imitations.
-
----
-
-## 18. Intentional Decompilation — Authenticity Through Controlled Breakage
-
-- **Pattern discipline:** choose from the sanctioned Annex F deviations (`deliberate_breath`, `sleeve_crease`, `brand_offset_9pct`, `timed_eye_avert`, `desk_reflection_keep`) when the narrative calls for vulnerability or renegade energy.
-- **Manifest receipts:** log each deployed pattern with rationale, approver, and intended audience in the manifest `decompilation` block so stakeholders read the cue as intentional.
-- **Failure drills:** run quarterly sessions where the team compiles both standard and decompiled frames to keep sensitivity high for when to deploy each cue.
-
----
-
-## 19. Cognitive Alignment — Photographing the P300 Moment
-
-- **Neural resonance:** the t* selection window (t₀ + 0.25–0.35 s) aligns with the P300 response—the brain’s decision-confirmation signal. You are literally capturing the instant cognition crystallizes into commitment.
-- **Behavioral proof:** referencing this correlation in briefs reassures analytical stakeholders that the temporal protocol isn’t stylistic flourish but perception science.
-- **Continuous validation:** periodically review burst footage alongside EEG or eye-tracking studies (where available) to ensure the capture cadence keeps mapping to that cognitive inflection point.
+## Quick On-Set Checklist
+- 4:5 frame, eyes at 27%, brand band 10–18%, 12–16% side gutters.
+- Key light 30–35° off-axis, fill –1.25 stops, subtle rim, neutral gray background.
+- Chin out/down, shoulders open, micro-lean, hands in active rest.
+- Direct gaze + micro-squint, corners up 2–3°, run the “silent yes” cue.
