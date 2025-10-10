@@ -1,4 +1,3 @@
-
 ## v1.3 additions
 ### Auto-measure eye-line & gutters
 ```bash
