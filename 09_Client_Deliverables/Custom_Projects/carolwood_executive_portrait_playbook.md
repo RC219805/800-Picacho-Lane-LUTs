@@ -14,7 +14,7 @@ Carolwood now treats the executive portrait as a compiled artifact rather than a
 ## Echo-of-Decision Capture Protocol
 1. Pre-light so the framing already satisfies the geometry gates.
 2. Prompt: “What would you do? Give me the I’ve-got-you look,” followed by a silent yes cue.
-3. Roll 0.8–1.2 s bursts at 10–12 fps; mark the peak grin (t₀) audibly.
+3. Roll 0.8–1.2 s bursts at 10–12 fps; mark the peak grin (t0) audibly.
 4. Select t* = t₀ + 0.25–0.35 s. Optionally median-stack t*−1, t*, t*+1 with 0.7/1.0/0.7 weights for micro-stability.
 5. Deliver the five-frame disruption set (t*−0.20, t*, t*+0.25, mid-gesture, relaxed reset) with metadata logging intent, angles, and parameter nudges.
 
