@@ -23,10 +23,13 @@ def sha256_file(path):
 
 
 def anchor_payload(manifest_path, hero_path, web_path):
-    mbytes = open(manifest_path, "rb").read()
+    with open(manifest_path, "rb") as f:
+        mbytes = f.read()
     h_m = hashlib.sha3_256(mbytes).hexdigest()
-    h_hero = hashlib.sha3_256(open(hero_path, "rb").read()).hexdigest()
-    h_web = hashlib.sha3_256(open(web_path, "rb").read()).hexdigest()
+    with open(hero_path, "rb") as f:
+        h_hero = hashlib.sha3_256(f.read()).hexdigest()
+    with open(web_path, "rb") as f:
+        h_web = hashlib.sha3_256(f.read()).hexdigest()
     payload = {"manifest_sha3": h_m, "hero_sha3": h_hero, "web_sha3": h_web}
     return payload
 
