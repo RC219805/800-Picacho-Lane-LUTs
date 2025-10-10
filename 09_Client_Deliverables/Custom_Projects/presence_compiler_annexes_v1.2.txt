@@ -36,7 +36,7 @@
     36	- Review cadence: evaluate metrics quarterly; document adjustments and rationale in governance log.
     37	
     38	ANNEX D · SUBJECT-FIRST COMPILATION MODES
-    39	- Introduce blend parameter λ ∈ [0.2, 0.5] balancing institutional consistency against subject fidelity: maximize `(geo_mean(C, W))^(1-λ) * F^λ`.
+    39	- Introduce blend parameter λ ∈ [0.2, 0.5] balancing institutional consistency against subject fidelity: maximize `(geo_mean(C, W))^(1-λ) * F^λ`, where `C` = competence and `W` = warmth.
     40	- `F` := fidelity score comparing compiled expression to subject baseline, derived from candid reference set.
     41	- Modes:
     42	  * `balance` (λ = 0.2): institutional target takes precedence.
