@@ -69,7 +69,12 @@ def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, st
     payload = _bytes_from_ids(manifest_hash_hex, session_id)
     bits = np.unpackbits(np.frombuffer(payload, dtype=np.uint8))
     h, w = Y.shape
-    # process 8x8 blocks; use coefficient (3,2) in zig-zag-ish mid frequency
+    # Process 8x8 blocks; use DCT coefficient (3,2) for embedding.
+    # (3,2) is a mid-frequency coefficient (in zig-zag order) chosen as a compromise:
+    # - Low-frequency coefficients (top-left) are more robust to compression but changes are more visible.
+    # - High-frequency coefficients (bottom-right) are less robust (often quantized away in JPEG).
+    # - Mid-frequency coefficients like (3,2) balance robustness (survive compression) and imperceptibility (less visible).
+    # This choice is common in watermarking literature for educational and practical reasons.
     bi = 0
     outY = Y.copy().astype(np.float64)
     for y in range(0, h, 8):
