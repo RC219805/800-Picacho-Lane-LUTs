@@ -12,11 +12,6 @@ Carolwood's executive portraiture must communicate a paradoxical blend of precis
   - “Say a silent ‘yes’ as if the plan just clicked.”
   - “Breathe in through the nose, soft exhale, eyes stay with me.”
 
-## Temporal Dynamics Protocol
-- **Burst the decision echo**: fire a 3–5 frame sequence while delivering the “silent yes” cue. The target hero almost always lands **0.3 seconds after** the peak micro-smile when the expression settles into confident composure.
-- **Track the decay curve**: review the sequence like a waveform—frame 1 carries anticipation, frame 2 the decision, frame 3 the resolution. Select the frame where the eyes remain locked yet the mouth has eased, preserving authority while keeping the warmth resonant.
-- **Log micro-adjustments**: note the shutter timestamp and expression prompts that produced the keeper. These become repeatable heuristics for future sessions or other executives.
-
 ## Posture, Hands, and Body Language
 - Chin out, then 5–10 mm down to define the jaw without defiance.
 - Shoulders open with a 2–4 cm micro-lean toward camera to signal availability.
@@ -62,11 +57,10 @@ Using the provided four monochrome frames (A–D, left to right):
 - **Frame A**: Marginally cooler mouth expression; reserve for institutional trust collateral (board decks, investor packets) where authority should lead.
 - **Frame C**: Slightly wider smile diminishes the command presence; suitable for relational touchpoints when additional warmth is needed.
 - **Frame D**: The broadest smile and subtly raised shoulders trade precision for approachability; keep for informal communications only.
-- **Temporal selection tip**: When reviewing burst captures, bias toward the frame that sits at the center of the expression spectrum—the one that can read warmer or cooler depending on audience needs. This "universal solvent" frame becomes the adaptable hero across channels.
 
 ## Shot List to Bank
-1. **Boardroom Credible** – cooler mouth tone, identical eye authority (Frame A analogue).
-2. **In-Conversation** – micro-smile with direct eyes (Frame B analogue).
+1. **Boardroom Credible** – cooler mouth tone, identical eye authority (Frame A analog).
+2. **In-Conversation** – micro-smile with direct eyes (Frame B analog).
 3. **Environmental Press** – 2:3 ratio with signage and desk anchors.
 
 ## Quick On-Set Checklist
@@ -74,18 +68,3 @@ Using the provided four monochrome frames (A–D, left to right):
 - Key light 30–35° off-axis, fill –1.25 stops, subtle rim, neutral gray background.
 - Chin out/down, shoulders open, micro-lean, hands in active rest.
 - Direct gaze + micro-squint, corners up 2–3°, run the “silent yes” cue.
-
-## Presence Compiler (For Creative Leads)
-Treat the playbook as a trust-building algorithm:
-
-```
-generate_trust() {
-  set_authority(eyes, micro_squint, 0.7);
-  set_warmth(mouth, corner_lift_deg=2.3);
-  balance_asymmetry(expression, cognitive_bias=true);
-  embed_temporal_echo(sequence_length=5, keeper_offset=0.3s);
-  return composite_presence;
-}
-```
-
-Use the function as shorthand during reviews: verify the parameters, confirm the temporal echo, and sign off when the composite presence reads decisively human.
