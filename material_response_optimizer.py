@@ -325,7 +325,7 @@ class RenderEnhancementPlanner:
                         "interventions": [
                             "float linear LED reveals detached from architecture",
                             "introduce high-polish reflections for spatial ambiguity",
-                            "embed discreet sensor-like pin lights",
+                            "embed discrete sensor-like pin lights",
                             ],
                     }
                 )
