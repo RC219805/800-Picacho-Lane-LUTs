@@ -66,7 +66,7 @@ class MaterialResponseReport:
     @classmethod
     def load(cls, path: str | Path) -> "MaterialResponseReport":
         with Path(path).open("r", encoding="utf-8") as fp:
-            raw: Dict[str, Any] = json.load(fp)
+            raw: dict[str, Any] = json.load(fp)
 
         scenes = {
             scene_data["name"]: SceneReport.from_mapping(scene_data)
