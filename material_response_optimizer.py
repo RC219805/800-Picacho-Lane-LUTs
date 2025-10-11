@@ -66,7 +66,7 @@ class MaterialResponseReport:
     @classmethod
     def load(cls, path: str | Path) -> "MaterialResponseReport":
         with Path(path).open("r", encoding="utf-8") as fp:
-            raw: Dict[str, Any] = json.load(fp)
+            raw: dict[str, Any] = json.load(fp)
 
         scenes = {
             scene_data["name"]: SceneReport.from_mapping(scene_data)
@@ -100,7 +100,7 @@ class RenderEnhancementPlanner:
     def from_json(cls, path: str | Path) -> "RenderEnhancementPlanner":
         return cls(MaterialResponseReport.load(path))
 
-    def build_blueprint(self) -> Dict[str, Any]:
+    def build_blueprint(self) -> dict[str, Any]:
         """Return a nested dictionary describing rendering upgrades."""
 
         luminance_strategy = self._derive_luminance_strategy()
@@ -109,11 +109,7 @@ class RenderEnhancementPlanner:
         texture_dimensions = self._derive_texture_strategy()
         future_alignment = self._derive_future_alignment_strategy()
         lux_plan = self._derive_lux_strategy()
-        algorithmic_formula = self._derive_algorithmic_formula()
-        scene_specific = self._summarize_scene_specific_enhancements(algorithmic_formula)
-        phase_program = self._derive_phase_program()
-        measurement_loop = self._derive_measurement_loop()
-        emotional_amplification = self._derive_emotional_amplification()
+        scene_specific = self._derive_scene_specific_upgrades()
 
         return {
             "generated": self.report.generated,
@@ -125,8 +121,6 @@ class RenderEnhancementPlanner:
             "future_alignment": future_alignment,
             "lux_version_strategy": lux_plan,
             "scene_specific_enhancements": scene_specific,
-            "algorithmic_enhancement_formula": algorithmic_formula,
-            "emotional_amplification": emotional_amplification,
             "narrative": (
                 "transcends conventional luxury through orchestrated tension "
                 "between photonic drama, tactile richness, and future-forward quiet tech."
@@ -166,62 +160,29 @@ class RenderEnhancementPlanner:
                 ],
                 "goal": "orchestrate an emotional crescendo instead of uniform gains",
             },
-            "phase_program": phase_program,
-            "measurement_loop": measurement_loop,
         }
 
-    def _derive_luminance_strategy(self) -> Dict[str, Any]:
+    def _derive_luminance_strategy(self) -> dict[str, Any]:
         hierarchy_targets = []
         for scene in self.report.iter_scenes():
             base_luminance = scene.metric("regular", "luminance")
-            if scene.name == "aerial":
-                desired = 0.285
-                target_value = max(base_luminance, desired)
+            if scene.name in {"pool", "aerial"} and base_luminance < 0.3:
+                target = round(min(0.32, base_luminance * 1.18), 4)
                 hierarchy_targets.append(
                     {
                         "scene": scene.name,
                         "current": base_luminance,
-                        "target": target_value,
-                        "desired_minimum": desired,
-                        "status": "maintain_refinement" if base_luminance >= desired else "elevate",
-                        "midtone_lift_percent": 18,
-                        "priority_regions": [
-                            "pool_water_reflections",
-                            "interior_window_glow",
-                            "white_architectural_elements",
+                        "target": target,
+                        "focus_areas": [
+                            "specular_pool_reflections" if scene.name == "pool" else "roofline_glow",
+                            "interior_window_bloom" if scene.name == "aerial" else "architectural_whites",
                         ],
-                        "highlight_overlays": [
-                            {"type": "gaussian_blur_overlay", "opacity": 0.15, "scope": "highlights"},
-                            {"type": "color_wash", "color": "#FFD700", "opacity": 0.08},
-                        ],
-                        "notes": "Selective midtone expansion to create luminance hierarchy without flattening shadows.",
-                    }
-                )
-            elif scene.name == "pool":
-                desired = 0.265
-                target_value = max(base_luminance, desired)
-                hierarchy_targets.append(
-                    {
-                        "scene": scene.name,
-                        "current": base_luminance,
-                        "target": target_value,
-                        "desired_minimum": desired,
-                        "status": "maintain_refinement" if base_luminance >= desired else "elevate",
-                        "midtone_lift_percent": 20,
-                        "priority_regions": [
-                            "water_surface_speculars",
-                            "architectural_edge_accents",
-                        ],
-                        "highlight_overlays": [
-                            {"type": "specular_gain", "amount": 0.4, "scope": "water_surface"},
-                        ],
-                        "notes": "Raise luminous energy only where reflections and architectural trims demand attention.",
+                        "approach": "sculpted masks and dodge layers to avoid uniform brightening",
                     }
                 )
 
         return {
             "reference_luminance": 0.31,
-            "global_normalization": {"threshold": 0.25, "target_range": [0.26, 0.28]},
             "notes": "0.30-0.32 scores correlate with top luxury perception. Maintain hierarchy.",
             "targets": hierarchy_targets,
         }
@@ -237,9 +198,10 @@ class RenderEnhancementPlanner:
                     "scene": "great_room",
                     "current": great_room.metric("regular", "awe"),
                     "target": 0.85,
-                    "god_rays": {"count": 4, "angles": "staggered", "dust_motes": True},
-                    "stone_wall_treatment": {"clarity": "+30%", "uplighting": "gradient_from_floor"},
-                    "fire_feature": {"reflection_mode": "color_dodge", "ceiling_kick": True},
+                    "moves": [
+                        "introduce volumetric sunset shaft through skylight",
+                        "amplify contrast on stone wall relief",
+                    ],
                 }
             )
 
@@ -249,17 +211,11 @@ class RenderEnhancementPlanner:
                 {
                     "scene": "pool",
                     "current": pool.metric("regular", "awe"),
-                    "target": 0.74,
-                    "twilight_transformation": {
-                        "grade": {"highlights": "+15_orange", "shadows": "-10_blue"},
-                        "underwater_geometry": "procedural_caustic_light_patterns",
-                        "floating_elements": "candle_cluster_5_to_7",
-                    },
-                    "architectural_glow": {
-                        "window_temperature": "warm_amber_#FFA500",
-                        "falloff": "exponential",
-                        "fire_reflections": "screen_blend_over_water",
-                    },
+                    "target": 0.75,
+                    "moves": [
+                        "activate underwater lighting with geometric caustics",
+                        "layer fire feature reflections across water surface",
+                    ],
                 }
             )
 
@@ -269,7 +225,7 @@ class RenderEnhancementPlanner:
             "actions": actions,
         }
 
-    def _derive_comfort_plan(self) -> Dict[str, Any]:
+    def _derive_comfort_plan(self) -> dict[str, Any]:
         bedroom = self.report.scenes.get("primary_bedroom")
         if bedroom is None:
             return {}
@@ -279,35 +235,10 @@ class RenderEnhancementPlanner:
             "scene": "primary_bedroom",
             "current": comfort,
             "target": 0.85,
-            "adjustments": [
-                {
-                    "type": "shadow_enrichment",
-                    "delta_luminance": -0.12,
-                    "placement": "perimeter_corners",
-                    "geometry": "use flag cards to carve asymmetric falloff",
-                },
-                {
-                    "type": "temperature_shift",
-                    "kelvin_delta": -350,
-                    "percent_change": -6,
-                    "notes": "cool the ambience while keeping bedside accents warm",
-                },
-                {
-                    "type": "view_activation",
-                    "detail": "insert distant ship lights (3-4px) on horizon",
-                    "depth_extension": "layer atmospheric haze between panes",
-                },
-                {
-                    "type": "material_complexity",
-                    "surface": "bedding",
-                    "texture_overlay_opacity": 0.18,
-                    "frequency": "introduce anisotropic textile grain",
-                },
-                {
-                    "type": "micro_motion",
-                    "method": "sheer_curtain_fan_cycle",
-                    "cadence": "45 second oscillation to imply life",
-                },
+            "moves": [
+                "fold in subtle corner shadows to reintroduce tension",
+                "cool ambient color temperature by ~250K",
+                "animate sheer curtains for micro-motion",
             ],
         }
 
@@ -329,27 +260,22 @@ class RenderEnhancementPlanner:
                     "scene": scene_name,
                     "surface": surface,
                     "current": current,
-                    "push_to": 2.25,
-                    "target_range": [2.2, 2.3],
-                    "method": "frequency_separation + procedural detail passes",
+                    "target": 2.25,
+                    "method": "microcontrast maps + procedural detail passes",
                 }
             )
 
         return {
             "baseline": 1.9,
-            "target_range": [2.2, 2.3],
             "hero_targets": hero_targets,
             "guardrails": "Maintain supporting surfaces at 1.9 to avoid noise accumulation.",
-            "technique": "frequency separation to decouple detail from color",
         }
 
     def _derive_future_alignment_strategy(self) -> Dict[str, Any]:
         adjustments = []
-        impossible_elements = []
         for scene in self.report.iter_scenes():
             current = scene.metric("regular", "future_alignment")
             if current < 0.7:
-                element = "floating_led_reveal" if scene.name in {"aerial", "pool"} else "cantilevered_shadow_gap"
                 adjustments.append(
                     {
                         "scene": scene.name,
@@ -359,80 +285,14 @@ class RenderEnhancementPlanner:
                             "float linear LED reveals detached from architecture",
                             "introduce high-polish reflections for spatial ambiguity",
                             "embed discreet sensor-like pin lights",
-                            ],
+                        ],
                     }
                 )
-                impossible_elements.append({"scene": scene.name, "concept": element})
 
         return {
             "summary": "Current readings imply contemporary comfort. Layer visionary cues to exceed 0.70.",
             "adjustments": adjustments,
-            "impossible_elements": impossible_elements,
         }
-
-    def _derive_emotional_amplification(self) -> Dict[str, Any]:
-        """Outline drama-forward upgrades once technical fixes plateau."""
-
-        plan: Dict[str, Any] = {}
-
-        primary = self.report.scenes.get("primary_bedroom")
-        if primary is not None:
-            plan["primary_bedroom_tension"] = {
-                "current_comfort": primary.metric("regular", "comfort"),
-                "goal": 0.85,
-                "moves": [
-                    "pocket harsh-edged shadows behind millwork to reintroduce tension",
-                    "blend cooler moonlight rim along bed frame for emotional contrast",
-                    "amplify curtain drift with subtle motion blur trails",
-                ],
-            }
-
-        aerial = self.report.scenes.get("aerial")
-        if aerial is not None:
-            regular = aerial.versions["regular"]
-            lux = aerial.versions["lux"]
-            plateau_detected = abs(lux.luxury_index - regular.luxury_index) < 1e-3
-            plan["aerial_plateau_breaker"] = {
-                "luxury_delta": lux.luxury_index - regular.luxury_index,
-                "plateau_detected": plateau_detected,
-                "directives": [
-                    "paint champagne sunset reflections across the pool surface",
-                    "cast landscape light ribbons emanating from glazing",
-                    "hint a distant coastline silhouette to extend narrative horizon",
-                    "thread a single surveillance drone trail to reinforce futurism",
-                ],
-            }
-
-        pool = self.report.scenes.get("pool")
-        if pool is not None:
-            plan["pool_cinematic_pressure"] = {
-                "current_luxury": pool.metric("regular", "luxury_index"),
-                "target": 0.72,
-                "interventions": [
-                    "project underwater geometric light lattices",
-                    "stage floating fire bowls with reflective shimmer",
-                    "layer spa steam volumetrics drifting across deck",
-                    "seed orchid petals or candles for ceremonial cues",
-                ],
-            }
-
-        lux_variants = {
-            scene.name: (scene.metric("lux", "luxury_index") - scene.metric("regular", "luxury_index"))
-            for scene in self.report.iter_scenes()
-        }
-        stagnant = {scene: delta for scene, delta in lux_variants.items() if abs(delta) < 0.02}
-        if stagnant:
-            plan["lux_version_reinvention"] = {
-                "scenes": sorted(stagnant),
-                "strategy": [
-                    "pivot lux renders to blue-hour / night narratives",
-                    "ignite architectural lighting hierarchy (interior + landscape)",
-                    "introduce prismatic caustics through glass and water",
-                    "wrap scenes in atmospheric haze for depth stacking",
-                ],
-            }
-
-        return plan
 
     def _derive_lux_strategy(self) -> Dict[str, Any]:
         entries = []
@@ -446,12 +306,10 @@ class RenderEnhancementPlanner:
                         "scene": scene.name,
                         "delta": round(delta, 4),
                         "actions": [
-                            "shift to blue hour timing (20 minutes after sunset)",
-                            "convert every interior fixture into an emissive light source",
-                            "add landscape uplights and luminous water surfaces",
-                            "introduce prismatic edges in glass and spectral caustics",
-                            "increase natural material saturation by 20%",
-                            "add atmospheric haze to reveal 3-4 depth planes",
+                            "global golden hour regrade",
+                            "prismatic highlights in glass and water",
+                            "boost natural material saturation by 20%",
+                            "layer atmospheric haze for multi-plane depth",
                         ],
                     }
                 )
@@ -459,243 +317,36 @@ class RenderEnhancementPlanner:
         return {
             "observation": "Lux variants only marginally outperform baseline.",
             "remedy": entries,
-            "true_lux_transformation_protocol": [
-                {"step": "time_shift", "description": "move the scene into blue hour to signal exclusivity"},
-                {"step": "light_architecture", "description": "treat every interior and landscape source as active"},
-                {"step": "material_response", "description": "boost metal reflectivity by 40% and simulate stone subsurface scattering"},
-                {"step": "spectral_complexity", "description": "layer prismatic and caustic effects across glass and water"},
-                {"step": "depth_multiplication", "description": "introduce atmospheric haze for multi-plane separation"},
-            ],
         }
 
-    def _derive_algorithmic_formula(self) -> Dict[str, Any]:
-        def current_metrics(scene_name: str) -> Dict[str, float]:
-            snapshot = self.report.scenes[scene_name].versions["regular"]
-            return {
-                "luminance": snapshot.luminance,
-                "awe": snapshot.awe,
-                "comfort": snapshot.comfort,
-                "texture_dimension": snapshot.texture_dimension,
-                "future_alignment": snapshot.future_alignment,
-                "luxury_index": snapshot.luxury_index,
-            }
-
+    def _derive_scene_specific_upgrades(self) -> Dict[str, Any]:
         return {
             "aerial": {
-                "current": current_metrics("aerial"),
-                "targets": {"luminance": 0.285, "luxury_index": 0.68, "awe": 0.72},
-                "protocol": [
-                    {
-                        "step": "luminance_curve",
-                        "parameters": {"midtone_lift_percent": 18, "target": 0.285},
-                        "masking": [
-                            "pool_water_reflections",
-                            "interior_window_glows",
-                            "white_architectural_elements",
-                        ],
-                    },
-                    {
-                        "step": "atmospheric_glow",
-                        "layers": [
-                            {"type": "gaussian_blur_overlay", "opacity": 0.15, "scope": "highlights"},
-                            {"type": "color_overlay", "color": "#FFD700", "opacity": 0.08},
-                        ],
-                    },
-                    {
-                        "step": "pool_enhancement",
-                        "actions": [
-                            "increase water saturation by 25%",
-                            "render caustic lighting via Lighting Effects",
-                            "screen blend #00FFFF underwater glow at 12%",
-                        ],
-                    },
-                    {
-                        "step": "future_elements",
-                        "actions": [
-                            "add single drone light trail",
-                            "trace 1px LED strips on architectural edges with outer glow",
-                        ],
-                    },
+                "current_luxury": self.report.scenes["aerial"].metric("regular", "luxury_index"),
+                "target": 0.7,
+                "moves": [
+                    "paint champagne sunset across pool",
+                    "project architectural light patterns onto landscaping",
+                    "hint at distant coastline haze",
                 ],
             },
             "pool": {
-                "current": current_metrics("pool"),
-                "targets": {"luminance": 0.265, "luxury_index": 0.71, "awe": 0.74},
-                "protocol": [
-                    {
-                        "step": "twilight_transformation",
-                        "grade": {"highlights": "+15_orange", "shadows": "-10_blue"},
-                    },
-                    {
-                        "step": "water_as_liquid_jewelry",
-                        "actions": [
-                            "increase specular highlights by 40% on water",
-                            "introduce floating candles (5-7 warm points)",
-                            "apply ripple displacement map at 3% for movement",
-                        ],
-                    },
-                    {
-                        "step": "architecture_glow",
-                        "actions": [
-                            "shift interior lighting to warm amber #FFA500",
-                            "shape window glows with exponential falloff",
-                            "reflect fire feature across water with screen blend",
-                        ],
-                    },
-                    {
-                        "step": "steam_effect",
-                        "actions": [
-                            "generate spa steam via fractal noise",
-                            "composite using screen blend at 20% opacity",
-                        ],
-                    },
+                "current_luxury": self.report.scenes["pool"].metric("regular", "luxury_index"),
+                "target": 0.72,
+                "moves": [
+                    "introduce spa steam plumes",
+                    "cast caustic light dances on retaining walls",
+                    "stage floating floral candles",
                 ],
             },
             "great_room": {
-                "current": current_metrics("great_room"),
-                "targets": {"luxury_index": 0.72, "awe": 0.85},
-                "protocol": [
-                    {
-                        "step": "god_ray_multiplication",
-                        "parameters": {"shafts": 4, "variation": "multi-angle", "dust_motes": True},
-                    },
-                    {
-                        "step": "stone_wall_hero",
-                        "actions": [
-                            "increase clarity by 30%",
-                            "add subtle uplighting gradient from floor",
-                        ],
-                    },
-                    {
-                        "step": "fire_feature_activation",
-                        "actions": [
-                            "paint flame reflections on adjacent surfaces",
-                            "apply orange color dodge on ceiling near fireplace",
-                        ],
-                    },
+                "current_luxury": self.report.scenes["great_room"].metric("regular", "luxury_index"),
+                "target": 0.75,
+                "moves": [
+                    "intensify fire feature for kinetic shadow play",
+                    "suspend dust motes inside skylight beam",
+                    "animate curtain sway for breathable movement",
                 ],
-            },
-            "kitchen": {
-                "current": current_metrics("kitchen"),
-                "targets": {"luxury_index": 0.73, "awe": 0.977},
-                "protocol": [
-                    {
-                        "step": "precision_polish",
-                        "actions": [
-                            "remove chromatic aberration to enhance sharpness",
-                            "boost metallic luminance by 15% selectively",
-                        ],
-                    },
-                    {
-                        "step": "humanizing_detail",
-                        "actions": [
-                            "introduce steam rising from espresso cup to add ritual",
-                        ],
-                    },
-                ],
-            },
-            "primary_bedroom": {
-                "current": current_metrics("primary_bedroom"),
-                "targets": {"comfort": 0.85, "luxury_index": 0.71},
-                "protocol": [
-                    {
-                        "step": "comfort_recalibration",
-                        "actions": [
-                            "add subtle corner shadows reducing luminance by 12%",
-                            "cool overall temperature by 5%",
-                        ],
-                    },
-                    {
-                        "step": "view_activation",
-                        "actions": [
-                            "place distant ship lights on horizon (3-4 pixel accents)",
-                        ],
-                    },
-                    {
-                        "step": "material_complexity",
-                        "actions": [
-                            "overlay textile texture on bedding at 15% opacity",
-                            "animate gentle curtain movement for air flow cues",
-                        ],
-                    },
-                ],
-            },
-        }
-
-    def _summarize_scene_specific_enhancements(self, formula: Mapping[str, Any]) -> Dict[str, Any]:
-        summary: Dict[str, Any] = {}
-        for scene, plan in formula.items():
-            targets = dict(plan.get("targets", {}))
-            summary[scene] = {
-                "current_luxury": plan["current"].get("luxury_index"),
-                "target_luxury": targets.get("luxury_index", plan["current"].get("luxury_index")),
-                "supporting_targets": {k: v for k, v in targets.items() if k != "luxury_index"},
-                "headline_steps": [step["step"] for step in plan.get("protocol", [])],
-            }
-        return summary
-
-    def _derive_phase_program(self) -> Iterable[Dict[str, Any]]:
-        return [
-            {
-                "phase": 1,
-                "name": "luminance_normalization",
-                "objective": "Raise all sub-0.25 luminance scenes into the 0.26-0.28 band.",
-                "actions": [
-                    "batch parametric curves for aerial and pool midtone lifts (18-20%)",
-                    "protect shadows via luminosity masks",
-                    "validate pool/patio highlight masks before moving on",
-                ],
-            },
-            {
-                "phase": 2,
-                "name": "hero_surface_protocol",
-                "objective": "Push one hero surface per room into the 2.2-2.3 texture range.",
-                "actions": [
-                    "apply frequency separation passes to hero materials",
-                    "restrain supporting surfaces to texture 1.9",
-                    "document before/after microcontrast for island, stone wall, headboard",
-                ],
-            },
-            {
-                "phase": 3,
-                "name": "awe_gap_correction",
-                "objective": "Ensure every scene lands between 0.65 and 0.85 awe, led by kitchen benchmark.",
-                "actions": [
-                    "execute god ray and fire feature upgrades in great room",
-                    "deploy twilight transformation and caustics in pool court",
-                    "tune volumetric depth until awe scores converge",
-                ],
-            },
-            {
-                "phase": 4,
-                "name": "future_alignment_leap",
-                "objective": "Add one seemingly impossible element per scene to exceed 0.70 future alignment.",
-                "actions": [
-                    "float LED reveals off the architecture",
-                    "introduce frameless reflections to imply hidden tech",
-                    "audit for cantilever illusions and sensor light cues",
-                ],
-            },
-        ]
-
-    def _derive_measurement_loop(self) -> Dict[str, Any]:
-        return {
-            "analysis_refresh": "Re-run material response analysis after every enhancement pass.",
-            "delta_guardrail": 0.15,
-            "target_gain_window": [0.08, 0.12],
-            "steps": [
-                "Document metric deltas scene-by-scene after each iteration.",
-                "Rollback or soften adjustments that exceed the 0.15 change guardrail.",
-                "Lock in gains only when they fall within the 0.08-0.12 window.",
-            ],
-            "nuclear_option": {
-                "description": "Time-shift the full set into dawn, day, dusk, and night series if incremental moves stall.",
-                "targets": {
-                    "dawn": {"focus": "maximum_focus", "goal_metrics": {"focus": 0.7}},
-                    "day": {"focus": "balanced_metrics"},
-                    "dusk": {"focus": "maximum_awe", "goal_metrics": {"awe": 0.8}},
-                    "night": {"focus": "maximum_future_alignment", "goal_metrics": {"future_alignment": 0.75}},
-                },
             },
         }
 
