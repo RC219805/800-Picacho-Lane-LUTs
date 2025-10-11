@@ -1,0 +1,111 @@
+{
+  "generated": "2025-01-16T07:12:00Z",
+  "analysis_version": "2.0",
+  "scenes": [
+    {
+      "name": "kitchen",
+      "versions": {
+        "regular": {
+          "luminance": 0.33,
+          "awe": 0.977,
+          "comfort": 0.74,
+          "texture_dimension": 1.97,
+          "future_alignment": 0.66,
+          "luxury_index": 0.7295
+        },
+        "lux": {
+          "luminance": 0.34,
+          "awe": 0.982,
+          "comfort": 0.75,
+          "texture_dimension": 1.99,
+          "future_alignment": 0.68,
+          "luxury_index": 0.742
+        }
+      }
+    },
+    {
+      "name": "great_room",
+      "versions": {
+        "regular": {
+          "luminance": 0.51,
+          "awe": 0.78,
+          "comfort": 0.71,
+          "texture_dimension": 1.99,
+          "future_alignment": 0.63,
+          "luxury_index": 0.636
+        },
+        "lux": {
+          "luminance": 0.52,
+          "awe": 0.79,
+          "comfort": 0.72,
+          "texture_dimension": 2.01,
+          "future_alignment": 0.64,
+          "luxury_index": 0.648
+        }
+      }
+    },
+    {
+      "name": "pool",
+      "versions": {
+        "regular": {
+          "luminance": 0.308,
+          "awe": 0.63,
+          "comfort": 0.68,
+          "texture_dimension": 1.95,
+          "future_alignment": 0.56,
+          "luxury_index": 0.6
+        },
+        "lux": {
+          "luminance": 0.312,
+          "awe": 0.64,
+          "comfort": 0.69,
+          "texture_dimension": 1.96,
+          "future_alignment": 0.57,
+          "luxury_index": 0.612
+        }
+      }
+    },
+    {
+      "name": "primary_bedroom",
+      "versions": {
+        "regular": {
+          "luminance": 0.29,
+          "awe": 0.72,
+          "comfort": 0.982,
+          "texture_dimension": 1.94,
+          "future_alignment": 0.58,
+          "luxury_index": 0.655
+        },
+        "lux": {
+          "luminance": 0.3,
+          "awe": 0.74,
+          "comfort": 0.986,
+          "texture_dimension": 1.95,
+          "future_alignment": 0.59,
+          "luxury_index": 0.666
+        }
+      }
+    },
+    {
+      "name": "aerial",
+      "versions": {
+        "regular": {
+          "luminance": 0.384,
+          "awe": 0.617,
+          "comfort": 0.67,
+          "texture_dimension": 1.93,
+          "future_alignment": 0.54,
+          "luxury_index": 0.593
+        },
+        "lux": {
+          "luminance": 0.386,
+          "awe": 0.617,
+          "comfort": 0.68,
+          "texture_dimension": 1.93,
+          "future_alignment": 0.54,
+          "luxury_index": 0.593
+        }
+      }
+    }
+  ]
+}
