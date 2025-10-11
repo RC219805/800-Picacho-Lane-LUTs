@@ -225,7 +225,7 @@ class RenderEnhancementPlanner:
             "actions": actions,
         }
 
-    def _derive_comfort_plan(self) -> Dict[str, Any]:
+    def _derive_comfort_plan(self) -> dict[str, Any]:
         bedroom = self.report.scenes.get("primary_bedroom")
         if bedroom is None:
             return {}
