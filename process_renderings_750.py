@@ -87,16 +87,15 @@ def _apply_split_tone(arr: np.ndarray, *, highlight_cool: float, shadow_warm: fl
         arr[..., 2] *= 1.0 - shadow_warm * lo_mask
 
 
-def _apply_temperature(arr: np.ndarray, shift: float) -> None:
+def _apply_temperature(arr: np.ndarray, shift: float) -> np.ndarray:
     if shift == 0:
-        return
+        return arr
 
     red_scale = 1.0 + shift
     blue_scale = 1.0 - shift
     arr[..., 0] *= red_scale
     arr[..., 2] *= blue_scale
-
-
+    return arr
 def _apply_contact_shadows(arr: np.ndarray, strength: float, radius: int) -> None:
     if strength <= 0:
         return
