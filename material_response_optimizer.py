@@ -162,7 +162,7 @@ class RenderEnhancementPlanner:
             },
         }
 
-    def _derive_luminance_strategy(self) -> Dict[str, Any]:
+    def _derive_luminance_strategy(self) -> dict[str, Any]:
         hierarchy_targets = []
         for scene in self.report.iter_scenes():
             base_luminance = scene.metric("regular", "luminance")
