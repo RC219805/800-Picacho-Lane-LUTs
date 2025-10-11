@@ -100,7 +100,7 @@ class RenderEnhancementPlanner:
     def from_json(cls, path: str | Path) -> "RenderEnhancementPlanner":
         return cls(MaterialResponseReport.load(path))
 
-    def build_blueprint(self) -> Dict[str, Any]:
+    def build_blueprint(self) -> dict[str, Any]:
         """Return a nested dictionary describing rendering upgrades."""
 
         luminance_strategy = self._derive_luminance_strategy()
