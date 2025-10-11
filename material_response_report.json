@@ -1,40 +1,25 @@
 {
-  "generated": "2025-01-16T07:12:00Z",
-  "analysis_version": "2.0",
+  "generated": "2024-12-12T08:45:00Z",
+  "analysis_version": "1.0",
   "scenes": [
     {
       "name": "kitchen",
       "versions": {
         "regular": {
-          "luminance": 0.33,
+          "luminance": 0.31,
           "awe": 0.977,
           "comfort": 0.74,
-          "texture_dimension": 1.97,
+          "texture_dimension": 1.94,
           "future_alignment": 0.66,
-          "luxury_index": 0.7295,
-          "focus": 0.69,
-          "warmth": 0.6,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "low": [20000, 30000],
-            "high": [80000, 100000]
-          },
-          "histogram_notes": "Bimodal distribution creates tension between voids and brilliance."
+          "luxury_index": 0.7295
         },
         "lux": {
-          "luminance": 0.34,
+          "luminance": 0.32,
           "awe": 0.982,
           "comfort": 0.75,
-          "texture_dimension": 1.99,
-          "future_alignment": 0.68,
-          "luxury_index": 0.742,
-          "focus": 0.7,
-          "warmth": 0.62,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "low": [22000, 32000],
-            "high": [82000, 104000]
-          }
+          "texture_dimension": 1.95,
+          "future_alignment": 0.67,
+          "luxury_index": 0.742
         }
       }
     },
@@ -42,33 +27,20 @@
       "name": "great_room",
       "versions": {
         "regular": {
-          "luminance": 0.51,
-          "awe": 0.78,
+          "luminance": 0.29,
+          "awe": 0.76,
           "comfort": 0.71,
-          "texture_dimension": 1.99,
-          "future_alignment": 0.63,
-          "luxury_index": 0.636,
-          "focus": 0.62,
-          "warmth": 0.57,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "mid": [45000, 70000]
-          }
+          "texture_dimension": 1.93,
+          "future_alignment": 0.61,
+          "luxury_index": 0.636
         },
         "lux": {
-          "luminance": 0.52,
-          "awe": 0.79,
+          "luminance": 0.3,
+          "awe": 0.77,
           "comfort": 0.72,
-          "texture_dimension": 2.01,
-          "future_alignment": 0.64,
-          "luxury_index": 0.648,
-          "focus": 0.64,
-          "warmth": 0.58,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "mid": [42000, 65000],
-            "specular": [90000]
-          }
+          "texture_dimension": 1.94,
+          "future_alignment": 0.62,
+          "luxury_index": 0.648
         }
       }
     },
@@ -76,35 +48,20 @@
       "name": "pool",
       "versions": {
         "regular": {
-          "luminance": 0.308,
-          "awe": 0.63,
+          "luminance": 0.23,
+          "awe": 0.62,
           "comfort": 0.68,
-          "texture_dimension": 1.95,
-          "future_alignment": 0.56,
-          "luxury_index": 0.6,
-          "focus": 0.6,
-          "warmth": 0.55,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "blue_channel_spike": 110000,
-            "mean": 0.218
-          },
-          "histogram_notes": "Dominant blue spike reads as municipal pool rather than mirror feature."
+          "texture_dimension": 1.91,
+          "future_alignment": 0.54,
+          "luxury_index": 0.6
         },
         "lux": {
-          "luminance": 0.312,
+          "luminance": 0.24,
           "awe": 0.64,
           "comfort": 0.69,
-          "texture_dimension": 1.96,
-          "future_alignment": 0.57,
-          "luxury_index": 0.612,
-          "focus": 0.61,
-          "warmth": 0.56,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "blue_channel_spike": 108000,
-            "mean": 0.22
-          }
+          "texture_dimension": 1.92,
+          "future_alignment": 0.55,
+          "luxury_index": 0.612
         }
       }
     },
@@ -112,34 +69,20 @@
       "name": "primary_bedroom",
       "versions": {
         "regular": {
-          "luminance": 0.29,
-          "awe": 0.72,
+          "luminance": 0.27,
+          "awe": 0.71,
           "comfort": 0.982,
-          "texture_dimension": 1.94,
+          "texture_dimension": 1.92,
           "future_alignment": 0.58,
-          "luxury_index": 0.655,
-          "focus": 0.578,
-          "warmth": 0.59,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "low": [9000],
-            "high": [135000]
-          }
+          "luxury_index": 0.655
         },
         "lux": {
-          "luminance": 0.3,
-          "awe": 0.74,
+          "luminance": 0.28,
+          "awe": 0.73,
           "comfort": 0.986,
-          "texture_dimension": 1.95,
+          "texture_dimension": 1.93,
           "future_alignment": 0.59,
-          "luxury_index": 0.666,
-          "focus": 0.59,
-          "warmth": 0.6,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "low": [9500],
-            "high": [138000]
-          }
+          "luxury_index": 0.666
         }
       }
     },
@@ -147,33 +90,20 @@
       "name": "aerial",
       "versions": {
         "regular": {
-          "luminance": 0.384,
-          "awe": 0.617,
+          "luminance": 0.22,
+          "awe": 0.58,
           "comfort": 0.67,
-          "texture_dimension": 1.93,
-          "future_alignment": 0.54,
-          "luxury_index": 0.593,
-          "focus": 0.58,
-          "warmth": 0.56,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "plateau": [50000, 60000],
-            "notes": "post-enhancement uniformity"
-          }
+          "texture_dimension": 1.9,
+          "future_alignment": 0.52,
+          "luxury_index": 0.593
         },
         "lux": {
-          "luminance": 0.386,
-          "awe": 0.617,
+          "luminance": 0.24,
+          "awe": 0.6,
           "comfort": 0.68,
-          "texture_dimension": 1.93,
+          "texture_dimension": 1.91,
           "future_alignment": 0.54,
-          "luxury_index": 0.593,
-          "focus": 0.585,
-          "warmth": 0.55,
-          "diffusion": 0.6,
-          "histogram_peaks": {
-            "plateau": [30000, 40000]
-          }
+          "luxury_index": 0.604
         }
       }
     }
