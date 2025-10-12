@@ -7,7 +7,7 @@ This document summarizes key architectural principles that emerge from the luxur
 - Luminance guidance explicitly cites a 0.30–0.32 perception sweet spot while coupling adjustments with focus areas such as specular pool reflections or roofline glow, reinforcing that exposure is sculpted to local storytelling goals instead of globally amplified.[^1]
 
 ## Materials as Computational Substrate
-- Canonical material definitions encode unique indices of refraction, roughness ranges, displacement amplitudes, mapping approaches, and texture layer stacks for herringbone oak, algorithmic stone pavers, and granular plaster, highlighting that believable renders depend on distinct light-material interaction models per surface.【F:material_response_optimizer.py†L77-L120】
+- Canonical material definitions encode unique indices of refraction, roughness ranges, displacement amplitudes, mapping approaches, and texture layer stacks for herringbone oak, algorithmic stone pavers, and granular plaster, highlighting that believable renders depend on distinct light-material interaction models per surface.[^1]
 
 ## Engineered Imperfection
 - Post-processing stages apply bloom, vignette, and a film-grain injection (default noise amplitude 0.02) after core rendering, intentionally reintroducing handcrafted imperfection that keeps imagery grounded in reality.【F:lux_render_pipeline.py†L188-L236】
