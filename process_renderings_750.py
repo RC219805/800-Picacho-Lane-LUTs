@@ -112,10 +112,10 @@ def convert_renderings_to_jpeg(input_dir: Path, output_dir: Path | None = None) 
         destination = output_dir / (path.stem + ".jpg")
 
         if suffix in SUPPORTED_IMAGE_SUFFIXES:
-            destination = output_dir / path.name
-            if destination.exists() and destination.stat().st_mtime >= path.stat().st_mtime:
+            copied_destination = output_dir / path.name
+            if copied_destination.exists() and copied_destination.stat().st_mtime >= path.stat().st_mtime:
                 continue
-            shutil.copy2(path, destination)
+            shutil.copy2(path, copied_destination)
             continue
 
         if suffix not in CONVERTIBLE_IMAGE_SUFFIXES:
