@@ -94,9 +94,9 @@ library. Supply the new CLI flags alongside `--material-response` to opt-in:
 
 ```bash
   --floor-texture ./textures/wide_oak.jpg --floor-texture-strength 0.75 --floor-texture-scale 0.8 \
-  --wall-texture-path ./textures/limestone.png --wall-texture-strength 0.45 \
-  --pool-texture-path ./textures/pool_mosaic.png --pool-texture-strength 0.6 \
-  --sky-environment-path ./textures/coastal_dusk_sky.png --sky-environment-strength 0.8
+  --wall-texture-path ./textures/limestone.jpg --wall-texture-strength 0.45 \
+  --pool-texture-path ./textures/pool_mosaic.jpg --pool-texture-strength 0.6 \
+  --sky-environment-path ./textures/coastal_dusk_sky.jpg --sky-environment-strength 0.8
 ```
 
 Each texture flag includes a blend strength (0–1) and optional scale multiplier so you can match the plate to the render's

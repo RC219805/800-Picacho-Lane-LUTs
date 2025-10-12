@@ -111,7 +111,7 @@ def _make_texture(path: Path, color: tuple[int, int, int]) -> None:
 
 def test_floor_texture_blend_enriches_lower_rows(tmp_path: Path) -> None:
     rgb = np.full((8, 8, 3), 0.2, dtype=np.float32)
-    texture_path = tmp_path / "floor.png"
+    texture_path = tmp_path / "floor.jpg"
     _make_texture(texture_path, (255, 0, 0))
 
     result = apply_material_response_finishing(
@@ -151,7 +151,7 @@ def test_sky_environment_tints_exterior_region(tmp_path: Path) -> None:
     rgb = np.zeros((8, 8, 3), dtype=np.float32)
     rgb[:3, 4:, :] = np.array([0.3, 0.35, 0.9], dtype=np.float32)
 
-    sky_path = tmp_path / "sky.png"
+    sky_path = tmp_path / "sky.jpg"
     _make_texture(sky_path, (64, 128, 255))
 
     result = apply_material_response_finishing(
