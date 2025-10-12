@@ -23,17 +23,125 @@ Usage (defaults match the brief):
 from __future__ import annotations
 
 import argparse
+import importlib
+import importlib.util
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Iterable
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
 
+SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif"}
+CONVERTIBLE_IMAGE_SUFFIXES = {".tif", ".tiff", ".webp", ".bmp", ".tga", ".psd", ".exr"}
+
+
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
+
+
+def _iter_render_candidates(input_dir: Path) -> Iterable[Path]:
+    for path in sorted(input_dir.iterdir()):
+        if path.is_file():
+            yield path
+
+
+def _require_module(module_name: str):
+    """Return the imported module, raising a helpful error when missing."""
+
+    if importlib.util.find_spec(module_name) is None:
+        raise ModuleNotFoundError(
+            f"The optional dependency '{module_name}' is required to convert that asset."
+        )
+    return importlib.import_module(module_name)
+
+
+def _convert_exr_to_jpg(exr_path: Path, jpg_path: Path) -> None:
+    """Convert an OpenEXR image to JPEG with simple tone mapping."""
+
+    OpenEXR = _require_module("OpenEXR")
+    Imath = _require_module("Imath")
+    exr_file = OpenEXR.InputFile(str(exr_path))
+    header = exr_file.header()
+    data_window = header["dataWindow"]
+    width = data_window.max.x - data_window.min.x + 1
+    height = data_window.max.y - data_window.min.y + 1
+
+    pixel_type = Imath.PixelType(Imath.PixelType.FLOAT)
+    channels = [
+        np.frombuffer(exr_file.channel(channel, pixel_type), dtype=np.float32)
+        for channel in ("R", "G", "B")
+    ]
+    exr_file.close()
+
+    rgb = [channel.reshape(height, width) for channel in channels]
+    rgb = np.stack(rgb, axis=-1)
+    rgb = np.clip(rgb, 0.0, 1.0)
+    rgb = (rgb * 255.0).astype(np.uint8)
+
+    Image.fromarray(rgb, mode="RGB").save(jpg_path, format="JPEG", quality=95)
+
+
+def _convert_with_pillow(source: Path, destination: Path) -> None:
+    """Convert ``source`` to RGB JPEG using Pillow."""
+
+    with Image.open(source) as img:
+        if img.mode in {"RGBA", "LA", "P"}:
+            base = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            base.paste(img, mask=img.split()[-1])
+            img = base
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        img.save(destination, format="JPEG", quality=95)
+
+
+def convert_renderings_to_jpeg(input_dir: Path, output_dir: Path | None = None) -> Path:
+    """Convert unsupported renderings to JPEG for downstream pipelines."""
+
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir) if output_dir else input_dir / "converted_for_api"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for path in _iter_render_candidates(input_dir):
+        suffix = path.suffix.lower()
+        destination = output_dir / (path.stem + ".jpg")
+
+        if suffix in SUPPORTED_IMAGE_SUFFIXES:
+            destination = output_dir / path.name
+            if destination.exists() and destination.stat().st_mtime >= path.stat().st_mtime:
+                continue
+            shutil.copy2(path, destination)
+            continue
+
+        if suffix not in CONVERTIBLE_IMAGE_SUFFIXES:
+            continue
+
+        if destination.exists() and path.stat().st_mtime <= destination.stat().st_mtime:
+            continue
+
+        if suffix == ".exr":
+            _convert_exr_to_jpg(path, destination)
+        else:
+            _convert_with_pillow(path, destination)
+
+    return output_dir
+
+
+def ensure_supported_renderings(input_dir: Path) -> Path:
+    """Return a directory containing only API-compatible renderings."""
+
+    paths = list(_iter_render_candidates(input_dir))
+    convertible = [p for p in paths if p.suffix.lower() in CONVERTIBLE_IMAGE_SUFFIXES]
+    if not convertible:
+        return input_dir
+
+    converted_dir = convert_renderings_to_jpeg(input_dir)
+    return converted_dir
 
 
 def _load_rgb(path: Path) -> np.ndarray:
@@ -255,8 +363,10 @@ def process_render(path: Path, output_path: Path, recipe: RenderRecipe | None = 
 
 
 def process_directory(input_dir: Path, output_dir: Path) -> None:
-    for path in sorted(input_dir.glob("*")):
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".tif", ".tiff"}:
+    normalized_input = ensure_supported_renderings(input_dir)
+
+    for path in sorted(normalized_input.glob("*")):
+        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff"}:
             continue
         try:
             recipe = _match_recipe(path)
@@ -282,4 +392,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
