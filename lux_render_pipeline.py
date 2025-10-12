@@ -31,6 +31,7 @@ Usage examples:
 """
 from __future__ import annotations
 import os, math, glob, random
+from functools import lru_cache
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import List, Optional, Tuple, Union
@@ -94,6 +95,47 @@ def np_to_pil(arr: np.ndarray) -> Image.Image:
     arr = np.clip(arr, 0, 1)
     arr = (arr * 255.0 + 0.5).astype(np.uint8)
     return Image.fromarray(arr)
+
+
+@lru_cache(maxsize=16)
+def _load_texture_base(path: str) -> np.ndarray:
+    """Return the RGB float texture at ``path`` normalised to ``[0, 1]``."""
+
+    if not path:
+        raise ValueError("Texture path must be a non-empty string")
+
+    try:
+        with Image.open(path) as img:
+            texture = img.convert("RGB")
+            return np.asarray(texture, dtype=np.float32) / 255.0
+    except FileNotFoundError as exc:  # pragma: no cover - defensive
+        raise FileNotFoundError(f"Texture file not found: {path}") from exc
+    except OSError as exc:  # pragma: no cover - defensive
+        raise ValueError(f"Unable to load texture '{path}': {exc}") from exc
+
+
+def _prepare_texture(path: str, target_shape: tuple[int, int], scale: float = 1.0) -> np.ndarray:
+    """Load ``path`` and tile/resize so it fills ``target_shape``."""
+
+    base = _load_texture_base(path)
+    height, width = target_shape
+
+    if scale <= 0:
+        scale = 1.0
+
+    texture = base
+    if not math.isclose(scale, 1.0):
+        new_h = max(1, int(round(texture.shape[0] * scale)))
+        new_w = max(1, int(round(texture.shape[1] * scale)))
+        pil_tex = Image.fromarray((np.clip(texture, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8))
+        pil_tex = pil_tex.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        texture = np.asarray(pil_tex, dtype=np.float32) / 255.0
+
+    tile_y = max(1, math.ceil(height / texture.shape[0]))
+    tile_x = max(1, math.ceil(width / texture.shape[1]))
+    tiled = np.tile(texture, (tile_y, tile_x, 1))
+    return tiled[:height, :width, :]
+
 
 def resize_to_multiple(
     img: Image.Image,
@@ -173,22 +215,39 @@ def apply_material_response_finishing(
     floor_plank_contrast: float = 0.12,
     floor_specular: float = 0.18,
     floor_contact_shadow: float = 0.05,
+    floor_texture_path: Optional[str] = None,
+    floor_texture_strength: float = 0.0,
+    floor_texture_scale: float = 1.0,
     textile_contrast: float = 0.18,
     leather_sheen: float = 0.16,
     fireplace_glow: float = 0.18,
     fireplace_glow_radius: float = 45.0,
     window_reflection: float = 0.12,
     bedding_relief: float = 0.16,
+    wall_texture_path: Optional[str] = None,
+    wall_texture_strength: float = 0.0,
+    wall_texture_scale: float = 1.0,
     wall_texture: float = 0.1,
     painting_integration: float = 0.1,
     window_light_wrap: float = 0.14,
+    pool_texture_path: Optional[str] = None,
+    pool_texture_strength: float = 0.0,
+    pool_texture_scale: float = 1.0,
     exterior_atmosphere: float = 0.12,
+    sky_environment_path: Optional[str] = None,
+    sky_environment_strength: float = 0.0,
+    sky_environment_scale: float = 1.0,
 ) -> np.ndarray:
-    """Empirical material response layer to emphasize texture, shadowing, and atmosphere."""
+    """Empirical material response layer to emphasize texture, shadowing, atmosphere, and sky plates."""
 
     from scipy.ndimage import gaussian_filter, sobel  # Lazy import to avoid hard dependency at module import time
 
     rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
+
+    floor_texture_strength = float(np.clip(floor_texture_strength, 0.0, 1.0))
+    wall_texture_strength = float(np.clip(wall_texture_strength, 0.0, 1.0))
+    pool_texture_strength = float(np.clip(pool_texture_strength, 0.0, 1.0))
+    sky_environment_strength = float(np.clip(sky_environment_strength, 0.0, 1.0))
 
     if texture_boost > 0:
         # High-frequency boost to reveal subtle grain and fabric weave
@@ -205,6 +264,41 @@ def apply_material_response_finishing(
     x_norm = xx.astype(np.float32) / max(1, w - 1)
 
     floor_mask = np.clip((y_norm - 0.55) / 0.45, 0.0, 1.0)
+
+    needs_wall_mask = wall_texture > 0 or (wall_texture_path and wall_texture_strength > 0)
+    wall_mask: Optional[np.ndarray]
+    wall_mask = None
+    if needs_wall_mask:
+        wall_mask_raw = np.clip((lum - 0.32) / 0.45, 0.0, 1.0) * np.clip((0.26 - sat) / 0.26, 0.0, 1.0)
+        wall_mask_raw *= np.clip(1.0 - floor_mask, 0.0, 1.0)
+        wall_mask = gaussian_filter(wall_mask_raw, sigma=1.4)
+
+    needs_exterior_mask = (
+        exterior_atmosphere > 0
+        or (sky_environment_path and sky_environment_strength > 0)
+        or (pool_texture_path and pool_texture_strength > 0)
+    )
+    exterior_mask = None
+    depth_falloff = None
+    if needs_exterior_mask:
+        exterior_raw = np.clip((sat - 0.18) / 0.6, 0.0, 1.0) * np.clip((lum - 0.28) / 0.72, 0.0, 1.0)
+        exterior_raw *= np.clip((x_norm - 0.38) / 0.62, 0.0, 1.0)
+        exterior_mask = gaussian_filter(exterior_raw, sigma=3.5)
+        depth_falloff = np.clip(1.0 - y_norm, 0.0, 1.0)
+
+    if floor_texture_path and floor_texture_strength > 0:
+        floor_texture = _prepare_texture(floor_texture_path, (h, w), floor_texture_scale)
+        blend = floor_texture_strength * floor_mask[..., None]
+        textured_floor = 0.7 * floor_texture + 0.3 * rgb
+        rgb = np.clip(rgb * (1.0 - blend) + textured_floor * blend, 0.0, 1.0)
+
+    if pool_texture_path and pool_texture_strength > 0 and exterior_mask is not None and depth_falloff is not None:
+        pool_texture = _prepare_texture(pool_texture_path, (h, w), pool_texture_scale)
+        pool_mask = exterior_mask * np.clip((rgb[..., 2] - 0.8 * rgb[..., 1]) / 0.4, 0.0, 1.0)
+        pool_mask = gaussian_filter(pool_mask, sigma=2.0)
+        pool_blend = pool_texture_strength * pool_mask[..., None] * np.clip(depth_falloff[..., None], 0.25, 1.0)
+        pool_mix = 0.65 * pool_texture + 0.35 * rgb
+        rgb = np.clip(rgb * (1.0 - pool_blend) + pool_mix * pool_blend, 0.0, 1.0)
 
     if ambient_occlusion > 0:
         # Edge-based occlusion mask to ground furniture with the floor
@@ -259,10 +353,19 @@ def apply_material_response_finishing(
         if sheen.max() > 0:
             sheen = np.clip((sheen - 0.25) / 0.5, 0.0, 1.0)
         sheen_color = np.array([0.82, 0.73, 0.62], dtype=np.float32)
-        rgb = np.clip(rgb * (1.0 - leather_sheen * leather_mask[..., None]) + sheen_color * leather_sheen * leather_mask[..., None] * sheen[..., None], 0.0, 1.0)
+        rgb = np.clip(
+            rgb * (1.0 - leather_sheen * leather_mask[..., None])
+            + sheen_color * leather_sheen * leather_mask[..., None] * sheen[..., None],
+            0.0,
+            1.0,
+        )
 
     if fireplace_glow > 0:
-        warm_mask = ((rgb[..., 0] > 0.55) & (rgb[..., 0] - rgb[..., 1] > 0.08) & (rgb[..., 1] > rgb[..., 2])).astype(np.float32)
+        warm_mask = (
+            (rgb[..., 0] > 0.55)
+            & (rgb[..., 0] - rgb[..., 1] > 0.08)
+            & (rgb[..., 1] > rgb[..., 2])
+        ).astype(np.float32)
         warm_mask = gaussian_filter(warm_mask, sigma=1.5)
         sigma = max(1.5, fireplace_glow_radius / 18.0)
         glow = gaussian_filter(warm_mask, sigma=sigma)
@@ -292,14 +395,16 @@ def apply_material_response_finishing(
         wrap_color = np.array([1.0, 0.95, 0.82], dtype=np.float32)
         rgb = np.clip(rgb + window_light_wrap * wrap[..., None] * (wrap_color - rgb), 0.0, 1.0)
 
-    if exterior_atmosphere > 0:
-        exterior_mask = np.clip((sat - 0.18) / 0.6, 0.0, 1.0) * np.clip((lum - 0.28) / 0.72, 0.0, 1.0)
-        exterior_mask *= np.clip((x_norm - 0.38) / 0.62, 0.0, 1.0)
-        exterior_mask = gaussian_filter(exterior_mask, sigma=3.5)
-        depth_falloff = np.clip(1.0 - y_norm, 0.0, 1.0)
+    if exterior_atmosphere > 0 and exterior_mask is not None and depth_falloff is not None:
         haze = exterior_atmosphere * exterior_mask * depth_falloff
         sky_tint = np.array([0.78, 0.86, 0.92], dtype=np.float32)
         rgb = np.clip(rgb * (1.0 - haze[..., None]) + sky_tint * haze[..., None], 0.0, 1.0)
+
+    if sky_environment_path and sky_environment_strength > 0 and exterior_mask is not None and depth_falloff is not None:
+        sky_texture = _prepare_texture(sky_environment_path, (h, w), sky_environment_scale)
+        sky_weight = sky_environment_strength * exterior_mask * np.clip(depth_falloff ** 0.85, 0.0, 1.0)
+        sky_mix = 0.6 * sky_texture + 0.4 * rgb
+        rgb = np.clip(rgb * (1.0 - sky_weight[..., None]) + sky_mix * sky_weight[..., None], 0.0, 1.0)
 
     if highlight_warmth > 0:
         # Warm the brightest values to simulate fireplace spill and sunlit reflections
@@ -329,10 +434,17 @@ def apply_material_response_finishing(
         rgb = np.clip(rgb + bedding_relief * bedding_mask[..., None] * bedding_detail, 0.0, 1.0)
         rgb = np.clip(rgb - bedding_relief * 0.35 * bedding_mask[..., None] * shading[..., None], 0.0, 1.0)
 
+    if wall_texture_path and wall_texture_strength > 0 and wall_mask is not None:
+        wall_texture_img = _prepare_texture(wall_texture_path, (h, w), wall_texture_scale)
+        wall_blend = wall_texture_strength * wall_mask[..., None]
+        wall_mix = 0.65 * wall_texture_img + 0.35 * rgb
+        rgb = np.clip(rgb * (1.0 - wall_blend) + wall_mix * wall_blend, 0.0, 1.0)
+
     if wall_texture > 0:
-        wall_mask = np.clip((lum - 0.32) / 0.45, 0.0, 1.0) * np.clip((0.26 - sat) / 0.26, 0.0, 1.0)
-        wall_mask *= np.clip(1.0 - floor_mask, 0.0, 1.0)
-        wall_mask = gaussian_filter(wall_mask, sigma=1.4)
+        if wall_mask is None:
+            wall_mask_raw = np.clip((lum - 0.32) / 0.45, 0.0, 1.0) * np.clip((0.26 - sat) / 0.26, 0.0, 1.0)
+            wall_mask_raw *= np.clip(1.0 - floor_mask, 0.0, 1.0)
+            wall_mask = gaussian_filter(wall_mask_raw, sigma=1.4)
         wall_detail = rgb - gaussian_filter(rgb, sigma=(2.6, 2.6, 0))
         wall_detail = gaussian_filter(wall_detail, sigma=(0.9, 0.9, 0))
         rng = np.random.default_rng(42)
@@ -451,16 +563,28 @@ class FinishConfig:
     floor_plank_contrast: float = 0.12
     floor_specular: float = 0.18
     floor_contact_shadow: float = 0.05
+    floor_texture_path: Optional[str] = None
+    floor_texture_strength: float = 0.0
+    floor_texture_scale: float = 1.0
     textile_contrast: float = 0.18
     leather_sheen: float = 0.16
     fireplace_glow: float = 0.18
     fireplace_glow_radius: float = 45.0
     window_reflection: float = 0.12
     bedding_relief: float = 0.16
+    wall_texture_path: Optional[str] = None
+    wall_texture_strength: float = 0.0
+    wall_texture_scale: float = 1.0
     wall_texture: float = 0.1
     painting_integration: float = 0.1
     window_light_wrap: float = 0.14
+    pool_texture_path: Optional[str] = None
+    pool_texture_strength: float = 0.0
+    pool_texture_scale: float = 1.0
     exterior_atmosphere: float = 0.12
+    sky_environment_path: Optional[str] = None
+    sky_environment_strength: float = 0.0
+    sky_environment_scale: float = 1.0
 
 # --------------------------
 # Core pipeline
@@ -643,16 +767,28 @@ class LuxuryRenderPipeline:
                 floor_plank_contrast=finish.floor_plank_contrast,
                 floor_specular=finish.floor_specular,
                 floor_contact_shadow=finish.floor_contact_shadow,
+                floor_texture_path=finish.floor_texture_path,
+                floor_texture_strength=finish.floor_texture_strength,
+                floor_texture_scale=finish.floor_texture_scale,
                 textile_contrast=finish.textile_contrast,
                 leather_sheen=finish.leather_sheen,
                 fireplace_glow=finish.fireplace_glow,
                 fireplace_glow_radius=finish.fireplace_glow_radius,
                 window_reflection=finish.window_reflection,
                 bedding_relief=finish.bedding_relief,
+                wall_texture_path=finish.wall_texture_path,
+                wall_texture_strength=finish.wall_texture_strength,
+                wall_texture_scale=finish.wall_texture_scale,
                 wall_texture=finish.wall_texture,
                 painting_integration=finish.painting_integration,
                 window_light_wrap=finish.window_light_wrap,
+                pool_texture_path=finish.pool_texture_path,
+                pool_texture_strength=finish.pool_texture_strength,
+                pool_texture_scale=finish.pool_texture_scale,
                 exterior_atmosphere=finish.exterior_atmosphere,
+                sky_environment_path=finish.sky_environment_path,
+                sky_environment_strength=finish.sky_environment_strength,
+                sky_environment_scale=finish.sky_environment_scale,
             )
         out = np_to_pil(rgb)
 
@@ -714,16 +850,28 @@ def main(
     floor_plank_contrast: float = typer.Option(0.12, help="Material response: enhance floor plank definition"),
     floor_specular: float = typer.Option(0.18, help="Material response: specular streak intensity on flooring"),
     floor_contact_shadow: float = typer.Option(0.05, help="Material response: floor transition contact shadow"),
+    floor_texture: Optional[str] = typer.Option(None, help="Material response: floor texture image path"),
+    floor_texture_strength: float = typer.Option(0.0, min=0.0, help="Material response: floor texture blend (0-1)", show_default=True),
+    floor_texture_scale: float = typer.Option(1.0, min=0.1, help="Material response: floor texture scale multiplier"),
     textile_contrast: float = typer.Option(0.18, help="Material response: linen/fabric separation"),
     leather_sheen: float = typer.Option(0.16, help="Material response: leather sheen blend"),
     fireplace_glow: float = typer.Option(0.18, help="Material response: fireplace spill intensity"),
     fireplace_glow_radius: float = typer.Option(45.0, help="Material response: fireplace glow falloff radius"),
     window_reflection: float = typer.Option(0.12, help="Material response: window reflection spill on flooring"),
     bedding_relief: float = typer.Option(0.16, help="Material response: bedding wrinkle relief and occlusion"),
+    wall_texture_path: Optional[str] = typer.Option(None, help="Material response: wall texture image path"),
+    wall_texture_strength: float = typer.Option(0.0, min=0.0, help="Material response: wall texture blend (0-1)", show_default=True),
+    wall_texture_scale: float = typer.Option(1.0, min=0.1, help="Material response: wall texture scale multiplier"),
     wall_texture: float = typer.Option(0.1, help="Material response: wall microtexture strength"),
     painting_integration: float = typer.Option(0.1, help="Material response: wall art integration and rim light"),
     window_light_wrap: float = typer.Option(0.14, help="Material response: window light wrap onto interior surfaces"),
+    pool_texture_path: Optional[str] = typer.Option(None, help="Material response: pool tile texture image path"),
+    pool_texture_strength: float = typer.Option(0.0, min=0.0, help="Material response: pool texture blend (0-1)", show_default=True),
+    pool_texture_scale: float = typer.Option(1.0, min=0.1, help="Material response: pool texture scale multiplier"),
     exterior_atmosphere: float = typer.Option(0.12, help="Material response: exterior haze and atmospheric blend"),
+    sky_environment_path: Optional[str] = typer.Option(None, help="Material response: sky environment plate (image path)"),
+    sky_environment_strength: float = typer.Option(0.0, min=0.0, help="Material response: sky environment blend (0-1)", show_default=True),
+    sky_environment_scale: float = typer.Option(1.0, min=0.1, help="Material response: sky environment horizontal scale"),
     # Branding
     logo: Optional[str] = typer.Option(None, help="Path to PNG/SVG logo (PNG w/ alpha recommended)"),
     brand_text: Optional[str] = typer.Option(None, help="Caption, e.g. 'The Veridian | Penthouse 21B'"),
@@ -757,16 +905,28 @@ def main(
         floor_plank_contrast=floor_plank_contrast,
         floor_specular=floor_specular,
         floor_contact_shadow=floor_contact_shadow,
+        floor_texture_path=floor_texture,
+        floor_texture_strength=floor_texture_strength,
+        floor_texture_scale=floor_texture_scale,
         textile_contrast=textile_contrast,
         leather_sheen=leather_sheen,
         fireplace_glow=fireplace_glow,
         fireplace_glow_radius=fireplace_glow_radius,
         window_reflection=window_reflection,
         bedding_relief=bedding_relief,
+        wall_texture_path=wall_texture_path,
+        wall_texture_strength=wall_texture_strength,
+        wall_texture_scale=wall_texture_scale,
         wall_texture=wall_texture,
         painting_integration=painting_integration,
         window_light_wrap=window_light_wrap,
+        pool_texture_path=pool_texture_path,
+        pool_texture_strength=pool_texture_strength,
+        pool_texture_scale=pool_texture_scale,
         exterior_atmosphere=exterior_atmosphere,
+        sky_environment_path=sky_environment_path,
+        sky_environment_strength=sky_environment_strength,
+        sky_environment_scale=sky_environment_scale,
     )
 
     pipe = LuxuryRenderPipeline(
