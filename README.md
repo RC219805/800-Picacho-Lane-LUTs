@@ -40,6 +40,12 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 ## Innovation
 **Material Response LUTs** analyze and enhance how different surfaces interact with light—shifting from purely global color transforms to surface-aware rendering that respects highlights, midtones, and micro-contrast differently across materials. The approach keeps natural roll-off in highlights, protects nuanced midtone skin detail, and intelligently refines specular textures so metal, stone, glass, and fabric all retain their distinctive depth.
 
+### Design Considerations Beyond the Current Pipeline
+- **Uncaptured sensory dimensions** – Acoustic character, scent associations, and haptic memory remain outside of the renderer's scope. Documenting these omissions helps stakeholders plan auxiliary storytelling layers (audio beds, scent marketing, tactile staging) that finish the luxury experience.
+- **Procedural vs. authored control** – `lux_render_pipeline.py` mixes stochastic calls such as `algorithmic_stone`'s `weighted_random` selections with highly specific authored values (for example, hand-tuned fireplace glow radii). Teams should intentionally decide which elements benefit from parametric exploration and which require fixed creative direction so that variation never dilutes signature moments.
+- **Modeling negative space** – While the pipeline meticulously models materials and lighting, it has no explicit "spatial restraint" metric (i.e., a guideline or measure for intentionally preserving empty space, minimalism, or the absence of visual clutter in a scene). When scenes demand quiet luxury, consider companion guidelines (shot lists, framing briefs, staging constraints) that preserve emptiness and silence instead of defaulting to additive richness.
+- **Codification as creative baseline** – The system excels at making tacit craft repeatable. Treat that repeatability as a scaffold; the most memorable executions will still come from consciously breaking expectations once the technical baseline is in place.
+
 ## Usage
 
 1. Import into DaVinci Resolve, Premiere Pro, or other color-grading software.
