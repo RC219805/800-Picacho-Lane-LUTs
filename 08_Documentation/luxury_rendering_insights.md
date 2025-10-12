@@ -16,7 +16,7 @@ This document summarizes key architectural principles that emerge from the luxur
 - Variation sets orchestrate morning, twilight, and night moods, each nudging specific metrics (comfort, awe, luxury index, future alignment) to align with the intended emotional register of that time of day.【F:material_response_optimizer.py†L176-L207】
 
 ## Hierarchies of Perception
-- The luminance strategy constructs scene-specific masks and dodge guidance so focal zones command attention without flattening the space, mirroring human perceptual hierarchies.【F:material_response_optimizer.py†L210-L232】
+- The luminance strategy constructs scene-specific masks and dodge guidance so focal zones command attention without flattening the space, mirroring human perceptual hierarchies.[^1]
 
 ## Computational Phenomenology
 - Finishing parameters such as fireplace glow radius, window light wrap, and textile contrast codify how atmosphere and tactile cues should feel, translating phenomenological goals into reproducible algorithmic adjustments.[^1]
