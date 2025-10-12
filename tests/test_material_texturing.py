@@ -102,11 +102,11 @@ from lux_render_pipeline import apply_material_response_finishing
 
 
 def _make_texture(path: Path, color: tuple[int, int, int]) -> None:
-    tile = np.zeros((32, 32, 3), dtype=np.uint8)
+    tile = np.zeros((2, 2, 3), dtype=np.uint8)
     tile[..., 0] = color[0]
     tile[..., 1] = color[1]
     tile[..., 2] = color[2]
-    Image.fromarray(tile, mode="RGB").save(path, format="JPEG", quality=95)
+    Image.fromarray(tile, mode="RGB").save(path)
 
 
 def test_floor_texture_blend_enriches_lower_rows(tmp_path: Path) -> None:

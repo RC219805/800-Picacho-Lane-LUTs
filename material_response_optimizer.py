@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, List, Mapping, Tuple
 
 
 @dataclass(frozen=True)
@@ -88,6 +88,51 @@ class MaterialResponseReport:
         """Return the scene with the highest ``metric_name`` for ``version``."""
 
         return max(self.iter_scenes(), key=lambda scene: scene.metric(version, metric_name))
+
+
+@dataclass(frozen=True)
+class MaterialDefinition:
+    """Physical and rendering properties for a specific material."""
+
+    name: str
+    ior: float
+    roughness_range: Tuple[float, float]
+    displacement_mm: float
+    mapping_type: str
+    texture_layers: List[str]
+
+    @classmethod
+    def herringbone_wood(cls) -> "MaterialDefinition":
+        return cls(
+            name="herringbone_oak",
+            ior=1.53,
+            roughness_range=(0.35, 0.65),
+            displacement_mm=1.5,
+            mapping_type="uv",
+            texture_layers=["diffuse", "normal", "displacement", "specularity_inverse"],
+        )
+
+    @classmethod
+    def stone_pavers(cls) -> "MaterialDefinition":
+        return cls(
+            name="algorithmic_stone",
+            ior=1.57,
+            roughness_range=(0.4, 0.7),
+            displacement_mm=3.0,
+            mapping_type="procedural",
+            texture_layers=["diffuse_variants", "roughness_noise", "joint_geometry"],
+        )
+
+    @classmethod
+    def textured_plaster(cls) -> "MaterialDefinition":
+        return cls(
+            name="granular_plaster",
+            ior=1.52,
+            roughness_range=(0.6, 0.8),
+            displacement_mm=8.0,
+            mapping_type="triplanar",
+            texture_layers=["base_normal", "macro_undulation", "roughness_variation"],
+        )
 
 
 class RenderEnhancementPlanner:
@@ -351,9 +396,163 @@ class RenderEnhancementPlanner:
         }
 
 
+class MaterialAwareEnhancementPlanner(RenderEnhancementPlanner):
+    """Extended planner that incorporates material-specific rendering strategies."""
+
+    def __init__(self, report: MaterialResponseReport):
+        super().__init__(report)
+        self.materials = self._initialize_materials()
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> "MaterialAwareEnhancementPlanner":
+        return cls(MaterialResponseReport.load(path))
+
+    def _initialize_materials(self) -> dict[str, MaterialDefinition]:
+        """Map scenes to their primary materials."""
+
+        return {
+            "great_room": MaterialDefinition.herringbone_wood(),
+            "aerial": MaterialDefinition.stone_pavers(),
+            "kitchen": MaterialDefinition.textured_plaster(),
+        }
+
+    def build_blueprint(self) -> dict[str, Any]:
+        """Enhanced blueprint with material-aware strategies."""
+
+        base_blueprint = super().build_blueprint()
+        base_blueprint["material_integration"] = self._derive_material_strategy()
+        base_blueprint["exposure_zones"] = self._derive_exposure_zones()
+        base_blueprint["shader_settings"] = self._derive_shader_settings()
+        return base_blueprint
+
+    def _derive_material_strategy(self) -> dict[str, Any]:
+        """Generate material-specific rendering instructions."""
+
+        strategies: dict[str, Any] = {}
+        for scene_name, material in self.materials.items():
+            scene = self.report.scenes.get(scene_name)
+            if scene is None:
+                continue
+
+            current_texture = scene.metric("regular", "texture_dimension")
+            target_texture = 2.25 if scene_name == "great_room" else 1.95
+
+            strategies[scene_name] = {
+                "material": material.name,
+                "current_texture_dimension": current_texture,
+                "target_texture_dimension": target_texture,
+                "rendering_params": {
+                    "ior": material.ior,
+                    "roughness_min": material.roughness_range[0],
+                    "roughness_max": material.roughness_range[1],
+                    "displacement": {
+                        "strength_mm": material.displacement_mm,
+                        "subdivision_level": 4 if material.displacement_mm > 5 else 3,
+                    },
+                    "mapping": {
+                        "type": material.mapping_type,
+                        "layers": material.texture_layers,
+                    },
+                },
+                "optimization_notes": self._get_material_optimization(material, current_texture),
+            }
+
+        return strategies
+
+    def _derive_exposure_zones(self) -> dict[str, Any]:
+        """Create exposure zones based on luminance hierarchy."""
+
+        zones: List[dict[str, Any]] = []
+        for scene in self.report.iter_scenes():
+            base_luminance = scene.metric("regular", "luminance")
+            ev_adjustment = self._calculate_ev_adjustment(base_luminance, 0.31)
+            zones.append(
+                {
+                    "scene": scene.name,
+                    "base_luminance": base_luminance,
+                    "ev_adjustment": ev_adjustment,
+                    "tone_mapping": "filmic" if base_luminance < 0.3 else "aces",
+                    "local_adjustments": self._get_local_adjustments(scene.name),
+                }
+            )
+
+        return {"zones": zones, "global_reference": 0.31}
+
+    def _derive_shader_settings(self) -> dict[str, Any]:
+        """Generate shader-specific settings for each material type."""
+
+        return {
+            "wood": {
+                "anisotropy": 0.5,
+                "anisotropy_rotation": 0.0,
+                "clearcoat": 0.3,
+                "clearcoat_roughness": 0.1,
+                "subsurface": 0.0,
+                "specular_workflow": "inverse_grain_correlation",
+            },
+            "stone": {
+                "procedural_variation": {
+                    "count": 12,
+                    "seed": 42,
+                    "distribution": "weighted_random",
+                    "mortar_depth": 3.0,
+                    "mortar_roughness": 0.85,
+                }
+            },
+            "plaster": {
+                "multi_layer_noise": {
+                    "fine_scale": 0.2,
+                    "fine_strength": 0.3,
+                    "macro_scale": 8.0,
+                    "macro_strength": 0.7,
+                    "roughness_correlation": "follow_macro",
+                }
+            },
+        }
+
+    def _get_material_optimization(self, material: MaterialDefinition, current: float) -> str:
+        """Return optimization notes for specific material."""
+
+        if material.name == "herringbone_oak":
+            return f"Increase grain contrast by {round((2.25 - current) * 100)}% through displacement"
+        if material.name == "algorithmic_stone":
+            return "Add 8-12 unique variants with procedural distribution"
+        return "Layer dual-frequency noise for organic complexity"
+
+    def _calculate_ev_adjustment(self, current: float, target: float) -> float:
+        """Calculate exposure value adjustment in stops."""
+
+        import math
+
+        if current <= 0:
+            return 0.0
+        return round(math.log2(target / current), 2)
+
+    def _get_local_adjustments(self, scene_name: str) -> List[dict[str, Any]]:
+        """Return scene-specific local exposure adjustments."""
+
+        adjustments = {
+            "pool": [
+                {"area": "water_surface", "ev_delta": +0.5},
+                {"area": "underwater", "ev_delta": -0.3},
+            ],
+            "great_room": [
+                {"area": "skylight_shaft", "ev_delta": +1.0},
+                {"area": "corner_shadows", "ev_delta": -0.5},
+            ],
+            "kitchen": [
+                {"area": "island_surface", "ev_delta": +0.3},
+                {"area": "backsplash", "ev_delta": 0.0},
+            ],
+        }
+        return adjustments.get(scene_name, [])
+
+
 __all__ = [
     "MaterialResponseReport",
     "MetricSnapshot",
+    "MaterialAwareEnhancementPlanner",
+    "MaterialDefinition",
     "RenderEnhancementPlanner",
     "SceneReport",
 ]
