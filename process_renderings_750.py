@@ -366,7 +366,7 @@ def process_directory(input_dir: Path, output_dir: Path) -> None:
     normalized_input = ensure_supported_renderings(input_dir)
 
     for path in sorted(normalized_input.glob("*")):
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff"}:
+        if path.suffix.lower() not in (SUPPORTED_IMAGE_SUFFIXES | CONVERTIBLE_IMAGE_SUFFIXES):
             continue
         try:
             recipe = _match_recipe(path)
