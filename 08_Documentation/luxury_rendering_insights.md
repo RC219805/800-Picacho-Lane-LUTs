@@ -3,7 +3,7 @@
 This document summarizes key architectural principles that emerge from the luxury rendering toolchain.
 
 ## Quantifying the Aesthetic Experience
-- The `MetricSnapshot` schema models luxury perception as a multidimensional scorecard spanning luminance, awe, comfort, texture dimension, future alignment, and an overall luxury index, enabling structured comparison across render versions.【F:material_response_optimizer.py†L12-L43】
+- The `MetricSnapshot` schema models luxury perception as a multidimensional scorecard spanning luminance, awe, comfort, texture dimension, future alignment, and an overall luxury index, enabling structured comparison across render versions.[^1]
 - Luminance guidance explicitly cites a 0.30–0.32 perception sweet spot while coupling adjustments with focus areas such as specular pool reflections or roofline glow, reinforcing that exposure is sculpted to local storytelling goals instead of globally amplified.【F:material_response_optimizer.py†L210-L232】
 
 ## Materials as Computational Substrate
