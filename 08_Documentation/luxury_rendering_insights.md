@@ -19,7 +19,9 @@ This document summarizes key architectural principles that emerge from the luxur
 - The luminance strategy constructs scene-specific masks and dodge guidance so focal zones command attention without flattening the space, mirroring human perceptual hierarchies.【F:material_response_optimizer.py†L210-L232】
 
 ## Computational Phenomenology
-- Finishing parameters such as fireplace glow radius, window light wrap, and textile contrast codify how atmosphere and tactile cues should feel, translating phenomenological goals into reproducible algorithmic adjustments.【F:lux_render_pipeline.py†L214-L236】
+- Finishing parameters such as fireplace glow radius, window light wrap, and textile contrast codify how atmosphere and tactile cues should feel, translating phenomenological goals into reproducible algorithmic adjustments.[^1]
 
 ## Open Question
 - The pipeline’s discipline makes luxury legible and repeatable, yet it also raises the question of whether codified heuristics can fully capture the serendipity often present in lived luxury experiences.
+
+[^1]: See `lux_render_pipeline.py`, lines 214–236.
