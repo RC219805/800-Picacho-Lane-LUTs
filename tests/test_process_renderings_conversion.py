@@ -14,8 +14,15 @@ from process_renderings_750 import (
 
 
 def _write_dummy_image(path: Path) -> None:
-    data = (np.linspace(0, 255, 16, dtype=np.uint8).reshape(4, 4)[:, :, None]).repeat(3, axis=2)
-    Image.fromarray(data, mode="RGB").save(path)
+    # Create a 1D array of 16 values from 0 to 255
+    grayscale_values = np.linspace(0, 255, 16, dtype=np.uint8)
+    # Reshape to a 4x4 2D array
+    grayscale_image = grayscale_values.reshape(4, 4)
+    # Add a channel dimension to make it (4, 4, 1)
+    grayscale_image_3d = grayscale_image[:, :, None]
+    # Repeat the single channel 3 times to create an RGB image (4, 4, 3)
+    rgb_image = np.repeat(grayscale_image_3d, 3, axis=2)
+    Image.fromarray(rgb_image, mode="RGB").save(path)
 
 
 def test_convert_renderings_to_jpeg_creates_jpg(tmp_path: Path) -> None:
