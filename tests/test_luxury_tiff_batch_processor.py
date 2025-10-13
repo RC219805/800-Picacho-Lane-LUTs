@@ -18,6 +18,7 @@ from PIL import Image, TiffImagePlugin
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import luxury_tiff_batch_processor as ltiff
+import luxury_tiff_batch_processor.adjustments as adjustments
 import luxury_tiff_batch_processor.pipeline as pipeline
 import luxury_tiff_batch_processor.io_utils as io_utils
 
@@ -78,6 +79,23 @@ def test_apply_adjustments_vibrance_boosts_muted_colors_more():
     muted_gain = sat_after[1, 0] - sat_before[1, 0]
     saturated_gain = sat_after[2, 0] - sat_before[2, 0]
     assert muted_gain > saturated_gain
+
+
+def test_apply_clarity_handles_negative_softening():
+    rng = np.random.default_rng(2025)
+    arr = rng.random((10, 10, 3), dtype=np.float32) * 0.6 + 0.2
+
+    boosted = adjustments.apply_clarity(arr, 0.4)
+    softened = adjustments.apply_clarity(arr, -0.4)
+    reference = adjustments.gaussian_blur(arr, radius=3)
+
+    base_delta = float(np.mean(np.abs(arr - reference)))
+    boost_delta = float(np.mean(np.abs(boosted - reference)))
+    soften_delta = float(np.mean(np.abs(softened - reference)))
+
+    assert boost_delta > base_delta
+    assert soften_delta < base_delta
+    assert np.allclose(softened, np.clip(softened, 0.0, 1.0))
 
 
 def test_processing_profiles_balance_costly_filters():

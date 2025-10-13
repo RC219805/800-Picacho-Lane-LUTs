@@ -326,13 +326,20 @@ def gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -
 
 
 def apply_clarity(arr: np.ndarray, amount: float) -> np.ndarray:
-    if amount <= 0:
+    if amount == 0:
         return arr
-    radius = max(1, int(round(1 + amount * 5)))
+
+    emphasis = abs(amount)
+    radius = max(1, int(round(1 + emphasis * 5)))
     blurred = gaussian_blur(arr, radius)
-    high_pass = arr - blurred
-    LOGGER.debug("Clarity amount=%s radius=%s", amount, radius)
-    return np.clip(arr + high_pass * (0.6 + amount * 0.8), 0.0, 1.0)
+
+    if amount > 0:
+        high_pass = arr - blurred
+        LOGGER.debug("Clarity boost amount=%s radius=%s", amount, radius)
+        return np.clip(arr + high_pass * (0.6 + amount * 0.8), 0.0, 1.0)
+
+    LOGGER.debug("Clarity soften amount=%s radius=%s", amount, radius)
+    return np.clip(arr + (blurred - arr) * emphasis, 0.0, 1.0)
 
 
 def rgb_to_yuv(arr: np.ndarray) -> np.ndarray:
