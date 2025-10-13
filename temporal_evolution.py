@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Mapping, MutableSequence, Sequence
 
-
 @dataclass(frozen=True)
 class EvolutionDirective:
     """A single directive inside a temporal evolution discipline.
@@ -47,7 +46,6 @@ class EvolutionDirective:
             return self.summary
         return {self.summary: self.detail}
 
-
 @dataclass(frozen=True)
 class EvolutionDiscipline:
     """A named collection of :class:`EvolutionDirective` instances."""
@@ -72,7 +70,6 @@ class EvolutionDiscipline:
         """Return a serialisable list representation of the directives."""
 
         return [directive.serialise() for directive in self.directives]
-
 
 @dataclass(frozen=True)
 class TemporalEvolutionRoadmap:
@@ -123,7 +120,6 @@ class TemporalEvolutionRoadmap:
 
         return {discipline.name: discipline.serialise() for discipline in self.disciplines}
 
-
 def _normalise_directives(name: str, directives: object) -> List[EvolutionDirective]:
     if isinstance(directives, (str, bytes)) or not isinstance(directives, Sequence):
         raise TypeError(
@@ -160,10 +156,8 @@ def _normalise_directives(name: str, directives: object) -> List[EvolutionDirect
 
     return result
 
-
 __all__ = [
     "EvolutionDirective",
     "EvolutionDiscipline",
     "TemporalEvolutionRoadmap",
 ]
-
