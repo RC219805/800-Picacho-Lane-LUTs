@@ -106,7 +106,7 @@ def _make_texture(path: Path, color: tuple[int, int, int]) -> None:
     tile[..., 0] = color[0]
     tile[..., 1] = color[1]
     tile[..., 2] = color[2]
-    Image.fromarray(tile, mode="RGB").save(path)
+    Image.fromarray(tile).save(path)
 
 
 def test_floor_texture_blend_enriches_lower_rows(tmp_path: Path) -> None:

@@ -22,7 +22,7 @@ def _write_dummy_image(path: Path) -> None:
     grayscale_image_3d = grayscale_image[:, :, None]
     # Repeat the single channel 3 times to create an RGB image (4, 4, 3)
     rgb_image = np.repeat(grayscale_image_3d, 3, axis=2)
-    Image.fromarray(rgb_image, mode="RGB").save(path)
+    Image.fromarray(rgb_image).save(path)
 
 
 def test_convert_renderings_to_jpeg_creates_jpg(tmp_path: Path) -> None:

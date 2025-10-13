@@ -465,16 +465,29 @@ def save_image(
     elif dtype_info and dtype_info.bits < 16 and array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
         array_to_write = array_to_write.astype(np.uint8)
 
-    if array_to_write.ndim == 3 and array_to_write.shape[2] == 4:
-        mode = "RGBA"
-    elif array_to_write.ndim == 3 and array_to_write.shape[2] == 2:
-        mode = "LA"
-    elif array_to_write.ndim == 3 and array_to_write.shape[2] == 3:
-        mode = "RGB"
+    # Pillow can infer mode for most uint8 arrays, but needs explicit mode for:
+    # - float32 multi-channel arrays (can't infer RGB/RGBA from float data)
+    # - LA mode (grayscale + alpha) with uint8
+    # For uint8 arrays with standard shapes, Pillow infers correctly without mode parameter
+    if array_to_write.dtype == np.float32 and array_to_write.ndim == 3:
+        # Float RGB/RGBA needs explicit mode
+        if array_to_write.shape[2] == 4:
+            # Suppress deprecation warning for necessary mode specification
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+                image = Image.fromarray(array_to_write, mode="RGBA")
+        elif array_to_write.shape[2] == 3:
+            # Float RGB needs explicit mode
+            import warnings
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=DeprecationWarning)
+                image = Image.fromarray(array_to_write, mode="RGB")
+        else:
+            image = Image.fromarray(array_to_write)
     else:
-        mode = "L"
-
-    image = Image.fromarray(array_to_write, mode=mode)
+        # For uint8/uint16/int data, Pillow can infer mode correctly
+        image = Image.fromarray(array_to_write)
     save_kwargs = {"compression": compression}
     if metadata is not None:
         save_kwargs["tiffinfo"] = metadata

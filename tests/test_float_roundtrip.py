@@ -77,7 +77,7 @@ def test_image_to_float_roundtrip_signed_int_image():
 
 def test_image_to_float_float_dynamic_range_restored():
     data = np.linspace(-2.0, 2.0, 36, dtype=np.float32).reshape(6, 6)
-    image = Image.fromarray(data, mode="F")
+    image = Image.fromarray(data)
 
     result = ltiff.image_to_float(image)
     assert isinstance(result, ltiff.ImageToFloatResult)
