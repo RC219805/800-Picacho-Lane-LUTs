@@ -1,0 +1,8 @@
+[MASTER]
+ignore = tests
+
+[TYPECHECK]
+ignored-modules = torch,diffusers,controlnet_aux,realesrgan
+
+[MESSAGES CONTROL]
+enable = E,F

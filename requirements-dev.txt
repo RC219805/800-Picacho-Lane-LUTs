@@ -1,3 +1,6 @@
-numpy>=1.24,<3
-pytest>=7.4
-pytest-xdist>=3.3
+-r requirements.txt
+pylint==4.0.*
+pytest>=8
+tqdm
+tifffile==2024.8.*
+imagecodecs

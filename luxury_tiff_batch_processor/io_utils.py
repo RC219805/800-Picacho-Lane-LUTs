@@ -442,7 +442,13 @@ def save_image(
             extratags.append((34675, "B", len(icc_profile), icc_profile, False))
         if metadata:
             try:
-                tiff_kwargs["metadata"] = {tag: metadata[tag] for tag in metadata}
+                metadata_items = (
+                    dict(metadata.items()) if hasattr(metadata, "items") else dict(metadata)
+                )
+                tiff_kwargs["metadata"] = {str(tag): value for tag, value in metadata_items.items()}
+                description = metadata_items.get(270)
+                if isinstance(description, str):
+                    tiff_kwargs.setdefault("description", description)
             except Exception:  # pragma: no cover - best-effort metadata copy
                 LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
         if extratags:
