@@ -82,9 +82,13 @@ def main() -> None:
     destination: Path = args.destination.expanduser().resolve()
 
     if not root.exists():
-        raise SystemExit(f"Root path '{root}' does not exist.")
+        raise SystemExit(
+            f"Root path '{root}' does not exist. Please check the path for typos and verify that you have the necessary permissions."
+        )
     if not root.is_dir():
-        raise SystemExit(f"Root path '{root}' exists but is not a directory.")
+        raise SystemExit(
+            f"Root path '{root}' exists but is not a directory. Please check that the path is correct and that you have the necessary permissions."
+        )
 
     write_manifest(root, destination)
 
