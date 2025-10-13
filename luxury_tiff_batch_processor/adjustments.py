@@ -336,10 +336,13 @@ def apply_clarity(arr: np.ndarray, amount: float) -> np.ndarray:
     mode = "boost" if amount > 0 else "soften"
     LOGGER.debug("Clarity amount=%s radius=%s mode=%s", amount, radius, mode)
 
-    if amount > 0:
-        return np.clip(arr + high_pass * (0.6 + amount * 0.8), 0.0, 1.0)
+    boost_strength = 0.6 + emphasis * 0.8
+    soften_strength = emphasis
 
-    return np.clip(arr - high_pass * emphasis, 0.0, 1.0)
+    if amount > 0:
+        return np.clip(arr + high_pass * boost_strength, 0.0, 1.0)
+
+    return np.clip(arr - high_pass * soften_strength, 0.0, 1.0)
 
 
 def rgb_to_yuv(arr: np.ndarray) -> np.ndarray:
