@@ -477,7 +477,11 @@ def save_image(
     image = Image.fromarray(array_to_write, mode=mode)
     save_kwargs = {"compression": compression}
     if metadata is not None:
-        save_kwargs["tiffinfo"] = metadata
+        # Convert metadata keys to strings for Pillow compatibility
+        tiffinfo = metadata
+        if isinstance(tiffinfo, dict):
+            tiffinfo = {str(k): v for k, v in tiffinfo.items()}
+        save_kwargs["tiffinfo"] = tiffinfo
     if icc_profile:
         save_kwargs["icc_profile"] = icc_profile
     image.save(destination_fs, format="TIFF", **save_kwargs)
