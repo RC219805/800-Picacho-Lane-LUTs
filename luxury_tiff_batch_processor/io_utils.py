@@ -398,6 +398,12 @@ def safe_kwargs(kwargs: Dict[Any, Any]) -> Dict[str, Any]:
 
     Python requires that keyword arguments have string keys. This helper
     converts any non-string keys to strings to prevent TypeError.
+
+    Args:
+        kwargs (Dict): A dictionary of keyword arguments, possibly with non-string keys.
+
+    Returns:
+        Dict[str, Any]: A dictionary with all keys converted to strings.
     """
     return {str(k): v for k, v in kwargs.items()}
 
