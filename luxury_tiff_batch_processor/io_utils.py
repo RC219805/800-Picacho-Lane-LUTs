@@ -393,6 +393,15 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
     return safe or None
 
 
+def safe_kwargs(kwargs: Dict) -> Dict[str, Any]:
+    """Ensure all keys in kwargs dict are strings for safe unpacking with **.
+
+    Python requires that keyword arguments have string keys. This helper
+    converts any non-string keys to strings to prevent TypeError.
+    """
+    return {str(k): v for k, v in kwargs.items()}
+
+
 def save_image(
     destination: Path,
     arr_int: np.ndarray,
@@ -447,7 +456,7 @@ def save_image(
                 LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
         if extratags:
             tiff_kwargs["extratags"] = extratags
-        tifffile.imwrite(destination_fs, array_to_write, **tiff_kwargs)
+        tifffile.imwrite(destination_fs, array_to_write, **safe_kwargs(tiff_kwargs))
         return
 
     if dtype_info and dtype_info.bits == 16:
@@ -480,7 +489,7 @@ def save_image(
         save_kwargs["tiffinfo"] = metadata
     if icc_profile:
         save_kwargs["icc_profile"] = icc_profile
-    image.save(destination_fs, format="TIFF", **save_kwargs)
+    image.save(destination_fs, format="TIFF", **safe_kwargs(save_kwargs))
 
 
 __all__ = [
@@ -491,5 +500,6 @@ __all__ = [
     "ProcessingContext",
     "float_to_dtype_array",
     "image_to_float",
+    "safe_kwargs",
     "save_image",
 ]

@@ -155,6 +155,7 @@ def test_process_single_image_profile_overrides_dtype_and_compression(
     captured_dtypes: list[np.dtype] = []
 
     def spy_float_to_dtype_array(*args, **kwargs):
+        kwargs = {str(k): v for k, v in kwargs.items()}
         dtype = np.dtype(args[1])
         captured_dtypes.append(dtype)
         return original_float_to_dtype(*args, **kwargs)
