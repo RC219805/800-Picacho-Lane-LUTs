@@ -18,7 +18,7 @@ from PIL import Image, TiffImagePlugin
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import luxury_tiff_batch_processor as ltiff
-import luxury_tiff_batch_processor.adjustments as adjustments
+import luxury_tiff_batch_processor.adjustments as adj
 import luxury_tiff_batch_processor.pipeline as pipeline
 import luxury_tiff_batch_processor.io_utils as io_utils
 
