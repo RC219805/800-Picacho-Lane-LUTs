@@ -120,7 +120,7 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
     info[270] = "Luxury scene"
     source_path = source_dir / "frame.tif"
     # Convert tiffinfo keys to strings for Pillow compatibility
-    image.save(source_path, tiffinfo=info)
+    image.save(source_path, tiffinfo={str(k): v for k, v in info.items()})
 
     dest_path = output_dir / "frame_processed.tif"
 
