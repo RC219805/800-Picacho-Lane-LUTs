@@ -336,12 +336,12 @@ def apply_clarity(arr: np.ndarray, amount: float) -> np.ndarray:
     mode = "boost" if amount > 0 else "soften"
     LOGGER.debug("Clarity amount=%s radius=%s mode=%s", amount, radius, mode)
 
-    boost_strength = 0.6 + emphasis * 0.8
-    soften_strength = emphasis
 
     if amount > 0:
+        boost_strength = 0.6 + emphasis * 0.8
         return np.clip(arr + high_pass * boost_strength, 0.0, 1.0)
 
+    soften_strength = emphasis
     return np.clip(arr - high_pass * soften_strength, 0.0, 1.0)
 
 
