@@ -119,7 +119,11 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
     info = TiffImagePlugin.ImageFileDirectory_v2()
     info[270] = "Luxury scene"
     source_path = source_dir / "frame.tif"
-    image.save(source_path, tiffinfo=info)
+    # Convert tiffinfo keys to strings for Pillow compatibility
+    tiffinfo = info
+    if isinstance(tiffinfo, dict):
+        tiffinfo = {str(k): v for k, v in tiffinfo.items()}
+    image.save(source_path, tiffinfo=tiffinfo)
 
     dest_path = output_dir / "frame_processed.tif"
 
