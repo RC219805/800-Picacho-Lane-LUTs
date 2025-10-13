@@ -24,3 +24,83 @@ classifiers = [
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["tests*", "input_images", "processed_images"]
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# Per-module options for gradual typing adoption
+[[tool.mypy.overrides]]
+module = [
+    "luxury_tiff_batch_processor.*",
+    "material_response",
+    "material_response_optimizer",
+]
+disallow_untyped_defs = false
+ignore_errors = false
+
+[[tool.mypy.overrides]]
+module = [
+    "yaml",
+    "tifffile",
+    "PIL.*",
+]
+ignore_missing_imports = true
+
+# Flake8 configuration
+[tool.flake8]
+max-line-length = 127
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    "venv",
+]
+per-file-ignores = [
+    "__init__.py:F401",
+]
+
+# Pylint configuration
+[tool.pylint.main]
+py-version = "3.10"
+jobs = 0
+recursive = true
+
+[tool.pylint.messages_control]
+disable = [
+    "missing-module-docstring",
+    "missing-class-docstring",
+    "missing-function-docstring",
+    "too-few-public-methods",
+    "too-many-arguments",
+    "too-many-locals",
+    "too-many-branches",
+    "too-many-statements",
+    "too-many-instance-attributes",
+    "duplicate-code",
+]
+
+[tool.pylint.format]
+max-line-length = 127
+
+[tool.pylint.design]
+max-args = 15
+max-locals = 25
+max-branches = 20
+max-statements = 75
