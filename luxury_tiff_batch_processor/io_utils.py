@@ -393,7 +393,7 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
     return safe or None
 
 
-def safe_kwargs(kwargs: Dict) -> Dict[str, Any]:
+def safe_kwargs(kwargs: Dict[Any, Any]) -> Dict[str, Any]:
     """Ensure all keys in kwargs dict are strings for safe unpacking with **.
 
     Python requires that keyword arguments have string keys. This helper
