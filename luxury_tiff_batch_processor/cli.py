@@ -453,9 +453,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
     return processed
 
 
-def main(argv: Optional[Iterable[str]] = None) -> None:
+def main(argv: Optional[Iterable[str]] = None) -> int:
     args = parse_args(argv)
-    run_pipeline(args)
+    return run_pipeline(args)
 
 
 __all__ = [
