@@ -665,7 +665,7 @@ class LuxuryRenderPipeline:
         # Real-ESRGAN (optional)
         self._use_realesrgan = use_realesrgan and _HAS_REALESRGAN
         if use_realesrgan and not _HAS_REALESRGAN:
-            print("[Warn] Real-ESRGAN requested but not installed. Run: pip install realesrgan basicsr")
+            print("[Warn] Real-ESRGAN requested but not installed. Install dependencies with: pip install -r requirements.txt")
         if self._use_realesrgan:
             print("[Load] Real-ESRGAN x4...")
             self.realesrgan = RealESRGAN(self.device, scale=4)
