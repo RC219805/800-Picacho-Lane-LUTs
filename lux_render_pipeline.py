@@ -69,6 +69,8 @@ except Exception:
 
 # Utilities
 # --------------------------
+
+
 def seed_all(seed: int) -> Generator:
     random.seed(seed)
     np.random.seed(seed)
@@ -77,19 +79,23 @@ def seed_all(seed: int) -> Generator:
         torch.cuda.manual_seed_all(seed)
     return Generator(device="cuda" if torch.cuda.is_available() else "cpu").manual_seed(seed)
 
+
 def load_image(path: Union[str, Path]) -> Image.Image:
     img = Image.open(path).convert("RGB")
     return img
 
+
 def save_image(img: Image.Image, path: Union[str, Path]) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
+
 
 def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:
     arr = np.array(img)
     if to_float:
         arr = arr.astype(np.float32) / 255.0
     return arr
+
 
 def np_to_pil(arr: np.ndarray) -> Image.Image:
     arr = np.clip(arr, 0, 1)
@@ -153,6 +159,8 @@ def resize_to_multiple(
 # --------------------------
 # Preprocessors (Canny + Depth)
 # --------------------------
+
+
 class Preprocessor:
     def __init__(self, canny_low: int = 100, canny_high: int = 200, use_depth: bool = True):
         self.canny = CannyDetector(low_threshold=canny_low, high_threshold=canny_high)
@@ -173,15 +181,19 @@ class Preprocessor:
 # --------------------------
 # Post-processing (photo finish)
 # --------------------------
+
+
 def aces_film_tonemap(rgb: np.ndarray) -> np.ndarray:
     """ACES-like tonemap, expects float RGB in [0,1]."""
     a, b, c, d, e = 2.51, 0.03, 2.43, 0.59, 0.14
     return np.clip((rgb * (a * rgb + b)) / (rgb * (c * rgb + d) + e), 0.0, 1.0)
 
+
 def gray_world_white_balance(rgb: np.ndarray) -> np.ndarray:
     mean = rgb.reshape(-1, 3).mean(axis=0) + 1e-6
     scale = mean.mean() / mean
     return np.clip(rgb * scale, 0.0, 1.0)
+
 
 def add_bloom(rgb: np.ndarray, threshold: float = 0.8, blur_radius: int = 9, intensity: float = 0.25) -> np.ndarray:
     from scipy.ndimage import gaussian_filter
@@ -189,6 +201,7 @@ def add_bloom(rgb: np.ndarray, threshold: float = 0.8, blur_radius: int = 9, int
     mask = (lum > threshold).astype(np.float32)
     glow = np.stack([gaussian_filter(rgb[...,i] * mask, blur_radius) for i in range(3)], axis=-1)
     return np.clip(rgb + intensity * glow, 0.0, 1.0)
+
 
 def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     h, w = rgb.shape[:2]
@@ -198,6 +211,7 @@ def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     r /= r.max() + 1e-6
     mask = 1.0 - strength * (r**2)
     return np.clip(rgb * mask[...,None], 0.0, 1.0)
+
 
 def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.ndarray:
     rng = np.random.default_rng(seed)
@@ -469,6 +483,7 @@ def apply_material_response_finishing(
 
     return rgb
 
+
 def adjust_contrast_saturation(rgb: np.ndarray, contrast: float = 1.08, saturation: float = 1.05) -> np.ndarray:
     # Contrast in linear light
     gray = rgb.mean(axis=2, keepdims=True)
@@ -484,6 +499,8 @@ def adjust_contrast_saturation(rgb: np.ndarray, contrast: float = 1.08, saturati
 # --------------------------
 # Branding (logo + caption)
 # --------------------------
+
+
 def overlay_logo_caption(img: Image.Image, logo_path: Optional[str], text: Optional[str], margin: int = 36) -> Image.Image:
     canvas = img.copy()
     draw = ImageDraw.Draw(canvas)
@@ -523,6 +540,8 @@ def overlay_logo_caption(img: Image.Image, logo_path: Optional[str], text: Optio
 # --------------------------
 # Config
 # --------------------------
+
+
 @dataclass
 class ModelIDs:
     base_model: str = "runwayml/stable-diffusion-v1-5"
@@ -530,6 +549,7 @@ class ModelIDs:
     controlnet_depth: str = "lllyasviel/sd-controlnet-depth"
     upscaler_id: str = "stabilityai/sd-x2-latent-upscaler"
     refiner: Optional[str] = None  # e.g., "stabilityai/stable-diffusion-xl-refiner-1.0"
+
 
 @dataclass
 class RenderConfig:
@@ -539,6 +559,7 @@ class RenderConfig:
     guidance_scale: float = 7.5
     strength: float = 0.5
     seed: int = 1234
+
 
 @dataclass
 class FinishConfig:
@@ -589,6 +610,8 @@ class FinishConfig:
 # --------------------------
 # Core pipeline
 # --------------------------
+
+
 class LuxuryRenderPipeline:
     def __init__(
         self,
@@ -800,6 +823,8 @@ class LuxuryRenderPipeline:
 # --------------------------
 # CLI
 # --------------------------
+
+
 import typer
 app = typer.Typer(add_completion=False)
 
@@ -814,6 +839,7 @@ def parse_float_triplet(value: str) -> Tuple[float, float, float]:
     clamped = tuple(max(0.0, min(1.0, p)) for p in parts)
     clamped_tuple: Tuple[float, float, float] = (clamped[0], clamped[1], clamped[2])
     return clamped_tuple
+
 
 @app.command()
 def main(
@@ -963,6 +989,7 @@ def main(
             print(f"[Saved] {out_dir / fname}")
         except Exception as e:
             print(f"[Error] {f}: {e}")
+
 
 if __name__ == "__main__":
     app()
