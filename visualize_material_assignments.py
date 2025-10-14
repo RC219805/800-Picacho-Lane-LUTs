@@ -112,7 +112,7 @@ legend_img.save(output_path, quality=95)
 
 print(f"✅ Material assignment map saved to: {output_path}")
 print(f"\nMaterial Assignments:")
-for label, rule in sorted(assignments.items()):
+for label, rule in sorted(assignments.items(), key=lambda x: str(x[0])):
     cluster_pixels = (labels == label).sum()
     percentage = (cluster_pixels / labels.size) * 100
     print(f"  • {rule.name.upper()}: Cluster {label} ({percentage:.1f}% of image)")
