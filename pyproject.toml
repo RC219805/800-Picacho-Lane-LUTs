@@ -41,7 +41,15 @@ video = [
     # FFmpeg is required but must be installed separately
 ]
 all = [
-    "picacho-lane-luts[ml,tiff,dev]",
+    "torch>=2.0",
+    "diffusers>=0.21",
+    "controlnet-aux>=0.0.7",
+    "realesrgan>=0.3",
+    "transformers>=4.30",
+    "tifffile>=2023.7.10",
+    "pytest>=7.4",
+    "pytest-xdist>=3.3",
+    "flake8>=6.0",
 ]
 
 [project.scripts]
