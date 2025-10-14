@@ -12,7 +12,7 @@ FAST_TESTS := \
 	tests/test_pipeline.py \
 	tests/test_presets.py
 
-.PHONY: help test-fast test-novideo test-full venv
+.PHONY: help test-fast test-novideo test-full venv pipeline-run pipeline-tensor pipeline-optimize pipeline-render
 
 help:
 	@echo "Targets:"
@@ -20,6 +20,10 @@ help:
 	@echo "  test-novideo  Run all tests excluding video suite via -k filter"
 	@echo "  test-full     Run entire test suite (parallel if xdist present)"
 	@echo "  venv          Create local .venv if missing"
+	@echo "  pipeline-run      Execute the material intelligence pipeline"
+	@echo "  pipeline-tensor   Build tensors only"
+	@echo "  pipeline-optimize Optimise assignments only"
+	@echo "  pipeline-render   Render lighting scenarios"
 
 venv:
 	@if [ ! -x .venv/bin/python ]; then \
@@ -40,3 +44,15 @@ test-full:
 	else \
 		"$(PY)" -m pytest -q tests; \
 	fi
+
+pipeline-run:
+	"$(PY)" pipeline_cli.py run $(RUN_ARGS)
+
+pipeline-tensor:
+	"$(PY)" pipeline_cli.py tensor --id-mask $(ID) --output-dir $(OUT) $(if $(PIXEL_SIZE),--pixel-size $(PIXEL_SIZE),)
+
+pipeline-optimize:
+	"$(PY)" pipeline_cli.py optimize --baseline-id-mask $(ID) --baseline-palette $(PAL) --output-dir $(OUT) $(if $(PIXEL_SIZE),--pixel-size $(PIXEL_SIZE),) $(if $(GEN),--generations $(GEN),) $(if $(POP),--population $(POP),)
+
+pipeline-render:
+	"$(PY)" pipeline_cli.py render --id-mask $(ID) --output-dir $(OUT) $(if $(SCNS),--scenarios $(SCNS),) $(if $(PIXEL_SIZE),--pixel-size $(PIXEL_SIZE),)

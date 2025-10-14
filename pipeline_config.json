@@ -1,0 +1,19 @@
+{
+  "defaults": {
+    "baseline_id_mask": "./data/picacho_demo/750_Picacho_ID_Mask_32bit.tiff",
+    "baseline_palette": "./data/picacho_demo/750_Picacho_Material_Palette.json",
+    "output_dir": "./pipeline_outputs",
+    "pixel_size_meters": 0.01,
+    "opt": {
+      "generations": 100,
+      "population_size": 50,
+      "weights": {
+        "cost": 1.0,
+        "carbon": 0.8,
+        "thermal": 0.5,
+        "aesthetic": 0.6
+      },
+      "target_conductivity": 0.5
+    }
+  }
+}
