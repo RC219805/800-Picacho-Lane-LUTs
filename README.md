@@ -132,7 +132,7 @@ After installation with `pip install .`, the following command-line tools are av
 - `lux-render-pipeline` – AI-powered render refinement (requires `[ml]` extras)
 - `decision-decay-dashboard` – view temporal contracts and philosophy violations
 
-You can also run the scripts directly with Python (e.g., `python luxury_tiff_batch_processor.py`).
+You can also run the scripts directly with Python (e.g., `python -m luxury_tiff_batch_processor.cli`).
 
 ### Test Shortcuts
 
