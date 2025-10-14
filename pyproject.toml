@@ -21,6 +21,45 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-exclude = ["tests*", "input_images", "processed_images"]
+[project.optional-dependencies]
+ml = [
+    "torch>=2.0",
+    "diffusers>=0.21",
+    "controlnet-aux>=0.0.7",
+    "realesrgan>=0.3",
+    "transformers>=4.30",
+]
+tiff = [
+    "tifffile>=2023.7.10",
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-xdist>=3.3",
+    "flake8>=6.0",
+]
+video = [
+    # FFmpeg is required but must be installed separately
+]
+all = [
+    "picacho-lane-luts[ml,tiff,dev]",
+]
+
+[project.scripts]
+luxury-tiff-batch-processor = "luxury_tiff_batch_processor.cli:main"
+luxury-video-master-grader = "luxury_video_master_grader:main"
+lux-render-pipeline = "lux_render_pipeline:app"
+decision-decay-dashboard = "decision_decay_dashboard:main"
+
+[tool.setuptools]
+packages = ["luxury_tiff_batch_processor"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = ["-ra", "--strict-markers"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "video: marks tests requiring FFmpeg video processing",
+]
