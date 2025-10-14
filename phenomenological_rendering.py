@@ -37,7 +37,11 @@ def _scenario_tint(scenario: str) -> tuple[int, int, int]:
 def _prepare_canvas(base_color: tuple[int, int, int], intensity: float, size: int = 512) -> Image.Image:
     r, g, b = base_color
     scale = np.clip(intensity, 0.2, 1.4)
-    colour = (int(r * scale) % 256, int(g * scale) % 256, int(b * scale) % 256)
+    colour = (
+        min(255, max(0, int(r * scale))),
+        min(255, max(0, int(g * scale))),
+        min(255, max(0, int(b * scale))),
+    )
     return Image.new("RGB", (size, size), colour)
 
 
