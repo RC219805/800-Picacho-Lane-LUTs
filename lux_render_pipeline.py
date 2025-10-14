@@ -61,9 +61,9 @@ from controlnet_aux import CannyDetector, MidasDetector
 # Optional Real-ESRGAN
 try:
     from realesrgan import RealESRGAN
-    _HAS_REALESRGAN = True
-except Exception:
-    _HAS_REALESRGAN = False
+except ImportError:
+    RealESRGAN = None
+    # Handle fallback logic, log an error, or raise a custom exception
 
 # --------------------------
 
