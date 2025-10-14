@@ -115,9 +115,24 @@ perspective without leaving the command line.
 - Create an isolated environment (optional but recommended):
   - `python -m venv .venv`
 - Install the project runtime requirements:
-  - `python -m pip install -r requirements.txt`
-- Add the developer extras (pytest, pytest-xdist, numpy pin for tests):
-  - `python -m pip install -r requirements-dev.txt`
+  - `python -m pip install .` (installs core dependencies from pyproject.toml)
+  - Alternatively: `python -m pip install -r requirements.txt` (to mirror CI)
+- Add optional extras as needed:
+  - `pip install -e ".[tiff]"` – 16-bit TIFF processing with tifffile
+  - `pip install -e ".[dev]"` – pytest, pytest-xdist, flake8
+  - `pip install -e ".[ml]"` – PyTorch, Diffusers, ControlNet for lux_render_pipeline
+  - `pip install -e ".[all]"` – all optional dependencies
+
+### Console Scripts
+
+After installation with `pip install .`, the following command-line tools are available:
+
+- `luxury-tiff-batch-processor` – batch process TIFF images with presets
+- `luxury-video-master-grader` – apply LUTs and finishing to video files
+- `lux-render-pipeline` – AI-powered render refinement (requires `[ml]` extras)
+- `decision-decay-dashboard` – view temporal contracts and philosophy violations
+
+You can also run the scripts directly with Python (e.g., `python luxury_tiff_batch_processor.py`).
 
 ### Test Shortcuts
 
