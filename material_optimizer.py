@@ -181,7 +181,7 @@ class MaterialOptimizer:
         metadata = {
             "population_size": float(population_size),
             "generations": float(generations),
-            "evaluated_materials": float(len(self.material_db)),
+            "evaluated_materials": len(self.material_db),
         }
 
         return OptimizationResult(
