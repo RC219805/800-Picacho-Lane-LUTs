@@ -147,6 +147,7 @@ class FrameRatePlan:
     target: Optional[str]
     note: str
 
+
 HQDN3D_PRESETS = {
     "soft": "hqdn3d=luma_spatial=1.6:luma_tmp=3.2:chroma_spatial=1.2:chroma_tmp=2.8",
     "medium": "hqdn3d=luma_spatial=2.8:luma_tmp=4.5:chroma_spatial=2.0:chroma_tmp=4.0",

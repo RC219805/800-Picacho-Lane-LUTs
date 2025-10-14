@@ -19,6 +19,7 @@ MATERIAL_COLORS = {
     "louvretec_powder_white": (245, 245, 245),
 }
 
+
 def create_texture(base_color: tuple[int, int, int], size: int = 512) -> Image.Image:
     """Create a subtle procedural texture with color variation.
     
@@ -50,6 +51,7 @@ def create_texture(base_color: tuple[int, int, int], size: int = 512) -> Image.I
     img = np.clip(img, 0, 255).astype(np.uint8)
     return Image.fromarray(img, mode="RGB")
 
+
 def main():
     """Generate all MBAR material textures."""
     output_dir = Path(__file__).parent / "textures" / "board_materials"
@@ -62,6 +64,7 @@ def main():
         print(f"Created: {output_path}")
     
     print(f"\nAll {len(MATERIAL_COLORS)} textures created in {output_dir}")
+
 
 if __name__ == "__main__":
     main()
