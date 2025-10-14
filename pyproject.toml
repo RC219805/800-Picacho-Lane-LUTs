@@ -52,6 +52,7 @@ decision-decay-dashboard = "decision_decay_dashboard:main"
 
 [tool.setuptools]
 packages = ["luxury_tiff_batch_processor"]
+py-modules = ["luxury_video_master_grader", "lux_render_pipeline", "decision_decay_dashboard"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
