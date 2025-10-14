@@ -132,7 +132,7 @@ with open(report_path, "w") as f:
     f.write("|----------|----------|----------|----------|\n")
     
     total_assigned = 0
-    for label, rule in sorted(assignments.items(), key=lambda x: (str(type(x[0])), str(x[0]))):
+    for label, rule in sorted(assignments.items(), key=lambda x: str(x[0])):
         stat = next(s for s in stats if s.label == label)
         coverage = (stat.count / labels.size) * 100
         total_assigned += coverage
