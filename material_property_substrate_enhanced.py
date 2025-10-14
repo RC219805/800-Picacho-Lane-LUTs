@@ -50,7 +50,8 @@ def _microstructure_response(id_mask: np.ndarray) -> np.ndarray:
     magnitude = np.sqrt((grad_x ** 2) + (grad_y ** 2))
     if magnitude.size == 0:
         return magnitude
-    magnitude = magnitude / (magnitude.max() or 1.0)
+    magnitude_max = magnitude.max()
+    magnitude = magnitude / (magnitude_max if magnitude_max != 0 else 1.0)
     return magnitude.astype(np.float32)
 
 
