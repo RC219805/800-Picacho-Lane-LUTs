@@ -201,7 +201,7 @@ def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:
     usages: List[ColorTokenUsage] = []
     orphans: List[ColorTokenUsage] = []
 
-    for token_name, descriptor in sorted(brand_tokens.items()):
+    for token_name, descriptor in sorted(brand_tokens.items(), key=lambda x: str(x[0])):
         value = descriptor.get("value")
         if not isinstance(value, str):
             continue
