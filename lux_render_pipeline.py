@@ -245,7 +245,7 @@ def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.n
     return np.clip(rgb + noise, 0.0, 1.0)
 
 
-def apply_material_response_finishing(
+def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements,unused-argument
     rgb: np.ndarray,
     texture_boost: float = 0.25,
     ambient_occlusion: float = 0.12,
@@ -562,7 +562,7 @@ def adjust_contrast_saturation(
 # --------------------------
 # Branding (logo + caption)
 # --------------------------
-def overlay_logo_caption(
+def overlay_logo_caption(  # pylint: disable=too-many-locals
     img: Image.Image,
     logo_path: Optional[str],
     text: Optional[str],
@@ -579,7 +579,7 @@ def overlay_logo_caption(
         try:
             # Use a clean sans (replace with your corporate font)
             font = ImageFont.truetype("arial.ttf", size=max(22, height_px // 40))
-        except Exception:
+        except (OSError, IOError):
             font = ImageFont.load_default()
 
         bbox = draw.textbbox((0, 0), text, font=font)
@@ -687,7 +687,7 @@ class FinishConfig:
 class LuxuryRenderPipeline:
     """High-level orchestrator for ControlNet-driven luxury render refinement."""
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         model_ids: ModelIDs,
         device: Optional[str] = None,
@@ -762,7 +762,7 @@ class LuxuryRenderPipeline:
             self.upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(
                 model_ids.upscaler_id, torch_dtype=self.dtype
             ).to(self.device)
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             print(f"[Warn] Latent upscaler not available ({e}). Will skip latent upscaling.")
             self.upscaler = None
 
@@ -782,7 +782,7 @@ class LuxuryRenderPipeline:
         self.pre = Preprocessor(use_depth=self._use_depth)
 
     @torch.inference_mode()
-    def enhance(
+    def enhance(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches
         self,
         init_image: Image.Image,
         prompt: str,
@@ -939,8 +939,8 @@ def parse_float_triplet(value: str) -> Tuple[float, float, float]:
     return clamped_tuple
 
 @app.command()
-def main(
-    input: str = typer.Option(..., help="Glob of input images, e.g. './drafts/*.png'"),
+def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    input_glob: str = typer.Option(..., help="Glob of input images, e.g. './drafts/*.png'"),
     out: str = typer.Option("./final", help="Output folder"),
     prompt: str = typer.Option(..., help="Positive prompt (style, materials, time of day, lens)"),
     neg: str = typer.Option(
@@ -1187,9 +1187,9 @@ def main(
         use_depth=not no_depth,
     )
 
-    files = sorted([p for g in input.split(",") for p in glob.glob(g.strip())])
+    files = sorted([p for g in input_glob.split(",") for p in glob.glob(g.strip())])
     if not files:
-        raise SystemExit(f"No files matched: {input}")
+        raise SystemExit(f"No files matched: {input_glob}")
 
     print(f"[Config] {asdict(cfg)}")
     print(f"[Models] {asdict(model_ids)}")

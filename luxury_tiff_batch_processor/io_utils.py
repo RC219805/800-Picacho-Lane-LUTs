@@ -8,19 +8,19 @@ import math
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
 
 try:  # Optional high-fidelity TIFF writer
     import tifffile  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - optional dependency
     tifffile = None
 
 try:  # Optional codec pack used by tifffile for certain compressions
     import imagecodecs  # type: ignore  # pylint: disable=import-error
-except Exception:  # pragma: no cover - optional dependency
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - optional dependency
     imagecodecs = None
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
@@ -59,7 +59,7 @@ class ProcessingCapabilities:
         supports_hdr = getattr(self._tifffile, "supports_hdr", True)
         try:
             return bool(supports_hdr)
-        except Exception:  # pragma: no cover - defensive fallback
+        except (TypeError, ValueError):  # pragma: no cover - defensive fallback
             return False
 
     def assert_luxury_grade(self) -> None:
@@ -178,6 +178,7 @@ class FloatDynamicRange:
         return working, squeezed
 
     def normalise(self, arr: np.ndarray) -> np.ndarray:
+        """Normalize array values using stored offset and scale."""
         working, squeezed = self._prepare(arr)
         offset = self.offset.reshape((1, 1, -1))
         scale = self.scale_recip.reshape((1, 1, -1))
@@ -187,6 +188,7 @@ class FloatDynamicRange:
         return normalised
 
     def denormalise(self, arr: np.ndarray) -> np.ndarray:
+        """Denormalize array values using stored scale and offset."""
         working, squeezed = self._prepare(arr)
         offset = self.offset.reshape((1, 1, -1))
         scale = self.scale.reshape((1, 1, -1))
@@ -213,7 +215,7 @@ class ImageToFloatResult:
         yield self.base_channels
 
 
-def image_to_float(
+def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     image: Image.Image,
     return_format: Literal["tuple3", "tuple4", "object"] = "object",
 ) -> Union[
@@ -312,7 +314,7 @@ def image_to_float(
     return result
 
 
-def float_to_dtype_array(
+def float_to_dtype_array(  # pylint: disable=too-many-branches
     arr: np.ndarray,
     dtype: np.dtype,
     alpha: Optional[np.ndarray],
@@ -320,6 +322,7 @@ def float_to_dtype_array(
     *,
     float_normalisation: Optional[FloatDynamicRange] = None,
 ) -> np.ndarray:
+    """Convert float array to specified dtype with optional alpha channel."""
     arr = np.clip(arr, 0.0, 1.0)
     if arr.ndim == 2:
         working = arr[:, :, None]
@@ -364,6 +367,7 @@ def float_to_dtype_array(
 
 
 def compression_for_tifffile(compression: str) -> Optional[str]:
+    """Map compression identifier to tifffile-compatible format name."""
     comp = compression.lower()
     mapping = {
         "tiff_lzw": "lzw",
@@ -383,6 +387,7 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
 
 
 def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, Any]]:
+    """Remove forbidden TIFF tags that conflict with image dimensions and encoding."""
     if raw_metadata is None:
         return None
     safe: Dict[int, Any] = {}
@@ -392,7 +397,7 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
             if tag in forbidden_tags:
                 continue
             safe[tag] = raw_metadata[tag]
-    except Exception:  # pragma: no cover - metadata best effort
+    except (TypeError, ValueError, KeyError):  # pragma: no cover - metadata best effort
         LOGGER.debug("Unable to sanitise TIFF metadata", exc_info=True)
         return None
     return safe or None
@@ -438,7 +443,7 @@ def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int,
     return None
 
 
-def save_image(
+def save_image(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements
     destination: Path,
     arr_int: np.ndarray,
     dtype: np.dtype,
@@ -446,6 +451,7 @@ def save_image(
     icc_profile: Optional[bytes],
     compression: str,
 ) -> None:
+    """Save image array to disk with comprehensive metadata support."""
     destination_fs = os.fspath(destination)
     metadata = sanitize_tiff_metadata(metadata)
     np_dtype = np.dtype(dtype)
