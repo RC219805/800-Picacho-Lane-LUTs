@@ -127,6 +127,20 @@ Use the bundled `Makefile` to run repeatable subsets during development:
 - `make test-novideo` – executes every test except the FFmpeg-heavy video grader coverage.
 - `make test-full` – runs the full suite, automatically parallelising with `pytest-xdist` when available.
 
+### Code Quality
+
+The repository uses both **flake8** and **pylint** for code quality checks:
+
+- **flake8**: Enforces critical syntax and import checks (configured in CI)
+  ```bash
+  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+  ```
+- **pylint**: Comprehensive code analysis with project-specific configuration
+  ```bash
+  pylint $(git ls-files '*.py')
+  ```
+  Configuration in `.pylintrc` aligns with project coding standards (127 char line length, selective documentation, etc.). CI passes with a score threshold of 9.0/10.
+
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow for polishing large-format TIFF photography prior to digital launch. The script preserves metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/) is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for ultra-luxury real-estate storytelling.
 
