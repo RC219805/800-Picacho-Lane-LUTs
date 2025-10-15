@@ -14,11 +14,11 @@ dependencies = [
     "Pillow>=10.0.0,<12",
     "scipy>=1.10,<2",
     "typer>=0.12,<1",
-    "torch",
-    "diffusers",
-    "controlnet-aux",
-    "realesrgan",
-    "tifffile",
+    "torch>=2.0,<3",
+    "diffusers>=0.20,<1",
+    "controlnet-aux>=0.0.6,<1",
+    "realesrgan>=0.3.0,<1",
+    "tifffile>=2023.7.18,<2025",
     "tqdm>=4.65,<5",
 ]
 classifiers = [
