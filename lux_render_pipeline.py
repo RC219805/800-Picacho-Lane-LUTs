@@ -50,9 +50,9 @@ from controlnet_aux import CannyDetector, MidasDetector
 
 # Optional Real-ESRGAN
 try:
-    from realesrgan import RealESRGAN
-except (ImportError, OSError):
-    RealESRGAN = None
+    from realesrgan import RealESRGANer  # type: ignore
+except Exception:  # pragma: no cover - best effort optional dependency
+    RealESRGANer = None  # type: ignore[assignment]
     _HAS_REALESRGAN = False
 else:
     _HAS_REALESRGAN = True
@@ -797,7 +797,9 @@ class LuxuryRenderPipeline:
             # If weights don't exist locally, the package will download them
             from realesrgan.archs.srvgg_arch import SRVGGNetCompact
             model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
-            self.realesrgan = RealESRGANer(
+            if RealESRGANer is None:
+                raise RuntimeError("RealESRGANer unavailable; install 'realesrgan' to enable SR.")
+            self.realesrgan = RealESRGANer(  # type: ignore[operator]
                 scale=4,
                 model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
                 model=model,
