@@ -61,6 +61,8 @@ else:
 
 # Utilities
 # --------------------------
+
+
 def seed_all(seed: int) -> Generator:
     """Seed Python, NumPy, and Torch RNGs and return a torch generator."""
 
@@ -72,17 +74,20 @@ def seed_all(seed: int) -> Generator:
     generator = Generator(device="cuda" if torch.cuda.is_available() else "cpu")
     return generator.manual_seed(seed)
 
+
 def load_image(path: Union[str, Path]) -> Image.Image:
     """Load ``path`` into an RGB ``Image`` instance."""
 
     img = Image.open(path).convert("RGB")
     return img
 
+
 def save_image(img: Image.Image, path: Union[str, Path]) -> None:
     """Persist ``img`` to ``path``, creating parent directories when missing."""
 
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
+
 
 def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:
     """Convert a PIL image to a NumPy array optionally scaled to ``[0, 1]``."""
@@ -91,6 +96,7 @@ def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:
     if to_float:
         arr = arr.astype(np.float32) / 255.0
     return arr
+
 
 def np_to_pil(arr: np.ndarray) -> Image.Image:
     """Convert a float array in ``[0, 1]`` back to an 8-bit ``Image``."""
@@ -158,6 +164,8 @@ def resize_to_multiple(
 # --------------------------
 # Preprocessors (Canny + Depth)
 # --------------------------
+
+
 class Preprocessor:
     """Generate ControlNet conditioning maps (Canny edges + optional depth)."""
 
@@ -196,10 +204,13 @@ class Preprocessor:
 # --------------------------
 # Post-processing (photo finish)
 # --------------------------
+
+
 def aces_film_tonemap(rgb: np.ndarray) -> np.ndarray:
     """ACES-like tonemap, expects float RGB in [0,1]."""
     a, b, c, d, e = 2.51, 0.03, 2.43, 0.59, 0.14
     return np.clip((rgb * (a * rgb + b)) / (rgb * (c * rgb + d) + e), 0.0, 1.0)
+
 
 def gray_world_white_balance(rgb: np.ndarray) -> np.ndarray:
     """Apply simple gray-world white balance to an RGB image."""
@@ -235,6 +246,7 @@ def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     r /= r.max() + 1e-6
     mask = 1.0 - strength * (r ** 2)
     return np.clip(rgb * mask[..., None], 0.0, 1.0)
+
 
 
 def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.ndarray:
@@ -612,6 +624,8 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
 # --------------------------
 # Config
 # --------------------------
+
+
 @dataclass
 class ModelIDs:
     """Identifiers for diffusion base models, ControlNets, and upscalers."""
@@ -621,6 +635,7 @@ class ModelIDs:
     controlnet_depth: str = "lllyasviel/sd-controlnet-depth"
     upscaler_id: str = "stabilityai/sd-x2-latent-upscaler"
     refiner: Optional[str] = None  # e.g., "stabilityai/stable-diffusion-xl-refiner-1.0"
+
 
 @dataclass
 class RenderConfig:
@@ -632,6 +647,7 @@ class RenderConfig:
     guidance_scale: float = 7.5
     strength: float = 0.5
     seed: int = 1234
+
 
 @dataclass
 class FinishConfig:
@@ -684,6 +700,8 @@ class FinishConfig:
 # --------------------------
 # Core pipeline
 # --------------------------
+
+
 class LuxuryRenderPipeline:
     """High-level orchestrator for ControlNet-driven luxury render refinement."""
 
@@ -937,6 +955,7 @@ def parse_float_triplet(value: str) -> Tuple[float, float, float]:
     clamped = tuple(max(0.0, min(1.0, p)) for p in parts)
     clamped_tuple: Tuple[float, float, float] = (clamped[0], clamped[1], clamped[2])
     return clamped_tuple
+
 
 @app.command()
 def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
@@ -1215,6 +1234,7 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
             print(f"[Saved] {out_dir / fname}")
         except Exception as e:
             print(f"[Error] {f}: {e}")
+
 
 if __name__ == "__main__":
     app()
