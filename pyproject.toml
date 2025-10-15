@@ -24,3 +24,23 @@ classifiers = [
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["tests*", "input_images", "processed_images"]
+
+[tool.pylint.main]
+# Increase limits for complex image/video processing functions
+max-args = 8
+max-locals = 20
+max-branches = 15
+max-statements = 60
+max-line-length = 127
+max-module-lines = 1500
+
+[tool.pylint.messages_control]
+# Disable specific checks that are overly strict for this codebase
+disable = [
+    "too-few-public-methods",  # Many dataclasses and simple classes
+    "missing-module-docstring",  # Some modules are self-explanatory
+    "missing-function-docstring",  # Some simple functions are self-explanatory
+    "missing-class-docstring",  # Some simple classes are self-explanatory
+    "duplicate-code",  # Acceptable for similar processing patterns
+    "fixme",  # TODOs are tracked elsewhere
+]
