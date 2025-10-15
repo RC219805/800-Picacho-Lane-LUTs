@@ -1,16 +1,14 @@
-# Minimal deps for unit tests on CI (no CUDA/GPU stacks)
+# Lean deps for unit tests & linting (no GPU / diffusion stacks)
 numpy>=1.24,<3
 Pillow>=10,<12
-scipy>=1.10,<2
-typer>=0.12,<1
-tifffile>=2023.7.18,<2026
-tqdm>=4.65,<5
+scipy<2,>=1.15
+tifffile>=2023.7.18,<2025
+imagecodecs>=2023.9.18,<2025
+tqdm>=4.66,<5
 pytest>=8,<9
-# If needed for image reading speed; otherwise remove to save ~25–50 MB
-imagecodecs>=2024.1,<2026
 
-# CPU-only PyTorch (if your tests import torch)
---extra-index-url https://download.pytorch.org/whl/cpu
+# Optional CPU-only torch (if your tests need it). The +cpu builds are on a separate index:
+# If you don't need torch in CI, delete these three lines.
 torch==2.9.0+cpu
-# If your tests import torchvision, use CPU wheel too:
-# torchvision==0.24.0+cpu
+torchvision==0.24.0+cpu
+-f https://download.pytorch.org/whl/cpu
