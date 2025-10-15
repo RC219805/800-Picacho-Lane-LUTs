@@ -85,9 +85,9 @@ def test_apply_clarity_handles_negative_softening():
     rng = np.random.default_rng(2025)
     arr = rng.random((10, 10, 3), dtype=np.float32) * 0.6 + 0.2
 
-    boosted = adjustments.apply_clarity(arr, 0.4)
-    softened = adjustments.apply_clarity(arr, -0.4)
-    reference = adjustments.gaussian_blur(arr, radius=3)
+    boosted = adj.apply_clarity(arr, 0.4)
+    softened = adj.apply_clarity(arr, -0.4)
+    reference = adj.gaussian_blur(arr, radius=3)
 
     base_delta = float(np.mean(np.abs(arr - reference)))
     boost_delta = float(np.mean(np.abs(boosted - reference)))
