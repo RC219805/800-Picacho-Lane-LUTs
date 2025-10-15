@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 import subprocess
 import sys
@@ -8,18 +7,23 @@ from typing import Any, Dict
 
 import pytest
 
-from .documentation import documents
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+try:
+    from .documentation import documents
+except ImportError:  # pragma: no cover - fallback for direct execution
+    from tests.documentation import documents
 
 np = pytest.importorskip("numpy")
 pytest.importorskip("PIL.Image")
 pytest.importorskip("PIL.TiffImagePlugin")
-from PIL import Image, TiffImagePlugin
+from PIL import Image, TiffImagePlugin  # noqa: E402
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
-import luxury_tiff_batch_processor as ltiff
-import luxury_tiff_batch_processor.pipeline as pipeline
-import luxury_tiff_batch_processor.io_utils as io_utils
+import luxury_tiff_batch_processor as ltiff  # noqa: E402
+import luxury_tiff_batch_processor.pipeline as pipeline  # noqa: E402
+import luxury_tiff_batch_processor.io_utils as io_utils  # noqa: E402
 
 
 def test_run_pipeline_exposed_in_dunder_all():
@@ -297,7 +301,7 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
     assert outputs == [f"frame_{i}_lux.tif" for i in range(3)]
 
 
-def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch):
+def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     input_dir.mkdir()
@@ -328,7 +332,7 @@ def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch):
     assert "Processing" in (calls["description"] or "")
 
 
-def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
+def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     input_dir.mkdir()
@@ -379,7 +383,7 @@ def test_run_pipeline_supports_legacy_resize_target(tmp_path: Path, monkeypatch:
 
 
 @documents("Filesystem discovery respects operator scope selections")
-def test_collect_images_handles_recursive(tmp_path):
+def test_collect_images_handles_recursive(tmp_path: Path):
     input_root = tmp_path
     (input_root / "top.tif").write_bytes(b"top")
     (input_root / "upper.TIFF").write_bytes(b"upper")
@@ -449,7 +453,7 @@ def test_run_pipeline_rejects_input_nested_in_output(tmp_path: Path):
 
 
 @documents("User overrides cascade atop curated presets without drift")
-def test_build_adjustments_applies_overrides(tmp_path):
+def test_build_adjustments_applies_overrides(tmp_path: Path):
     args = ltiff.parse_args(
         [
             str(tmp_path / "input"),
@@ -504,12 +508,12 @@ def test_adjustment_settings_validation_accepts_reasonable_ranges():
         {"white_balance_temp": 40000},
     ],
 )
-def test_adjustment_settings_validation_rejects_invalid_ranges(kwargs):
+def test_adjustment_settings_validation_rejects_invalid_ranges(kwargs: Dict[str, float] | Dict[str, int]):
     with pytest.raises(ValueError):
         ltiff.AdjustmentSettings(**kwargs)
 
 
-def test_build_adjustments_rejects_invalid_override(tmp_path):
+def test_build_adjustments_rejects_invalid_override(tmp_path: Path):
     args = ltiff.parse_args(
         [
             str(tmp_path / "input"),

@@ -21,54 +21,26 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-[project.optional-dependencies]
-ml = [
-    "torch>=2.0",
-    "diffusers>=0.21",
-    "controlnet-aux>=0.0.7",
-    "realesrgan>=0.3",
-    "transformers>=4.30",
-]
-tiff = [
-    "tifffile>=2023.7.10",
-]
-dev = [
-    "pytest>=7.4",
-    "pytest-xdist>=3.3",
-    "flake8>=6.0",
-]
-video = [
-    # FFmpeg is required but must be installed separately
-]
-all = [
-    "torch>=2.0",
-    "diffusers>=0.21",
-    "controlnet-aux>=0.0.7",
-    "realesrgan>=0.3",
-    "transformers>=4.30",
-    "tifffile>=2023.7.10",
-    "pytest>=7.4",
-    "pytest-xdist>=3.3",
-    "flake8>=6.0",
-]
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "input_images", "processed_images"]
 
-[project.scripts]
-luxury-tiff-batch-processor = "luxury_tiff_batch_processor.cli:main"
-luxury-video-master-grader = "luxury_video_master_grader:main"
-lux-render-pipeline = "lux_render_pipeline:app"
-decision-decay-dashboard = "decision_decay_dashboard:main"
+[tool.pylint.main]
+# Increase limits for complex image/video processing functions
+max-args = 8
+max-locals = 20
+max-branches = 15
+max-statements = 60
+max-line-length = 127
+max-module-lines = 1500
 
-[tool.setuptools]
-packages = ["luxury_tiff_batch_processor"]
-py-modules = ["luxury_video_master_grader", "lux_render_pipeline", "decision_decay_dashboard"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = ["-ra", "--strict-markers"]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "video: marks tests requiring FFmpeg video processing",
+[tool.pylint.messages_control]
+# Disable specific checks that are overly strict for this codebase
+disable = [
+    "too-few-public-methods",  # Many dataclasses and simple classes
+    "missing-module-docstring",  # Some modules are self-explanatory
+    "missing-function-docstring",  # Some simple functions are self-explanatory
+    "missing-class-docstring",  # Some simple classes are self-explanatory
+    "duplicate-code",  # Acceptable for similar processing patterns
+    "fixme",  # TODOs are tracked elsewhere
 ]
