@@ -265,7 +265,7 @@ def build_material_rules(textures: Mapping[str, Path]) -> Sequence[MaterialRule]
         Tuple of MaterialRule objects in priority order.
     """
     def plaster_score(stats: ClusterStats) -> float:
-        h, s, v = stats.mean_hsv
+        _, s, v = stats.mean_hsv
         return max(0.0, (1.0 - s) * v)
 
     def stone_score(stats: ClusterStats) -> float:
@@ -338,10 +338,10 @@ def _load_texture(path: str) -> np.ndarray:
     try:
         image = Image.open(path).convert("RGB")
         return np.asarray(image, dtype=np.float32) / 255.0
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Texture file not found: {path}")
-    except Exception as e:
-        raise IOError(f"Failed to load texture {path}: {e}")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Texture file not found: {path}") from exc
+    except (OSError, IOError) as e:
+        raise IOError(f"Failed to load texture {path}: {e}") from e
 
 
 def _tile_texture(texture: np.ndarray, size: tuple[int, int]) -> np.ndarray:
@@ -409,7 +409,9 @@ def assign_materials(stats: Sequence[ClusterStats], rules: Sequence[MaterialRule
     return assignments
 
 
-def apply_materials(image: np.ndarray, labels: np.ndarray, assignments: Mapping[int, MaterialRule]) -> np.ndarray:
+def apply_materials(  # pylint: disable=too-many-locals
+    image: np.ndarray, labels: np.ndarray, assignments: Mapping[int, MaterialRule]
+) -> np.ndarray:
     """Apply material textures to image based on cluster assignments.
 
     Blends high-resolution texture plates with base image using soft masks
@@ -459,12 +461,12 @@ def relabel(assignments: Mapping[int, MaterialRule], labels: np.ndarray) -> np.n
         Relabeled array (currently unchanged).
     """
     renamed = labels.copy()
-    for label, rule in assignments.items():
+    for label, _ in assignments.items():
         renamed[labels == label] = label
     return renamed
 
 
-def enhance_aerial(
+def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
     input_path: Path,
     output_path: Path,
     *,
