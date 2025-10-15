@@ -355,6 +355,87 @@ The repository bundles a minimal `luxury_video_master_grader.py` so the automate
 
 Layer the script after `luxury_video_master_grader.py` to apply bespoke LUTs before the HDR-specific finishing tools run. The pipeline preserves Dolby Vision and static HDR10 metadata where available, while the deband and halation stages default to the Codex branch recipes highlighted in the documentation examples.
 
+## Board Material Aerial Enhancer
+
+`board_material_aerial_enhancer.py` applies MBAR (Montecito Board of Architectural Review) approved material palettes to aerial photographs using k-means color clustering and texture blending. The system identifies architectural surfaces (plaster, stone, wood cladding, metal panels) and applies high-resolution material textures for board-ready deliverables.
+
+### Key Features
+- **Automatic Material Detection**: HSV-based heuristics identify 8 MBAR-approved materials
+- **Palette Configuration**: Save and load cluster-to-material assignments as JSON files
+- **Deterministic Workflows**: Reuse palette files for consistent results across multiple aerials
+- **4K Output**: Scales enhanced images to 4096px width for presentation materials
+- **Texture Blending**: Soft Gaussian masks ensure natural material transitions
+
+### Palette Assignment Workflow
+
+The enhancer now supports **palette files** - JSON configurations that map cluster IDs to specific materials. This enables manual override of automatic detection and deterministic assignments:
+
+```bash
+# Step 1: Generate automatic assignments and save palette
+python board_material_aerial_enhancer.py \
+  aerial.jpg enhanced.jpg \
+  --k 8 \
+  --save-palette auto_palette.json
+
+# Step 2: Review and edit auto_palette.json to adjust materials
+# Example: Change cluster 3 from "stone" to "plaster"
+
+# Step 3: Apply refined palette to all project aerials
+python board_material_aerial_enhancer.py \
+  aerial_view_2.jpg enhanced_view_2.jpg \
+  --palette auto_palette.json
+```
+
+Palette JSON format:
+```json
+{
+  "version": "1.0",
+  "assignments": {
+    "0": "plaster",
+    "1": "stone",
+    "2": "roof",
+    "3": "equitone"
+  }
+}
+```
+
+**Available Materials**: `plaster`, `stone`, `cladding`, `screens`, `equitone`, `roof`, `bronze`, `shade`
+
+For complete documentation, see [Palette Assignment Guide](08_Documentation/Palette_Assignment_Guide.md).
+
+### Basic Usage
+
+```bash
+python board_material_aerial_enhancer.py input.jpg output.jpg
+```
+
+### Advanced Options
+
+```bash
+python board_material_aerial_enhancer.py \
+  input.jpg output.jpg \
+  --analysis-max 1280 \
+  --k 8 \
+  --seed 22 \
+  --target-width 4096 \
+  --palette custom_palette.json \
+  --save-palette computed_palette.json
+```
+
+**Options**:
+- `--analysis-max`: Max dimension for clustering (default: 1280)
+- `--k`: Number of k-means clusters (default: 8)
+- `--seed`: Random seed for reproducibility (default: 22)
+- `--target-width`: Output width in pixels (default: 4096)
+- `--palette`: Load cluster assignments from JSON file
+- `--save-palette`: Save computed assignments to JSON file
+
+The enhancer includes a visualization tool for reviewing material assignments:
+
+```bash
+python visualize_material_assignments.py --save-palette viz_palette.json
+```
+
 ## Decision Decay Dashboard
 
 `decision_decay_dashboard.py` surfaces temporal contracts, codebase philosophy violations, and brand color token drift in a single terminal dashboard. It cross-references `tests/` for `@valid_until` decorators, audits Python sources with `CodebasePhilosophyAuditor`, and highlights unused color tokens from the Lantern logo deliverables so teams know what requires attention next.
