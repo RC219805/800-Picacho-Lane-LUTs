@@ -793,8 +793,20 @@ class LuxuryRenderPipeline:
             )
         if self._use_realesrgan:
             print("[Load] Real-ESRGAN x4...")
-            self.realesrgan = RealESRGAN(self.device, scale=4)
-            self.realesrgan.load_weights("RealESRGAN_x4plus.pth", download=True)
+            # RealESRGANer expects model_path parameter
+            # If weights don't exist locally, the package will download them
+            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
+            model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
+            self.realesrgan = RealESRGANer(
+                scale=4,
+                model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
+                model=model,
+                tile=0,
+                tile_pad=10,
+                pre_pad=0,
+                half=(self.dtype == torch.float16),
+                device=self.device
+            )
 
         # Preprocessor
         self.pre = Preprocessor(use_depth=self._use_depth)
@@ -871,7 +883,10 @@ class LuxuryRenderPipeline:
             # upscale progressively until min edge >= target_min
             pil = out
             while min(pil.size) < target_min:
-                pil = self.realesrgan.predict(pil)
+                # RealESRGANer.enhance() expects numpy array and returns (output, _)
+                img_np = np.array(pil)
+                upscaled_np, _ = self.realesrgan.enhance(img_np, outscale=4)
+                pil = Image.fromarray(upscaled_np)
             out = pil
 
         # 6) Photo finishing
