@@ -115,30 +115,12 @@ def cmd_run(args: argparse.Namespace) -> None:
 def _ensure_tifffile() -> None:
     try:
         import tifffile  # noqa: F401
-    except ImportError:  # pragma: no cover - convenience path
-        print("[info] Installing dependency 'tifffile' …")
-        import subprocess
-        import os
-        # Check for virtual environment
-        in_venv = (
-            hasattr(sys, "real_prefix")
-            or (hasattr(sys, "base_prefix") and sys.prefix != sys.base_prefix)
-            or "VIRTUAL_ENV" in os.environ
+    except ImportError:
+        raise SystemExit(
+            "[error] Missing required dependency 'tifffile'.\n"
+            "Please install it by running:\n"
+            "    pip install tifffile\n"
         )
-        pip_cmd = [sys.executable, "-m", "pip", "install", "tifffile"]
-        # Only use --break-system-packages if not in venv and explicitly allowed
-        allow_break = os.environ.get("ALLOW_BREAK_SYSTEM_PACKAGES", "0") == "1"
-        if not in_venv:
-            if allow_break:
-                print("[warn] Installing with --break-system-packages outside a virtual environment!")
-                pip_cmd.append("--break-system-packages")
-            else:
-                print(
-                    "[error] Refusing to install 'tifffile' outside a virtual environment without explicit permission.\n"
-                    "Set ALLOW_BREAK_SYSTEM_PACKAGES=1 in your environment to override, but this may damage your system Python."
-                )
-                raise SystemExit(1)
-        subprocess.check_call(pip_cmd)
 def cmd_tensor(args: argparse.Namespace) -> None:
     substrate = _import_substrate(args.use_enhanced)
     _ensure_tifffile()
