@@ -213,15 +213,29 @@ def create_property_tensor(
 
 
 def summarise_tensor(tensor: Mapping[str, np.ndarray]) -> Dict[str, float]:
-    """Return scalar diagnostics for ``tensor``."""
+    """Return scalar diagnostics for ``tensor``.
+
+    For area-based totals (carbon, cost), scale by pixel area derived from mean thickness.
+    """
 
     summary: Dict[str, float] = {}
+    pixel_area_m2 = None
+    if "thickness" in tensor:
+        # Assume square pixels, pixel size in meters is mean thickness
+        pixel_size_meters = float(np.mean(tensor["thickness"]))
+        pixel_area_m2 = pixel_size_meters ** 2
     if "density" in tensor:
         summary["mean_density"] = float(np.mean(tensor["density"]))
     if "carbon" in tensor:
-        summary["total_carbon"] = float(np.sum(tensor["carbon"]))
+        total_carbon = float(np.sum(tensor["carbon"]))
+        if pixel_area_m2 is not None:
+            total_carbon *= pixel_area_m2
+        summary["total_carbon"] = total_carbon
     if "cost" in tensor:
-        summary["total_cost"] = float(np.sum(tensor["cost"]))
+        total_cost = float(np.sum(tensor["cost"]))
+        if pixel_area_m2 is not None:
+            total_cost *= pixel_area_m2
+        summary["total_cost"] = total_cost
     if "thermal_conductivity" in tensor:
         summary["mean_thermal_conductivity"] = float(np.mean(tensor["thermal_conductivity"]))
     return summary
