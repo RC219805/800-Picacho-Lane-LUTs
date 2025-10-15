@@ -16,6 +16,9 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v5
@@ -23,14 +26,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Set up Python 3.10
+    - name: Set up Python
       uses: actions/setup-python@v6
       with:
-        python-version: "3.10"
+        python-version: ${{ matrix.python-version }}
     - name: Free up disk space
       run: |
         sudo rm -rf /opt/ghc
