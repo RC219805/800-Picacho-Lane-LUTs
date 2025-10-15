@@ -16,8 +16,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      - name: Debug - Print issue details
+        run: |
+          echo "::group::Issue Details"
+          echo "Issue Number: ${{ github.event.issue.number }}"
+          echo "Issue Title: ${{ github.event.issue.title }}"
+          echo "Issue Author: ${{ github.event.issue.user.login }}"
+          echo "::endgroup::"
+          
+          echo "::group::Issue Body"
+          echo "${{ github.event.issue.body }}"
+          echo "::endgroup::"
+
       - name: Run AI inference
         id: inference
+        continue-on-error: true
         uses: actions/ai-inference@v2
         with:
           prompt: |
@@ -25,10 +38,33 @@ jobs:
             Title: ${{ github.event.issue.title }}
             Body: ${{ github.event.issue.body }}
 
+      - name: Debug - Check inference output
+        if: always()
+        run: |
+          echo "::group::Inference Step Status"
+          echo "Step outcome: ${{ steps.inference.outcome }}"
+          echo "Step conclusion: ${{ steps.inference.conclusion }}"
+          if [ -n "${{ steps.inference.outputs.response }}" ]; then
+            echo "Response received: Yes"
+            echo "Response length: $(echo '${{ steps.inference.outputs.response }}' | wc -c)"
+          else
+            echo "Response received: No"
+          fi
+          echo "::endgroup::"
+
       - name: Comment with AI summary
+        if: steps.inference.outcome == 'success' && steps.inference.outputs.response != ''
         run: |
           gh issue comment $ISSUE_NUMBER --body '${{ steps.inference.outputs.response }}'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           RESPONSE: ${{ steps.inference.outputs.response }}
+
+      - name: Comment with debug info on failure
+        if: steps.inference.outcome != 'success'
+        run: |
+          gh issue comment $ISSUE_NUMBER --body "⚠️ AI summarization failed. Please check the workflow logs for details."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
