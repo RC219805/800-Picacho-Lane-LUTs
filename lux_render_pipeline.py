@@ -17,6 +17,18 @@ Example:
         --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
 """
 from __future__ import annotations
+
+try:
+    from realesrgan import RealESRGANer
+except Exception:
+
+    class RealESRGANer:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError(
+                "RealESRGANer unavailable in this environment. "
+                "Install 'realesrgan' (and GPU deps) to enable super-resolution."
+            )
+from __future__ import
 import glob
 import math
 import random
