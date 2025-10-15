@@ -51,7 +51,7 @@ from controlnet_aux import CannyDetector, MidasDetector
 # Optional Real-ESRGAN
 try:
     from realesrgan import RealESRGANer  # type: ignore
-except Exception:  # pragma: no cover - best effort optional dependency
+except ImportError:  # pragma: no cover - best effort optional dependency
     RealESRGANer = None  # type: ignore[assignment]
     _HAS_REALESRGAN = False
 else:
