@@ -204,6 +204,8 @@ def _apply_temperature(arr: np.ndarray, shift: float) -> np.ndarray:
     arr[..., 0] *= red_scale
     arr[..., 2] *= blue_scale
     return arr
+
+
 def _apply_contact_shadows(arr: np.ndarray, strength: float, radius: int) -> np.ndarray:
     if strength <= 0:
         return arr
@@ -214,6 +216,8 @@ def _apply_contact_shadows(arr: np.ndarray, strength: float, radius: int) -> np.
     ao = np.clip(blurred - lum, 0.0, 1.0)[..., None]
     arr *= 1.0 - strength * ao
     return arr
+
+
 def _apply_haze(arr: np.ndarray, amount: float) -> np.ndarray:
     if amount <= 0:
         return arr

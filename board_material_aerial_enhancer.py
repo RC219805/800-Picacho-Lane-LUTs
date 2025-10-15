@@ -266,7 +266,7 @@ def build_material_rules(textures: Mapping[str, Path]) -> Sequence[MaterialRule]
         Tuple of MaterialRule objects in priority order.
     """
     def plaster_score(stats: ClusterStats) -> float:
-        h, s, v = stats.mean_hsv
+        _, s, v = stats.mean_hsv
         return max(0.0, (1.0 - s) * v)
 
     def stone_score(stats: ClusterStats) -> float:
@@ -339,10 +339,10 @@ def _load_texture(path: str) -> np.ndarray:
     try:
         image = Image.open(path).convert("RGB")
         return np.asarray(image, dtype=np.float32) / 255.0
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Texture file not found: {path}")
-    except Exception as e:
-        raise IOError(f"Failed to load texture {path}: {e}")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(f"Texture file not found: {path}") from exc
+    except (OSError, IOError) as e:
+        raise IOError(f"Failed to load texture {path}: {e}") from e
 
 
 def _tile_texture(texture: np.ndarray, size: tuple[int, int]) -> np.ndarray:
@@ -410,71 +410,9 @@ def assign_materials(stats: Sequence[ClusterStats], rules: Sequence[MaterialRule
     return assignments
 
 
-def save_palette_assignments(
-    assignments: Mapping[int, MaterialRule],
-    output_path: Path | str,
-) -> None:
-    """Save cluster-to-material assignments to a JSON palette file.
-
-    Args:
-        assignments: Mapping from cluster label to MaterialRule.
-        output_path: Path where the palette JSON should be saved.
-    """
-    palette_data = {
-        "version": "1.0",
-        "assignments": {
-            str(cluster_id): material_rule.name
-            for cluster_id, material_rule in assignments.items()
-        }
-    }
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(palette_data, f, indent=2)
-
-
-def load_palette_assignments(
-    palette_path: Path | str,
-    rules: Sequence[MaterialRule],
-) -> Dict[int, MaterialRule]:
-    """Load cluster-to-material assignments from a JSON palette file.
-
-    Args:
-        palette_path: Path to the palette JSON file.
-        rules: Available MaterialRule objects (needed to map names to rules).
-
-    Returns:
-        Mapping from cluster label to assigned MaterialRule.
-
-    Raises:
-        FileNotFoundError: If palette file does not exist.
-        ValueError: If palette references unknown material names.
-    """
-    palette_path = Path(palette_path)
-    if not palette_path.exists():
-        raise FileNotFoundError(f"Palette file not found: {palette_path}")
-
-    with open(palette_path, 'r', encoding='utf-8') as f:
-        palette_data = json.load(f)
-
-    # Build name-to-rule lookup
-    rule_by_name = {rule.name: rule for rule in rules}
-
-    # Map cluster IDs to MaterialRules using the palette
-    assignments: dict[int, MaterialRule] = {}
-    for cluster_id_str, material_name in palette_data.get("assignments", {}).items():
-        cluster_id = int(cluster_id_str)
-        if material_name not in rule_by_name:
-            raise ValueError(
-                f"Unknown material '{material_name}' in palette. "
-                f"Available materials: {list(rule_by_name.keys())}"
-            )
-        assignments[cluster_id] = rule_by_name[material_name]
-
-    return assignments
-
-
-def apply_materials(image: np.ndarray, labels: np.ndarray, assignments: Mapping[int, MaterialRule]) -> np.ndarray:
+def apply_materials(  # pylint: disable=too-many-locals
+    image: np.ndarray, labels: np.ndarray, assignments: Mapping[int, MaterialRule]
+) -> np.ndarray:
     """Apply material textures to image based on cluster assignments.
 
     Blends high-resolution texture plates with base image using soft masks
@@ -524,12 +462,12 @@ def relabel(assignments: Mapping[int, MaterialRule], labels: np.ndarray) -> np.n
         Relabeled array (currently unchanged).
     """
     renamed = labels.copy()
-    for label, rule in assignments.items():
+    for label, _ in assignments.items():
         renamed[labels == label] = label
     return renamed
 
 
-def enhance_aerial(
+def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
     input_path: Path,
     output_path: Path,
     *,

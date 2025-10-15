@@ -46,8 +46,9 @@ pip install .
 # Alternatively, mirror CI exactly
 pip install -r requirements.txt
 
-# Install development dependencies
-pip install pytest flake8
+# Install development dependencies (flake8 for linting, pytest-xdist for parallel tests)
+pip install flake8
+pip install -r requirements-dev.txt
 
 # Run tests to verify setup
 pytest
@@ -187,8 +188,7 @@ flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
 **Import Errors**
 - Ensure all dependencies are installed: `pip install -r requirements.txt`
-- For ML pipeline: `pip install torch diffusers transformers`
-- For 16-bit TIFF: `pip install tifffile`
+- All required packages (torch, diffusers, controlnet-aux, realesrgan, tifffile, etc.) are included in requirements.txt
 
 **Test Failures**
 - Run individual test files to isolate issues: `pytest tests/test_<module>.py -v`
