@@ -1,29 +1,46 @@
-"""Apply MBAR board material textures to the Montecito aerial capture.
+# Palette helpers: use real ones if available; otherwise provide simple JSON fallbacks.
+try:
+    from .palette_assignments import (  # type: ignore
+        load_palette_assignments,
+        save_palette_assignments,
+    )
+except Exception:
+    def load_palette_assignments(
+        path: str | Path,
+        rules: Sequence[MaterialRule] | Mapping[str, MaterialRule] | None = None,
+    ) -> dict[int, MaterialRule]:
+        """Load a palette JSON of { "<label>": "<rule_name>" } and map back to MaterialRule."""
+        p = Path(path)
+        if not p.exists():
+            return {}
+        data = json.loads(p.read_text())
 
-The Santa Barbara Montecito Board of Architectural Review (MBAR) submission
-identifies a restrained exterior palette (Marmorino Palladino plaster,
-Eco Outdoor Bokara stone, Sculptform click-on systems, Equitone LT85 panels,
-Bison Weathered Ipe pavers, and complementary bronze + powder-coated metals).
+        # Build lookup: rule name -> MaterialRule
+        lookup: dict[str, MaterialRule] = {}
+        if isinstance(rules, Mapping):
+            lookup.update(rules)  # assume already name->rule
+        elif isinstance(rules, Sequence):
+            lookup.update({r.name: r for r in rules})
+        # else: rules None => leave lookup empty
 
-This utility approximates that board-ready package by clustering the base
-aerial photograph, heuristically assigning each cluster to a board material,
-and blending high-resolution texture plates before scaling the result to a
-4K deliverable.  The workflow intentionally avoids heavyweight diffusion
-pipelines so that artists can iterate on the approved elevations with only
-NumPy and Pillow.
-"""
-from __future__ import annotations
+        assignments: dict[int, MaterialRule] = {}
+        for k, v in data.items():
+            try:
+                label = int(k)
+            except Exception:
+                # allow ints or numeric strings as keys
+                label = int(k)  # will raise if truly invalid
+            rule = lookup.get(v)
+            if rule is not None:
+                assignments[label] = rule
+        return assignments
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Callable, Dict, Mapping, MutableMapping, Optional, Sequence
-
-import argparse
-import json
-import math
-import numpy as np
-from PIL import Image, ImageFilter
-
+    def save_palette_assignments(assignments: Mapping[int, MaterialRule], path: str | Path) -> None:
+        """Save palette as { "<label>": "<rule_name>" } for portability."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        serializable = {str(label): rule.name for label, rule in assignments.items()}
+        p.write_text(json.dumps(serializable, indent=2, sort_keys=True))
 
 @dataclass(frozen=True)
 class ClusterStats:
