@@ -32,6 +32,16 @@ try:  # real implementations, if you have them elsewhere
     )
 except Exception:
     def _rules_by_name(rules: Mapping[str, Any] | Sequence[Any]) -> dict[str, Any]:
+        """
+        Convert a mapping or sequence of rule objects into a dictionary keyed by rule name.
+
+        Args:
+            rules: Either a mapping from names to rule objects, or a sequence of rule objects.
+                If a sequence is provided, each rule object must have a 'name' attribute.
+
+        Returns:
+            dict[str, Any]: Dictionary mapping rule names to rule objects.
+        """
         if isinstance(rules, Mapping):
             return dict(rules)
         return {getattr(rule, "name"): rule for rule in rules}
