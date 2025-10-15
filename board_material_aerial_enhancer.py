@@ -19,10 +19,23 @@ from pathlib import Path
 from typing import Callable, Dict, Mapping, MutableMapping, Optional, Sequence
 
 import argparse
-import json
 import math
 import numpy as np
 from PIL import Image, ImageFilter
+
+try:
+    from palette_assignments import load_palette_assignments, save_palette_assignments
+except Exception:  # pragma: no cover - fallback for standalone execution
+    import json
+
+    def load_palette_assignments(path: str | Path, rules: Mapping[str, object] | None = None) -> dict[str, object]:
+        p = Path(path)
+        return {} if not p.exists() else json.loads(p.read_text())
+
+    def save_palette_assignments(assignments: Mapping[str, object], path: str | Path) -> None:
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(assignments, indent=2, sort_keys=True))
 
 
 @dataclass(frozen=True)
