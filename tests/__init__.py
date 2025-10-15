@@ -1,2 +1,1 @@
 """Test suite package initialization for architectural documentation decorators."""
-

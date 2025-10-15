@@ -24,6 +24,7 @@ def _ensure_profile(profile: ProcessingProfile | None) -> ProcessingProfile:
         return PROCESSING_PROFILES[DEFAULT_PROFILE_NAME]
     return profile
 
+
 try:  # Optional progress bar for batch runs
     from tqdm import tqdm as _tqdm  # type: ignore
 except Exception:  # pragma: no cover - optional dependency

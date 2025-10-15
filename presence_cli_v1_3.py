@@ -27,12 +27,14 @@ try:
 except ImportError:
     NACL_OK = False
 
+
 def _sha256_file(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.digest()
+
 
 def measure_image(path: str, aspect: str="4:5") -> Dict[str,float]:
     """Heuristic measurement for eye-line and side gutters (no face model required).
@@ -109,6 +111,7 @@ def measure_image(path: str, aspect: str="4:5") -> Dict[str,float]:
         "chest_row_px": chest_row
     }
 
+
 def verify_manifest(manifest_path: str, hero: str=None, web: str=None,
                     public_key: str=None, signature_path: str=None,
                     require_signature: bool=False) -> Tuple[bool, str]:
@@ -147,6 +150,7 @@ def verify_manifest(manifest_path: str, hero: str=None, web: str=None,
             return False, "Signature invalid"
     return True, "PASS"
 
+
 def main():
     ap = argparse.ArgumentParser(prog="presence-cli-v1.3")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -182,6 +186,7 @@ def main():
             print("PASS:", msg); sys.exit(0)
         else:
             print("FAIL:", msg); sys.exit(2)
+
 
 if __name__ == "__main__":
     main()

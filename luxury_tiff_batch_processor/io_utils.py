@@ -8,15 +8,20 @@ import math
 import os
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Iterable, Literal, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 from PIL import Image
 
 try:  # Optional high-fidelity TIFF writer
     import tifffile  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - optional dependency
     tifffile = None
+
+try:  # Optional codec pack used by tifffile for certain compressions
+    import imagecodecs  # type: ignore  # pylint: disable=import-error
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - optional dependency
+    imagecodecs = None
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
@@ -54,7 +59,7 @@ class ProcessingCapabilities:
         supports_hdr = getattr(self._tifffile, "supports_hdr", True)
         try:
             return bool(supports_hdr)
-        except Exception:  # pragma: no cover - defensive fallback
+        except (TypeError, ValueError):  # pragma: no cover - defensive fallback
             return False
 
     def assert_luxury_grade(self) -> None:
@@ -173,6 +178,7 @@ class FloatDynamicRange:
         return working, squeezed
 
     def normalise(self, arr: np.ndarray) -> np.ndarray:
+        """Normalize array values using stored offset and scale."""
         working, squeezed = self._prepare(arr)
         offset = self.offset.reshape((1, 1, -1))
         scale = self.scale_recip.reshape((1, 1, -1))
@@ -182,6 +188,7 @@ class FloatDynamicRange:
         return normalised
 
     def denormalise(self, arr: np.ndarray) -> np.ndarray:
+        """Denormalize array values using stored scale and offset."""
         working, squeezed = self._prepare(arr)
         offset = self.offset.reshape((1, 1, -1))
         scale = self.scale.reshape((1, 1, -1))
@@ -208,7 +215,7 @@ class ImageToFloatResult:
         yield self.base_channels
 
 
-def image_to_float(
+def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     image: Image.Image,
     return_format: Literal["tuple3", "tuple4", "object"] = "object",
 ) -> Union[
@@ -307,7 +314,7 @@ def image_to_float(
     return result
 
 
-def float_to_dtype_array(
+def float_to_dtype_array(  # pylint: disable=too-many-branches
     arr: np.ndarray,
     dtype: np.dtype,
     alpha: Optional[np.ndarray],
@@ -315,6 +322,7 @@ def float_to_dtype_array(
     *,
     float_normalisation: Optional[FloatDynamicRange] = None,
 ) -> np.ndarray:
+    """Convert float array to specified dtype with optional alpha channel."""
     arr = np.clip(arr, 0.0, 1.0)
     if arr.ndim == 2:
         working = arr[:, :, None]
@@ -359,6 +367,7 @@ def float_to_dtype_array(
 
 
 def compression_for_tifffile(compression: str) -> Optional[str]:
+    """Map compression identifier to tifffile-compatible format name."""
     comp = compression.lower()
     mapping = {
         "tiff_lzw": "lzw",
@@ -378,6 +387,7 @@ def compression_for_tifffile(compression: str) -> Optional[str]:
 
 
 def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, Any]]:
+    """Remove forbidden TIFF tags that conflict with image dimensions and encoding."""
     if raw_metadata is None:
         return None
     safe: Dict[int, Any] = {}
@@ -387,13 +397,53 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
             if tag in forbidden_tags:
                 continue
             safe[tag] = raw_metadata[tag]
-    except Exception:  # pragma: no cover - metadata best effort
+    except (TypeError, ValueError, KeyError):  # pragma: no cover - metadata best effort
         LOGGER.debug("Unable to sanitise TIFF metadata", exc_info=True)
         return None
     return safe or None
 
 
-def save_image(
+def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int, Any, bool]]:
+    """Convert a metadata entry to a tifffile extratag tuple when possible."""
+
+    try:
+        tag_int = int(tag)
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        LOGGER.debug("Skipping non-integer TIFF tag %r", tag)
+        return None
+
+    if isinstance(value, str):
+        return (tag_int, "s", 0, value, False)
+
+    if isinstance(value, (bytes, bytearray)):
+        data = bytes(value)
+        return (tag_int, "B", len(data), data, False)
+
+    if isinstance(value, (tuple, list)):
+        items = list(value)
+        if not items:
+            return None
+        if all(isinstance(item, int) for item in items):
+            max_val = max(items)
+            dtype_code = "H" if 0 <= max_val <= 0xFFFF else "I"
+            return (tag_int, dtype_code, len(items), items, False)
+        if all(isinstance(item, float) for item in items):
+            return (tag_int, "d", len(items), items, False)
+        LOGGER.debug("Unsupported iterable metadata type for tag %r", tag)
+        return None
+
+    if isinstance(value, int):
+        dtype_code = "H" if 0 <= value <= 0xFFFF else "I"
+        return (tag_int, dtype_code, 1, value, False)
+
+    if isinstance(value, float):
+        return (tag_int, "d", 1, value, False)
+
+    LOGGER.debug("Unsupported TIFF metadata value type for tag %r: %s", tag, type(value).__name__)
+    return None
+
+
+def save_image(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements
     destination: Path,
     arr_int: np.ndarray,
     dtype: np.dtype,
@@ -401,12 +451,16 @@ def save_image(
     icc_profile: Optional[bytes],
     compression: str,
 ) -> None:
+    """Save image array to disk with comprehensive metadata support."""
     destination_fs = os.fspath(destination)
     metadata = sanitize_tiff_metadata(metadata)
     np_dtype = np.dtype(dtype)
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
 
-    use_tifffile = tifffile is not None and (
+    writer_compression = compression_for_tifffile(compression)
+    lzw_requires_codec = writer_compression in {"lzw", "jpeg"} and imagecodecs is None
+
+    use_tifffile = tifffile is not None and not lzw_requires_codec and (
         (dtype_info is not None and dtype_info.bits >= 16)
         or np.issubdtype(np_dtype, np.floating)
     )
@@ -430,7 +484,7 @@ def save_image(
     if use_tifffile:
         tiff_kwargs = {
             "photometric": photometric,
-            "compression": compression_for_tifffile(compression),
+            "compression": writer_compression,
             "metadata": None,
         }
         if extrasample_needed or (
@@ -441,10 +495,12 @@ def save_image(
         if icc_profile:
             extratags.append((34675, "B", len(icc_profile), icc_profile, False))
         if metadata:
-            try:
-                tiff_kwargs["metadata"] = {tag: metadata[tag] for tag in metadata}
-            except Exception:  # pragma: no cover - best-effort metadata copy
-                LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
+            for tag, value in metadata.items():
+                extratag = _metadata_to_extratag(tag, value)
+                if extratag is not None:
+                    extratags.append(extratag)
+                else:  # pragma: no cover - best-effort fallback
+                    LOGGER.debug("Skipping TIFF metadata tag %r", tag)
         if extratags:
             tiff_kwargs["extratags"] = extratags
         tifffile.imwrite(destination_fs, array_to_write, **tiff_kwargs)
@@ -477,7 +533,17 @@ def save_image(
     image = Image.fromarray(array_to_write, mode=mode)
     save_kwargs = {"compression": compression}
     if metadata is not None:
-        save_kwargs["tiffinfo"] = metadata
+        normalised_metadata = {}
+        for key, value in metadata.items():
+            if isinstance(key, str):
+                try:
+                    normalised_key = int(key)
+                except ValueError:
+                    normalised_key = key
+            else:
+                normalised_key = key
+            normalised_metadata[normalised_key] = value
+        save_kwargs["tiffinfo"] = normalised_metadata
     if icc_profile:
         save_kwargs["icc_profile"] = icc_profile
     image.save(destination_fs, format="TIFF", **save_kwargs)
