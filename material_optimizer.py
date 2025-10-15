@@ -195,7 +195,7 @@ def create_cost_minimization_objective(*, weight: float = 1.0) -> Objective:
     """Penalise materials with higher cost per square metre."""
 
     def _evaluate(material: MaterialPhysics, context: OptimizationContext) -> float:
-        return material.cost_per_square_meter
+        return material.cost_per_square_meter * max(context.pixel_area_m2, 1e-6)
 
     return Objective(name="cost", weight=weight, evaluator=_evaluate)
 
