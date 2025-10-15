@@ -7,9 +7,7 @@ This directory contains GitHub Actions workflow definitions for the 800 Picacho 
 ### python-app.yml
 Main CI workflow for Python testing and linting.
 - Runs on push to main and pull requests
-- Tests with Python 3.10
-- Linting with flake8
-- Testing with pytest
+- Tests with Python 3.10, 3.11, and 3.12 (matrix strategy)
 
 ### pylint.yml
 Pylint code quality checks.
