@@ -22,7 +22,7 @@ help:
 	@echo "  venv          Create local .venv if missing"
 	@echo "  pipeline-run      Execute the material intelligence pipeline"
 	@echo "  pipeline-tensor   Build tensors only"
-	@echo "  pipeline-optimize Optimise assignments only"
+	@echo "  pipeline-optimize Optimize assignments only"
 	@echo "  pipeline-render   Render lighting scenarios"
 
 venv:
