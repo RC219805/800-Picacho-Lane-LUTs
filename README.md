@@ -4,6 +4,14 @@
 
 A cutting-edge collection of **16 professional color grading LUTs** featuring innovative **Material Response** technology.
 
+## Quickstart
+
+Install the package and run your first TIFF enhancement:
+
+```bash
+pip install picacho-lane-luts
+python luxury_tiff_batch_processor.py input_folder output_folder --preset signature
+
 ## Table of Contents
 - [Overview](#overview)
 - [Collection Contents](#collection-contents)
