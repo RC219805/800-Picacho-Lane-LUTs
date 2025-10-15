@@ -23,10 +23,11 @@ jobs:
       - name: Debug - Print issue details
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
           echo "::group::Issue Details"
           echo "Issue Number: ${{ github.event.issue.number }}"
-          echo "Issue Title: ${{ github.event.issue.title }}"
+          echo "Issue Title: $ISSUE_TITLE"
           echo "Issue Author: ${{ github.event.issue.user.login }}"
           echo "::endgroup::"
           
