@@ -1,77 +1,54 @@
-# Experimental workflow for AI-powered issue summarization
-# Status: Requires working AI inference action (actions/ai-inference@v2 does not exist)
-# See .github/workflows/README.md for more information and alternatives
-
+# .github/workflows/summary.yml
 name: Summarize new issues
-
 on:
   issues:
     types: [opened]
 
 jobs:
-  summary:
+  summarize:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      models: read
       contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Debug - Print issue details
+      - name: Generate summary with OpenAI
+        id: summarize
         env:
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          echo "::group::Issue Details"
-          echo "Issue Number: ${{ github.event.issue.number }}"
-          echo "Issue Title: $ISSUE_TITLE"
-          echo "Issue Author: ${{ github.event.issue.user.login }}"
-          echo "::endgroup::"
-          
-          echo "::group::Issue Body"
-          echo "$ISSUE_BODY"
-          echo "::endgroup::"
+          python - <<'PY'
+          import os, openai, textwrap
+          openai.api_key = os.environ["OPENAI_API_KEY"]
+          title = os.environ.get("ISSUE_TITLE", "")
+          body  = os.environ.get("ISSUE_BODY", "")
+          prompt = textwrap.dedent(f"""
+          Summarize the following GitHub issue in one concise paragraph:
+          Title: {title}
+          Body:
+          {body}
+          """)
+          response = openai.chat.completions.create(
+              model="gpt-4o-mini",
+              messages=[{"role": "user", "content": prompt}],
+              max_tokens=120,
+              temperature=0.2,
+          )
+          text = response.choices[0].message.content.strip()
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "w", encoding="utf-8") as f:
+              f.write(text)
+          print("summary-output=" + text)
+          PY
 
-      - name: Run AI inference
-        id: inference
-        continue-on-error: true
-        uses: actions/ai-inference@v2
-        with:
-          prompt: |
-            Summarize the following GitHub issue in one paragraph:
-            Title: ${{ github.event.issue.title }}
-            Body: ${{ github.event.issue.body }}
-
-      - name: Debug - Check inference output
-        if: always()
-        run: |
-          echo "::group::Inference Step Status"
-          echo "Step outcome: ${{ steps.inference.outcome }}"
-          echo "Step conclusion: ${{ steps.inference.conclusion }}"
-          if [ -n "${{ steps.inference.outputs.response }}" ]; then
-            echo "Response received: Yes"
-            echo "Response length: $(echo '${{ steps.inference.outputs.response }}' | wc -c)"
-          else
-            echo "Response received: No"
-          fi
-          echo "::endgroup::"
-
-      - name: Comment with AI summary
-        if: steps.inference.outcome == 'success' && steps.inference.outputs.response != ''
-        run: |
-          gh issue comment $ISSUE_NUMBER --body '${{ steps.inference.outputs.response }}'
+      - name: Post summary as comment
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          RESPONSE: ${{ steps.inference.outputs.response }}
-
-      - name: Comment with debug info on failure
-        if: steps.inference.outcome != 'success'
         run: |
-          gh issue comment $ISSUE_NUMBER --body "⚠️ AI summarization failed. Please check the workflow logs for details."
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          gh issue comment $ISSUE_NUMBER \
+            --body "$(cat $GITHUB_STEP_SUMMARY)"
