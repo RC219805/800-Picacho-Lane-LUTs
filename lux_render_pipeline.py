@@ -798,7 +798,7 @@ class LuxuryRenderPipeline:
             from realesrgan.archs.srvgg_arch import SRVGGNetCompact
             model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
             if RealESRGANer is None:
-                raise RuntimeError("RealESRGANer unavailable; install 'realesrgan' to enable SR.")
+                raise RuntimeError("RealESRGANer unavailable; install 'realesrgan' to enable super resolution.")
             self.realesrgan = RealESRGANer(  # type: ignore[operator]
                 scale=4,
                 model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth',
