@@ -18,6 +18,11 @@ try:  # Optional high-fidelity TIFF writer
 except Exception:  # pragma: no cover - optional dependency
     tifffile = None
 
+try:  # Optional codec pack used by tifffile for certain compressions
+    import imagecodecs  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    imagecodecs = None
+
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
 
@@ -393,6 +398,46 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
     return safe or None
 
 
+def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int, Any, bool]]:
+    """Convert a metadata entry to a tifffile extratag tuple when possible."""
+
+    try:
+        tag_int = int(tag)
+    except (TypeError, ValueError):  # pragma: no cover - defensive
+        LOGGER.debug("Skipping non-integer TIFF tag %r", tag)
+        return None
+
+    if isinstance(value, str):
+        return (tag_int, "s", 0, value, False)
+
+    if isinstance(value, (bytes, bytearray)):
+        data = bytes(value)
+        return (tag_int, "B", len(data), data, False)
+
+    if isinstance(value, (tuple, list)):
+        items = list(value)
+        if not items:
+            return None
+        if all(isinstance(item, int) for item in items):
+            max_val = max(items)
+            dtype_code = "H" if 0 <= max_val <= 0xFFFF else "I"
+            return (tag_int, dtype_code, len(items), items, False)
+        if all(isinstance(item, float) for item in items):
+            return (tag_int, "d", len(items), items, False)
+        LOGGER.debug("Unsupported iterable metadata type for tag %r", tag)
+        return None
+
+    if isinstance(value, int):
+        dtype_code = "H" if 0 <= value <= 0xFFFF else "I"
+        return (tag_int, dtype_code, 1, value, False)
+
+    if isinstance(value, float):
+        return (tag_int, "d", 1, value, False)
+
+    LOGGER.debug("Unsupported TIFF metadata value type for tag %r: %s", tag, type(value).__name__)
+    return None
+
+
 def save_image(
     destination: Path,
     arr_int: np.ndarray,
@@ -406,7 +451,10 @@ def save_image(
     np_dtype = np.dtype(dtype)
     dtype_info = np.iinfo(np_dtype) if np.issubdtype(np_dtype, np.integer) else None
 
-    use_tifffile = tifffile is not None and (
+    writer_compression = compression_for_tifffile(compression)
+    lzw_requires_codec = writer_compression in {"lzw", "jpeg"} and imagecodecs is None
+
+    use_tifffile = tifffile is not None and not lzw_requires_codec and (
         (dtype_info is not None and dtype_info.bits >= 16)
         or np.issubdtype(np_dtype, np.floating)
     )
@@ -430,7 +478,7 @@ def save_image(
     if use_tifffile:
         tiff_kwargs = {
             "photometric": photometric,
-            "compression": compression_for_tifffile(compression),
+            "compression": writer_compression,
             "metadata": None,
         }
         if extrasample_needed or (
@@ -441,10 +489,12 @@ def save_image(
         if icc_profile:
             extratags.append((34675, "B", len(icc_profile), icc_profile, False))
         if metadata:
-            try:
-                tiff_kwargs["metadata"] = {tag: metadata[tag] for tag in metadata}
-            except Exception:  # pragma: no cover - best-effort metadata copy
-                LOGGER.debug("Unable to serialise TIFF metadata", exc_info=True)
+            for tag, value in metadata.items():
+                extratag = _metadata_to_extratag(tag, value)
+                if extratag is not None:
+                    extratags.append(extratag)
+                else:  # pragma: no cover - best-effort fallback
+                    LOGGER.debug("Skipping TIFF metadata tag %r", tag)
         if extratags:
             tiff_kwargs["extratags"] = extratags
         tifffile.imwrite(destination_fs, array_to_write, **tiff_kwargs)
@@ -477,8 +527,17 @@ def save_image(
     image = Image.fromarray(array_to_write, mode=mode)
     save_kwargs = {"compression": compression}
     if metadata is not None:
-        # Convert integer keys to strings for Pillow compatibility
-        save_kwargs["tiffinfo"] = {str(k): v for k, v in metadata.items()}
+        normalised_metadata = {}
+        for key, value in metadata.items():
+            if isinstance(key, str):
+                try:
+                    normalised_key = int(key)
+                except ValueError:
+                    normalised_key = key
+            else:
+                normalised_key = key
+            normalised_metadata[normalised_key] = value
+        save_kwargs["tiffinfo"] = normalised_metadata
     if icc_profile:
         save_kwargs["icc_profile"] = icc_profile
     image.save(destination_fs, format="TIFF", **save_kwargs)
