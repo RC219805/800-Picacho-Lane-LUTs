@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Mapping
 
+
 def enhance_aerial(
     input_path: Path,
     output_path: Path,
