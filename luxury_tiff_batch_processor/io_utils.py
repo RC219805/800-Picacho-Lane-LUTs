@@ -19,7 +19,7 @@ except Exception:  # pragma: no cover - optional dependency
     tifffile = None
 
 try:  # Optional codec pack used by tifffile for certain compressions
-    import imagecodecs  # type: ignore
+    import imagecodecs  # type: ignore  # pylint: disable=import-error
 except Exception:  # pragma: no cover - optional dependency
     imagecodecs = None
 
