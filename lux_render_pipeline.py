@@ -788,7 +788,7 @@ class LuxuryRenderPipeline:
             print("[Load] Real-ESRGAN x4...")
             if RealESRGANer is None:
                 raise RuntimeError(
-                    "RealESRGANer is unavailable. Install 'realesrgan' (and GPU deps) to enable super-resolution."
+                    "RealESRGANer is unavailable. Install with: pip install realesrgan basicsr"
                 )
             # RealESRGANer expects model_path parameter
             # If weights don't exist locally, the package will download them
