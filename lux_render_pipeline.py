@@ -23,7 +23,7 @@ import random
 from functools import lru_cache
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import typer
@@ -50,12 +50,9 @@ from controlnet_aux import CannyDetector, MidasDetector
 
 # Optional Real-ESRGAN
 try:
-    from realesrgan import RealESRGAN
-except (ImportError, OSError):
-    RealESRGAN = None
-    _HAS_REALESRGAN = False
-else:
-    _HAS_REALESRGAN = True
+    from realesrgan import RealESRGANer  # type: ignore
+except Exception:
+    RealESRGANer = None  # type: ignore[assignment]
 
 # --------------------------
 
@@ -785,14 +782,14 @@ class LuxuryRenderPipeline:
             self.upscaler = None
 
         # Real-ESRGAN (optional)
-        self._use_realesrgan = use_realesrgan and _HAS_REALESRGAN
-        if use_realesrgan and not _HAS_REALESRGAN:
-            print(
-                "[Warn] Real-ESRGAN requested but not installed. "
-                "Run: pip install realesrgan basicsr"
-            )
+        self._use_realesrgan = use_realesrgan
+        self.realesrgan: Optional[Any] = None
         if self._use_realesrgan:
             print("[Load] Real-ESRGAN x4...")
+            if RealESRGANer is None:
+                raise RuntimeError(
+                    "RealESRGANer is unavailable. Install 'realesrgan' (and GPU deps) to enable super-resolution."
+                )
             # RealESRGANer expects model_path parameter
             # If weights don't exist locally, the package will download them
             from realesrgan.archs.srvgg_arch import SRVGGNetCompact

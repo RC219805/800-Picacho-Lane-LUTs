@@ -15,14 +15,54 @@ NumPy and Pillow.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
-from typing import Callable, Dict, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Callable, Dict, Mapping, MutableMapping, Optional, Sequence
 
 import argparse
-import json
 import math
 import numpy as np
 from PIL import Image, ImageFilter
+
+# Palette assignment helpers: import if available, else provide simple JSON fallbacks.
+try:  # real implementations, if you have them elsewhere
+    from .palette_assignments import (  # type: ignore
+        load_palette_assignments,
+        save_palette_assignments,
+    )
+except Exception:
+    def _rules_by_name(rules: Mapping[str, Any] | Sequence[Any]) -> dict[str, Any]:
+        if isinstance(rules, Mapping):
+            return dict(rules)
+        return {getattr(rule, "name"): rule for rule in rules}
+
+    def load_palette_assignments(
+        path: str | Path,
+        rules: Mapping[str, Any] | Sequence[Any] | None = None,
+    ) -> dict[int, Any]:
+        p = Path(path)
+        if not p.exists():
+            return {}
+        data = json.loads(p.read_text())
+        assignments_data = data.get("assignments", {}) if isinstance(data, dict) else {}
+        if rules is None:
+            return {int(label): value for label, value in assignments_data.items()}
+        lookup = _rules_by_name(rules)
+        resolved: dict[int, Any] = {}
+        for label, name in assignments_data.items():
+            if name not in lookup:
+                raise ValueError(f"Unknown material '{name}' in palette assignments.")
+            resolved[int(label)] = lookup[name]
+        return resolved
+
+    def save_palette_assignments(assignments: Mapping[int, Any], path: str | Path) -> None:
+        payload = {
+            "version": "1.0",
+            "assignments": {str(label): getattr(rule, "name", str(rule)) for label, rule in assignments.items()},
+        }
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(payload, indent=2, sort_keys=True))
 
 
 @dataclass(frozen=True)
