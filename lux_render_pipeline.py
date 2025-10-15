@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover
             raise RuntimeError(
                 "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
             )
-from __future__ import
+from __future__ import annotations
 import glob
 import math
 import random
