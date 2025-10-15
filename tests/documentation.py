@@ -9,6 +9,7 @@ from typing import Callable, TypeVar, cast
 
 F = TypeVar("F", bound=Callable[..., object])
 
+
 def documents(note: str) -> Callable[[F], F]:
     """Annotate a test with the documentation note it enforces."""
 
@@ -17,6 +18,7 @@ def documents(note: str) -> Callable[[F], F]:
         return func
 
     return decorator
+
 
 def demonstrates(concepts: Iterable[object] | object) -> Callable[[F], F]:
     """Annotate a test subject with the concept(s) it proves out.
@@ -53,6 +55,7 @@ def demonstrates(concepts: Iterable[object] | object) -> Callable[[F], F]:
 
     return decorator
 
+
 def valid_until(iso_date: str, *, reason: str) -> Callable[[F], F]:
     """Fail the decorated test once the provided date has passed.
 
@@ -83,5 +86,6 @@ def valid_until(iso_date: str, *, reason: str) -> Callable[[F], F]:
         return cast(F, wrapper)
 
     return decorator
+
 
 __all__ = ["documents", "demonstrates", "valid_until"]
