@@ -61,7 +61,9 @@ except Exception:
         resolved: dict[int, Any] = {}
         for label, name in assignments_data.items():
             if name not in lookup:
-                raise ValueError(f"Unknown material '{name}' in palette assignments.")
+                raise ValueError(
+                    f"Unknown material '{name}' in palette assignments. Available: {list(lookup.keys())}"
+                )
             resolved[int(label)] = lookup[name]
         return resolved
 
