@@ -115,9 +115,24 @@ perspective without leaving the command line.
 - Create an isolated environment (optional but recommended):
   - `python -m venv .venv`
 - Install the project runtime requirements:
-  - `python -m pip install -r requirements.txt`
-- Add the developer extras (pytest, pytest-xdist, numpy pin for tests):
-  - `python -m pip install -r requirements-dev.txt`
+  - `python -m pip install .` (installs core dependencies from pyproject.toml)
+  - Alternatively: `python -m pip install -r requirements.txt` (to mirror CI)
+- Add optional extras as needed:
+  - `pip install -e ".[tiff]"` – 16-bit TIFF processing with tifffile
+  - `pip install -e ".[dev]"` – pytest, pytest-xdist, flake8
+  - `pip install -e ".[ml]"` – PyTorch, Diffusers, ControlNet for lux_render_pipeline
+  - `pip install -e ".[all]"` – all optional dependencies
+
+### Console Scripts
+
+After installation with `pip install .`, the following command-line tools are available:
+
+- `luxury-tiff-batch-processor` – batch process TIFF images with presets
+- `luxury-video-master-grader` – apply LUTs and finishing to video files
+- `lux-render-pipeline` – AI-powered render refinement (requires `[ml]` extras)
+- `decision-decay-dashboard` – view temporal contracts and philosophy violations
+
+You can also run the scripts directly with Python (e.g., `python -m luxury_tiff_batch_processor.cli`).
 
 ### Test Shortcuts
 
@@ -126,6 +141,20 @@ Use the bundled `Makefile` to run repeatable subsets during development:
 - `make test-fast` – runs the material response suite plus the light-weight image processing tests.
 - `make test-novideo` – executes every test except the FFmpeg-heavy video grader coverage.
 - `make test-full` – runs the full suite, automatically parallelising with `pytest-xdist` when available.
+
+### Code Quality
+
+The repository uses both **flake8** and **pylint** for code quality checks:
+
+- **flake8**: Enforces critical syntax and import checks (configured in CI)
+  ```bash
+  flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+  ```
+- **pylint**: Comprehensive code analysis with project-specific configuration
+  ```bash
+  pylint $(git ls-files '*.py')
+  ```
+  Configuration in `.pylintrc` aligns with project coding standards (127 char line length, selective documentation, etc.). CI passes with a score threshold of 9.0/10.
 
 ## Luxury TIFF Batch Processor
 The repository now includes `luxury_tiff_batch_processor.py`, a high-end batch workflow for polishing large-format TIFF photography prior to digital launch. The script preserves metadata, honors 16-bit source files when [`tifffile`](https://pypi.org/project/tifffile/) is available, and layers tonal, chroma, clarity, and diffusion refinements tuned for ultra-luxury real-estate storytelling.
@@ -325,6 +354,87 @@ The repository bundles a minimal `luxury_video_master_grader.py` so the automate
 ```
 
 Layer the script after `luxury_video_master_grader.py` to apply bespoke LUTs before the HDR-specific finishing tools run. The pipeline preserves Dolby Vision and static HDR10 metadata where available, while the deband and halation stages default to the Codex branch recipes highlighted in the documentation examples.
+
+## Board Material Aerial Enhancer
+
+`board_material_aerial_enhancer.py` applies MBAR (Montecito Board of Architectural Review) approved material palettes to aerial photographs using k-means color clustering and texture blending. The system identifies architectural surfaces (plaster, stone, wood cladding, metal panels) and applies high-resolution material textures for board-ready deliverables.
+
+### Key Features
+- **Automatic Material Detection**: HSV-based heuristics identify 8 MBAR-approved materials
+- **Palette Configuration**: Save and load cluster-to-material assignments as JSON files
+- **Deterministic Workflows**: Reuse palette files for consistent results across multiple aerials
+- **4K Output**: Scales enhanced images to 4096px width for presentation materials
+- **Texture Blending**: Soft Gaussian masks ensure natural material transitions
+
+### Palette Assignment Workflow
+
+The enhancer now supports **palette files** - JSON configurations that map cluster IDs to specific materials. This enables manual override of automatic detection and deterministic assignments:
+
+```bash
+# Step 1: Generate automatic assignments and save palette
+python board_material_aerial_enhancer.py \
+  aerial.jpg enhanced.jpg \
+  --k 8 \
+  --save-palette auto_palette.json
+
+# Step 2: Review and edit auto_palette.json to adjust materials
+# Example: Change cluster 3 from "stone" to "plaster"
+
+# Step 3: Apply refined palette to all project aerials
+python board_material_aerial_enhancer.py \
+  aerial_view_2.jpg enhanced_view_2.jpg \
+  --palette auto_palette.json
+```
+
+Palette JSON format:
+```json
+{
+  "version": "1.0",
+  "assignments": {
+    "0": "plaster",
+    "1": "stone",
+    "2": "roof",
+    "3": "equitone"
+  }
+}
+```
+
+**Available Materials**: `plaster`, `stone`, `cladding`, `screens`, `equitone`, `roof`, `bronze`, `shade`
+
+For complete documentation, see [Palette Assignment Guide](08_Documentation/Palette_Assignment_Guide.md).
+
+### Basic Usage
+
+```bash
+python board_material_aerial_enhancer.py input.jpg output.jpg
+```
+
+### Advanced Options
+
+```bash
+python board_material_aerial_enhancer.py \
+  input.jpg output.jpg \
+  --analysis-max 1280 \
+  --k 8 \
+  --seed 22 \
+  --target-width 4096 \
+  --palette custom_palette.json \
+  --save-palette computed_palette.json
+```
+
+**Options**:
+- `--analysis-max`: Max dimension for clustering (default: 1280)
+- `--k`: Number of k-means clusters (default: 8)
+- `--seed`: Random seed for reproducibility (default: 22)
+- `--target-width`: Output width in pixels (default: 4096)
+- `--palette`: Load cluster assignments from JSON file
+- `--save-palette`: Save computed assignments to JSON file
+
+The enhancer includes a visualization tool for reviewing material assignments:
+
+```bash
+python visualize_material_assignments.py --save-palette viz_palette.json
+```
 
 ## Decision Decay Dashboard
 

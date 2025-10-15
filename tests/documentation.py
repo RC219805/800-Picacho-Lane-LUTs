@@ -89,4 +89,3 @@ def valid_until(iso_date: str, *, reason: str) -> Callable[[F], F]:
 
 
 __all__ = ["documents", "demonstrates", "valid_until"]
-
