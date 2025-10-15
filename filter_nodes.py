@@ -84,7 +84,7 @@ class FilterNode:
 
             sanitized[key] = _stringify_value(value)
 
-        return dict(sorted(sanitized.items()))
+        return dict(sorted(sanitized.items(), key=lambda x: str(x[0])))
 
     def compile(self) -> str:
         """Compile the node into FFmpeg filter syntax."""
