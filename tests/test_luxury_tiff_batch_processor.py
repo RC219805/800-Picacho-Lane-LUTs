@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 import subprocess
 import sys
@@ -20,13 +19,11 @@ except ImportError:  # pragma: no cover - fallback for direct execution
 np = pytest.importorskip("numpy")
 pytest.importorskip("PIL.Image")
 pytest.importorskip("PIL.TiffImagePlugin")
-from PIL import Image, TiffImagePlugin
+from PIL import Image, TiffImagePlugin  # noqa: E402
 
-
-
-import luxury_tiff_batch_processor as ltiff
-import luxury_tiff_batch_processor.pipeline as pipeline
-import luxury_tiff_batch_processor.io_utils as io_utils
+import luxury_tiff_batch_processor as ltiff  # noqa: E402
+import luxury_tiff_batch_processor.pipeline as pipeline  # noqa: E402
+import luxury_tiff_batch_processor.io_utils as io_utils  # noqa: E402
 
 
 def test_run_pipeline_exposed_in_dunder_all():
