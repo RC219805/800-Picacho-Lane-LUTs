@@ -1,14 +1,16 @@
-# requirements-ci.txt — light, CPU-only
+# Minimal deps for unit tests on CI (no CUDA/GPU stacks)
 numpy>=1.24,<3
 Pillow>=10,<12
 scipy>=1.10,<2
 typer>=0.12,<1
 tifffile>=2023.7.18,<2026
 tqdm>=4.65,<5
-pytest>=8.0,<9
-imagecodecs>=2024.1,<2026  # optional; drop if not strictly needed
-# Use CPU PyTorch only (small, no CUDA dependencies)
+pytest>=8,<9
+# If needed for image reading speed; otherwise remove to save ~25–50 MB
+imagecodecs>=2024.1,<2026
+
+# CPU-only PyTorch (if your tests import torch)
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.9.0+cpu
-# If torchvision is required in tests, also use CPU build:
+# If your tests import torchvision, use CPU wheel too:
 # torchvision==0.24.0+cpu
