@@ -16,9 +16,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Mapping, MutableMapping, Sequence
+from typing import Callable, Dict, Mapping, MutableMapping, Optional, Sequence
 
 import argparse
+import json
 import math
 import numpy as np
 from PIL import Image, ImageFilter
@@ -475,6 +476,8 @@ def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
     seed: int = 22,
     target_width: int = 4096,
     textures: Mapping[str, Path] | None = None,
+    palette_path: Optional[Path | str] = None,
+    save_palette: Optional[Path | str] = None,
 ) -> Path:
     """Enhance an aerial image by clustering colors, assigning MBAR board materials,
     and blending high-resolution textures to approximate the approved palette.
@@ -482,7 +485,7 @@ def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
     Workflow:
     1. Downsample image for fast k-means color clustering
     2. Compute cluster statistics (mean RGB/HSV, variance)
-    3. Assign each cluster to best-matching MBAR material via scoring
+    3. Assign each cluster to best-matching MBAR material via scoring (or load from palette)
     4. Blend material textures with soft masks for natural transitions
     5. Scale result to 4K deliverable resolution
 
@@ -495,13 +498,17 @@ def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
         target_width: Output width in pixels (height scaled proportionally).
         textures: Optional mapping of material names to texture paths.
                   Defaults to DEFAULT_TEXTURES if not provided.
+        palette_path: Optional path to JSON palette file with cluster-to-material mappings.
+                      When provided, uses these assignments instead of heuristic scoring.
+        save_palette: Optional path to save the computed/loaded assignments as a palette JSON.
 
     Returns:
         Path to saved enhanced image.
 
     Raises:
-        FileNotFoundError: If input image or texture files do not exist.
+        FileNotFoundError: If input image, texture files, or palette file do not exist.
         IOError: If image cannot be loaded or saved.
+        ValueError: If palette references unknown materials.
     """
     source_textures = textures or DEFAULT_TEXTURES
     validated: dict[str, Path] = {}
@@ -535,7 +542,17 @@ def enhance_aerial(  # pylint: disable=too-many-arguments,too-many-locals
 
     stats = _cluster_stats(base_array, labels)
     rules = build_material_rules(validated)
-    assignments = assign_materials(stats, rules)
+    
+    # Use palette assignments if provided, otherwise compute via heuristics
+    if palette_path is not None:
+        assignments = load_palette_assignments(palette_path, rules)
+    else:
+        assignments = assign_materials(stats, rules)
+    
+    # Optionally save the assignments for future use
+    if save_palette is not None:
+        save_palette_assignments(assignments, save_palette)
+    
     enhanced = apply_materials(base_array, labels, assignments)
 
     enhanced_image = Image.fromarray((np.clip(enhanced, 0.0, 1.0) * 255.0 + 0.5).astype("uint8"))
@@ -566,6 +583,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--k", type=int, default=8, help="Number of K-means clusters")
     parser.add_argument("--seed", type=int, default=22, help="Random seed for clustering")
     parser.add_argument("--target-width", type=int, default=4096, help="Output width in pixels")
+    parser.add_argument("--palette", type=Path, default=None, help="Load cluster-to-material assignments from JSON palette file")
+    parser.add_argument("--save-palette", type=Path, default=None, help="Save computed assignments to JSON palette file")
     return parser.parse_args(argv)
 
 
@@ -586,6 +605,8 @@ def main(argv: Sequence[str] | None = None) -> Path:
         k=args.k,
         seed=args.seed,
         target_width=args.target_width,
+        palette_path=args.palette,
+        save_palette=args.save_palette,
     )
 
 

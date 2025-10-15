@@ -1,5 +1,6 @@
 """Generate a visualization showing MBAR material assignments for the aerial."""
 from pathlib import Path
+import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -10,6 +11,8 @@ from board_material_aerial_enhancer import (
     _cluster_stats,
     build_material_rules,
     assign_materials,
+    load_palette_assignments,
+    save_palette_assignments,
     DEFAULT_TEXTURES,
 )
 
@@ -41,7 +44,31 @@ labels = np.asarray(labels_full, dtype=np.uint8)
 # Get material assignments
 stats = _cluster_stats(base_array, labels)
 rules = build_material_rules(DEFAULT_TEXTURES)
-assignments = assign_materials(stats, rules)
+
+# Support optional palette file via command line argument
+# Usage: python visualize_material_assignments.py [--palette path/to/palette.json] [--save-palette path/to/save.json]
+palette_path = None
+save_palette_path = None
+if "--palette" in sys.argv:
+    idx = sys.argv.index("--palette")
+    if idx + 1 < len(sys.argv):
+        palette_path = Path(sys.argv[idx + 1])
+if "--save-palette" in sys.argv:
+    idx = sys.argv.index("--save-palette")
+    if idx + 1 < len(sys.argv):
+        save_palette_path = Path(sys.argv[idx + 1])
+
+# Load or compute assignments
+if palette_path and palette_path.exists():
+    print(f"Loading palette from: {palette_path}")
+    assignments = load_palette_assignments(palette_path, rules)
+else:
+    assignments = assign_materials(stats, rules)
+
+# Optionally save assignments
+if save_palette_path:
+    print(f"Saving palette to: {save_palette_path}")
+    save_palette_assignments(assignments, save_palette_path)
 
 # Create color-coded visualization
 colors = [

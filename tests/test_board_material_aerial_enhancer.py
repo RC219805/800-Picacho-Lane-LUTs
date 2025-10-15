@@ -17,6 +17,8 @@ from board_material_aerial_enhancer import (
     assign_materials,
     build_material_rules,
     enhance_aerial,
+    load_palette_assignments,
+    save_palette_assignments,
 )
 
 
@@ -137,3 +139,200 @@ def test_enhance_aerial_creates_output(tmp_path: Path) -> None:
 
     # Verify enhancement modified the image
     assert np.asarray(enhanced).mean() != np.asarray(image.resize(enhanced.size)).mean()
+
+
+def test_save_palette_assignments_creates_json(tmp_path: Path) -> None:
+    """Test that palette assignments can be saved to JSON."""
+    texture_path = tmp_path / "texture.png"
+    Image.new("RGB", (4, 4), (255, 255, 255)).save(texture_path)
+    
+    rule_a = MaterialRule(name="plaster", texture=str(texture_path), blend=0.5, score_fn=lambda _: 1.0)
+    rule_b = MaterialRule(name="stone", texture=str(texture_path), blend=0.6, score_fn=lambda _: 1.0)
+    
+    assignments = {0: rule_a, 2: rule_b}
+    palette_path = tmp_path / "palette.json"
+    
+    save_palette_assignments(assignments, palette_path)
+    
+    # Verify file exists
+    assert palette_path.exists()
+    
+    # Verify JSON structure
+    import json
+    with open(palette_path, 'r') as f:
+        data = json.load(f)
+    
+    assert "version" in data
+    assert "assignments" in data
+    assert data["assignments"]["0"] == "plaster"
+    assert data["assignments"]["2"] == "stone"
+
+
+def test_load_palette_assignments_restores_mappings(tmp_path: Path) -> None:
+    """Test that palette assignments can be loaded from JSON."""
+    import json
+    
+    # Create palette file
+    palette_data = {
+        "version": "1.0",
+        "assignments": {
+            "0": "plaster",
+            "1": "stone",
+            "3": "equitone"
+        }
+    }
+    palette_path = tmp_path / "palette.json"
+    with open(palette_path, 'w') as f:
+        json.dump(palette_data, f)
+    
+    # Create material rules
+    texture_path = tmp_path / "texture.png"
+    Image.new("RGB", (4, 4), (255, 255, 255)).save(texture_path)
+    
+    rules = [
+        MaterialRule(name="plaster", texture=str(texture_path), blend=0.5, score_fn=lambda _: 1.0),
+        MaterialRule(name="stone", texture=str(texture_path), blend=0.6, score_fn=lambda _: 1.0),
+        MaterialRule(name="equitone", texture=str(texture_path), blend=0.7, score_fn=lambda _: 1.0),
+    ]
+    
+    # Load assignments
+    assignments = load_palette_assignments(palette_path, rules)
+    
+    # Verify mappings
+    assert len(assignments) == 3
+    assert assignments[0].name == "plaster"
+    assert assignments[1].name == "stone"
+    assert assignments[3].name == "equitone"
+
+
+def test_load_palette_assignments_rejects_unknown_materials(tmp_path: Path) -> None:
+    """Test that loading palette with unknown material names raises ValueError."""
+    import json
+    import pytest
+    
+    # Create palette with unknown material
+    palette_data = {
+        "version": "1.0",
+        "assignments": {
+            "0": "unknown_material"
+        }
+    }
+    palette_path = tmp_path / "palette.json"
+    with open(palette_path, 'w') as f:
+        json.dump(palette_data, f)
+    
+    # Create material rules (no "unknown_material")
+    texture_path = tmp_path / "texture.png"
+    Image.new("RGB", (4, 4), (255, 255, 255)).save(texture_path)
+    
+    rules = [
+        MaterialRule(name="plaster", texture=str(texture_path), blend=0.5, score_fn=lambda _: 1.0),
+    ]
+    
+    # Should raise ValueError
+    with pytest.raises(ValueError, match="Unknown material"):
+        load_palette_assignments(palette_path, rules)
+
+
+def test_enhance_aerial_with_palette_uses_predefined_mappings(tmp_path: Path) -> None:
+    """Test that enhance_aerial respects palette file when provided."""
+    import json
+    
+    width, height = 160, 120
+    
+    # Create synthetic aerial
+    image = Image.new("RGB", (width, height), (160, 160, 150))
+    for x in range(width):
+        for y in range(height):
+            if x < width // 2:
+                image.putpixel((x, y), (225, 215, 200))  # will be cluster 0
+            else:
+                image.putpixel((x, y), (60, 50, 40))  # will be cluster 1
+    
+    input_path = tmp_path / "input.png"
+    image.save(input_path)
+    
+    # Create textures
+    material_names = ("plaster", "stone", "cladding", "screens", "equitone", "roof", "bronze", "shade")
+    textures = {name: (tmp_path / f"{name}.png") for name in material_names}
+    colors = {
+        "plaster": (240, 230, 215),
+        "stone": (210, 190, 170),
+        "cladding": (200, 170, 140),
+        "screens": (150, 145, 140),
+        "equitone": (100, 100, 105),
+        "roof": (170, 170, 175),
+        "bronze": (80, 60, 50),
+        "shade": (240, 240, 240),
+    }
+    for name, tex_path in textures.items():
+        Image.new("RGB", (16, 16), colors[name]).save(tex_path)
+    
+    # Create palette that assigns clusters deliberately
+    palette_data = {
+        "version": "1.0",
+        "assignments": {
+            "0": "bronze",  # Force light region to bronze (normally would be plaster)
+            "1": "plaster",  # Force dark region to plaster (normally would be bronze)
+        }
+    }
+    palette_path = tmp_path / "palette.json"
+    with open(palette_path, 'w') as f:
+        json.dump(palette_data, f)
+    
+    output_path = tmp_path / "output.png"
+    enhance_aerial(
+        input_path,
+        output_path,
+        analysis_max_dim=128,
+        k=2,
+        seed=1,
+        target_width=256,
+        textures=textures,
+        palette_path=palette_path,
+    )
+    
+    # Verify output was created
+    assert output_path.exists()
+
+
+def test_enhance_aerial_can_save_computed_palette(tmp_path: Path) -> None:
+    """Test that enhance_aerial can save assignments to a palette file."""
+    width, height = 160, 120
+    
+    # Create synthetic aerial
+    image = Image.new("RGB", (width, height), (225, 215, 200))
+    input_path = tmp_path / "input.png"
+    image.save(input_path)
+    
+    # Create textures
+    material_names = ("plaster", "stone", "cladding", "screens", "equitone", "roof", "bronze", "shade")
+    textures = {name: (tmp_path / f"{name}.png") for name in material_names}
+    for name, tex_path in textures.items():
+        Image.new("RGB", (16, 16), (255, 255, 255)).save(tex_path)
+    
+    output_path = tmp_path / "output.png"
+    palette_save_path = tmp_path / "saved_palette.json"
+    
+    enhance_aerial(
+        input_path,
+        output_path,
+        analysis_max_dim=128,
+        k=3,
+        seed=1,
+        target_width=256,
+        textures=textures,
+        save_palette=palette_save_path,
+    )
+    
+    # Verify palette was saved
+    assert palette_save_path.exists()
+    
+    # Verify it has valid structure
+    import json
+    with open(palette_save_path, 'r') as f:
+        data = json.load(f)
+    
+    assert "version" in data
+    assert "assignments" in data
+    assert len(data["assignments"]) > 0
