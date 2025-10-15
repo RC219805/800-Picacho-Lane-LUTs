@@ -1,17 +1,13 @@
 # board_material_aerial_enhancer.py
 """
 Apply MBAR board material textures to an aerial photograph using a lightweight,
-CI-friendly pipeline:
+CI-friendly pipeline focused on deterministic behavior for tests.
 
-- k-means clustering on a downscaled analysis image to derive label IDs
+Key pieces:
+- k-means clustering on a downscaled analysis image
 - palette JSON for deterministic cluster → material mapping
 - optional texture validation with graceful fallbacks
-- minimal enhancement (label-wise soft blur) to keep CI tests deterministic
-  without heavyweight render stacks
-
-This module intentionally avoids GPU/ML deps so unit tests can run in lean
-environments. It focuses on I/O shape, palette fidelity, and deterministic
-behavior rather than photoreal output.
+- minimal enhancement to keep tests fast (no heavyweight ML/GPU deps)
 """
 
 from __future__ import annotations
@@ -27,20 +23,62 @@ from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any
 import numpy as np
 from PIL import Image, ImageFilter
 
-# Optional dependency (kept soft to avoid CI failures)
+# Optional dependency (keep soft so CI stays lean)
 try:  # pragma: no cover - optional
     import tifffile  # type: ignore
 except Exception:  # pragma: no cover - optional
     tifffile = None  # type: ignore
 
 # If the real class is available elsewhere, use it only for typing;
-# otherwise we provide a tiny stub that satisfies runtime & tests.
+# otherwise provide a tiny stub that satisfies runtime & tests.
 if TYPE_CHECKING:  # pragma: no cover
     from material_response import MaterialRule  # type: ignore
 else:
     @dataclass(frozen=True)
     class MaterialRule:  # minimal stub
         name: str
+
+
+# --------------------------
+# Cluster statistics (exported for tests)
+# --------------------------
+
+@dataclass(frozen=True)
+class ClusterStats:
+    """Statistics for a single color cluster in the aerial image."""
+    label: int
+    count: int
+    centroid: tuple[float, float, float]  # (r,g,b) in [0,1]
+
+
+def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterStats]:
+    """
+    Compute simple stats per label:
+      - pixel count
+      - centroid color (mean RGB in [0,1])
+
+    labels: (H, W) uint dtype
+    rgb:    (H, W, 3) uint8 or float in [0,1]
+    """
+    if rgb.dtype.kind in ("u", "i"):
+        rgb_f = rgb.astype(np.float32) / 255.0
+    else:
+        rgb_f = rgb.astype(np.float32)
+
+    labs = labels.reshape(-1)
+    flat = rgb_f.reshape(-1, 3)
+
+    out: list[ClusterStats] = []
+    for lab in np.unique(labs).tolist():
+        mask = labs == lab
+        cnt = int(mask.sum())
+        if cnt:
+            mean = flat[mask].mean(axis=0)
+            centroid = (float(mean[0]), float(mean[1]), float(mean[2]))
+        else:
+            centroid = (0.0, 0.0, 0.0)
+        out.append(ClusterStats(label=int(lab), count=cnt, centroid=centroid))
+    return out
 
 
 # --------------------------
@@ -90,6 +128,7 @@ def _deserialize_assignments(
                 raise ValueError(f"Palette key is not an int: {sk!r}")
             continue
 
+    # Ensure name is string-like
         rule = by_name.get(name)
         if rule is None:
             if strict:
@@ -125,7 +164,6 @@ def load_palette_assignments(
     except Exception:
         return {}
 
-    # Allow a dict of name→rule to be passed as "rules"
     if rules is None:
         return {}
 
@@ -180,19 +218,15 @@ def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
     Tiny k-means for CI: data is (N, 3) in [0,1]. Returns labels (N,).
     """
     rng = np.random.default_rng(seed)
-    # init: pick k random rows
     centroids = data[rng.choice(data.shape[0], size=k, replace=False)]
     for _ in range(max(1, iters)):
-        # assign
         d2 = ((data[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
         labels = d2.argmin(axis=1)
-        # update
         for i in range(k):
             mask = labels == i
             if mask.any():
                 centroids[i] = data[mask].mean(axis=0)
             else:
-                # re-seed empty cluster
                 centroids[i] = data[rng.integers(0, data.shape[0])]
     return labels
 
@@ -205,8 +239,6 @@ def relabel(assignments: Mapping[int, "MaterialRule"], labels: np.ndarray) -> np
     """
     Optionally remap labels to a stable order based on material names.
     If no mapping needed, returns labels unchanged.
-
-    We compute a deterministic mapping by sorting (cluster_id, material_name).
     """
     if not assignments:
         return labels
@@ -242,7 +274,6 @@ def enhance_aerial(
     output_path = Path(output_path)
     image = Image.open(input_path).convert("RGB")
 
-    # Downscale for clustering
     w, h = image.size
     if max(w, h) > analysis_max:
         scale = analysis_max / max(w, h)
@@ -257,35 +288,28 @@ def enhance_aerial(
     labels_small = _kmeans(flat, k=k, seed=seed).astype(np.uint8)
     labels_small = labels_small.reshape(analysis_image.size[1], analysis_image.size[0])  # (H,W)
 
-    # Upscale labels to full size
     labels_small_img = Image.fromarray(labels_small, mode="L")
     labels_full = labels_small_img.resize(image.size, Image.Resampling.NEAREST)
     labels = np.asarray(labels_full, dtype=np.uint8)
 
-    # Optional palette to stabilize cluster→material names
     assignments: dict[int, "MaterialRule"] = {}
     if palette_path:
-        # Build a rule table from "textures" names if provided
         rule_candidates: list["MaterialRule"] = []
         if textures:
             for name in textures.keys():
                 rule_candidates.append(MaterialRule(name=name))
-        assignments = load_palette_assignments(palette_path, rule_candidates)  # {} if not resolvable
+        assignments = load_palette_assignments(palette_path, rule_candidates)
         if assignments:
             labels = relabel(assignments, labels)
 
-    # Gentle label-aware blur to make result visibly processed without heavies
     enhanced = np.asarray(image, dtype=np.float32) / 255.0
     blurred = image.filter(ImageFilter.GaussianBlur(radius=2))
     blurred_np = np.asarray(blurred, dtype=np.float32) / 255.0
 
-    # Mix a small amount of blur per label to imply different "materials"
-    # (purely for test determinism / visual cue)
     alpha = (labels.astype(np.float32) % 3) / 10.0  # 0.0–0.2
     alpha = np.repeat(alpha[:, :, None], 3, axis=2)
     enhanced = (1.0 - alpha) * enhanced + alpha * blurred_np
 
-    # Save result, optionally scaled to target width
     out_img = Image.fromarray((np.clip(enhanced, 0.0, 1.0) * 255.0 + 0.5).astype("uint8"), mode="RGB")
     if target_width and out_img.width != target_width:
         tw = int(target_width)
@@ -295,9 +319,7 @@ def enhance_aerial(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     out_img.save(output_path)
 
-    # Optionally write the palette we used/computed (here we emit the label→name order)
     if save_palette:
-        # If no assignments were supplied, emit a trivial "clusterN" mapping
         if not assignments:
             assignments = {i: MaterialRule(name=f"cluster{i}") for i in range(k)}
         save_palette_assignments(assignments, save_palette)
@@ -324,8 +346,6 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> Path:
     ns = _parse_args(argv)
-
-    # For CLI we don’t pass textures; tests/docs focus on palette I/O fidelity.
     out = enhance_aerial(
         ns.input,
         ns.output,
