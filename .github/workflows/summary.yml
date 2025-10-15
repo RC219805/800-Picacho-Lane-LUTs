@@ -1,3 +1,7 @@
+# Experimental workflow for AI-powered issue summarization
+# Status: Requires working AI inference action (actions/ai-inference@v2 does not exist)
+# See .github/workflows/README.md for more information and alternatives
+
 name: Summarize new issues
 
 on:
