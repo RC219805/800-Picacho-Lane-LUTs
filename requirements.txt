@@ -7,5 +7,6 @@ diffusers
 controlnet-aux
 realesrgan
 tifffile
+imagecodecs
 tqdm
 pytest
