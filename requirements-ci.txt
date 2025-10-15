@@ -1,10 +1,14 @@
+# requirements-ci.txt — light, CPU-only
 numpy>=1.24,<3
-Pillow>=10.0.0,<12
+Pillow>=10,<12
 scipy>=1.10,<2
 typer>=0.12,<1
-diffusers==0.35.1
-controlnet-aux==0.0.10
-realesrgan==0.3.0
-tifffile
-tqdm
-pytest==8.4.2
+tifffile>=2023.7.18,<2026
+tqdm>=4.65,<5
+pytest>=8.0,<9
+imagecodecs>=2024.1,<2026  # optional; drop if not strictly needed
+# Use CPU PyTorch only (small, no CUDA dependencies)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.9.0+cpu
+# If torchvision is required in tests, also use CPU build:
+# torchvision==0.24.0+cpu
