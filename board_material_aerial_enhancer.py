@@ -500,9 +500,13 @@ def build_material_rules(textures: Mapping[str, Path]) -> list[MaterialRule]:
         "shade": shade_score,
     }
 
+    def default_score(stats: ClusterStats) -> float:
+        """Default score function for unknown materials."""
+        return 0.5
+
     rules: list[MaterialRule] = []
     for name, texture_path in textures.items():
-        score_fn = score_functions.get(name, lambda _: 0.5)
+        score_fn = score_functions.get(name, default_score)
         rules.append(MaterialRule(
             name=name,
             texture=str(texture_path),
