@@ -584,7 +584,7 @@ def apply_materials(
             if box_width > orig_width or box_height > orig_height:
                 resample_method = Image.Resampling.LANCZOS  # Upscaling
             else:
-                resample_method = Image.Resampling.BOX      # Downscaling
+                resample_method = Image.Resampling.LANCZOS  # Downscaling (was BOX)
             texture_resized = texture_img.resize((box_width, box_height), resample=resample_method)
             texture_array = np.asarray(texture_resized, dtype=np.float32) / 255.0
         except (OSError, ValueError):
