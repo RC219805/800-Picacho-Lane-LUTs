@@ -459,9 +459,9 @@ def build_material_rules(textures: Mapping[str, Path]) -> list[MaterialRule]:
         # Medium-dark value, very low saturation
         return float((1.0 - abs(v - 0.5)) * (1.0 - s))
 
-
     def bronze_score(stats: ClusterStats) -> float:
         """Score for bronze - prefers darker, warmer tones."""
+        BRONZE_HUE_MIN = 0.0  # Lower bound for orange-brown hue
         BRONZE_HUE_MIN = 0.0  # Lower bound for orange-brown hue
         BRONZE_HUE_MAX = 0.15  # Upper bound for orange-brown hue characteristic of bronze
         WARM_TONE_MULTIPLIER = 1.0  # Multiplier for warm tones
