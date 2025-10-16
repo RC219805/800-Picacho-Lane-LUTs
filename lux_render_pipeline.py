@@ -16,15 +16,22 @@ Example:
         --width 1024 --height 768 --steps 30 --strength 0.45 --gs 7.5 \
         --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
 """
+from __future__ import annotations  # <-- must be at the top (after docstring)
+
+# ---------------------------------------------------------------------
+# Optional / heavy imports are guarded so the module imports in lean CI
+# ---------------------------------------------------------------------
+
+# Real-ESRGANer (optional)
 try:
     from realesrgan import RealESRGANer  # type: ignore
 except Exception:  # pragma: no cover
     class RealESRGANer:  # minimal CI stub
         def __init__(self, *_, **__):
             raise RuntimeError(
-                "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super‑resolution."
+                "RealESRGANer unavailable. Install 'realesrgan' (and GPU deps) to enable super-resolution."
             )
-from __future__ import annotations
+
 import glob
 import math
 import random
@@ -37,69 +44,86 @@ import numpy as np
 import typer
 from PIL import Image, ImageDraw, ImageFont
 
-import torch
-from torch import Generator
+# Torch (optional)
+try:
+    import torch
+    from torch import Generator
+except Exception:  # pragma: no cover
+    torch = None  # type: ignore
 
-from diffusers import (
-    ControlNetModel,
-    StableDiffusionControlNetImg2ImgPipeline,
-    StableDiffusionLatentUpscalePipeline,
-    UniPCMultistepScheduler,
-)
-# SDXL (optional). Imported lazily only if used.
+    class Generator:  # type: ignore
+        def __init__(self, *_, **__):
+            pass
+
+# Diffusers (optional)
+try:
+    from diffusers import (
+        ControlNetModel,
+        StableDiffusionControlNetImg2ImgPipeline,
+        StableDiffusionLatentUpscalePipeline,
+        UniPCMultistepScheduler,
+    )
+except Exception:  # pragma: no cover
+    ControlNetModel = None  # type: ignore
+    StableDiffusionControlNetImg2ImgPipeline = None  # type: ignore
+    StableDiffusionLatentUpscalePipeline = None  # type: ignore
+    UniPCMultistepScheduler = None  # type: ignore
+
+# SDXL (optional)
 try:
     from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline
-except ImportError:
-    StableDiffusionXLControlNetPipeline = None
-    StableDiffusionXLImg2ImgPipeline = None
+except Exception:  # pragma: no cover
+    StableDiffusionXLControlNetPipeline = None  # type: ignore
+    StableDiffusionXLImg2ImgPipeline = None  # type: ignore
 
-# Annotators
-from controlnet_aux import CannyDetector, MidasDetector
-
-# Optional Real-ESRGAN
+# Annotators (optional)
 try:
-    from realesrgan import RealESRGAN
-except (ImportError, OSError):
-    RealESRGAN = None
+    from controlnet_aux import CannyDetector, MidasDetector
+except Exception:  # pragma: no cover
+    CannyDetector = None  # type: ignore
+    MidasDetector = None  # type: ignore
+
+# Optional Real-ESRGAN wrapper (availability flag)
+try:
+    from realesrgan import RealESRGAN  # noqa: F401
+except Exception:
+    RealESRGAN = None  # type: ignore
     _HAS_REALESRGAN = False
 else:
     _HAS_REALESRGAN = True
 
 # --------------------------
-
 # Utilities
 # --------------------------
 
 
-def seed_all(seed: int) -> Generator:
-    """Seed Python, NumPy, and Torch RNGs and return a torch generator."""
-
+def seed_all(seed: int) -> Generator | None:
+    """Seed Python, NumPy, and Torch RNGs and return a torch.Generator if torch is present."""
     random.seed(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-    generator = Generator(device="cuda" if torch.cuda.is_available() else "cpu")
-    return generator.manual_seed(seed)
+    if torch is not None:
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        gen = Generator(device="cuda" if torch.cuda.is_available() else "cpu")
+        return gen.manual_seed(seed)
+    return None  # safe for CI; pipelines are only used when torch/diffusers is installed
 
 
 def load_image(path: Union[str, Path]) -> Image.Image:
     """Load ``path`` into an RGB ``Image`` instance."""
-
     img = Image.open(path).convert("RGB")
     return img
 
 
 def save_image(img: Image.Image, path: Union[str, Path]) -> None:
     """Persist ``img`` to ``path``, creating parent directories when missing."""
-
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     img.save(path)
 
 
 def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:
     """Convert a PIL image to a NumPy array optionally scaled to ``[0, 1]``."""
-
     arr = np.array(img)
     if to_float:
         arr = arr.astype(np.float32) / 255.0
@@ -108,7 +132,6 @@ def pil_to_np(img: Image.Image, to_float: bool = True) -> np.ndarray:
 
 def np_to_pil(arr: np.ndarray) -> Image.Image:
     """Convert a float array in ``[0, 1]`` back to an 8-bit ``Image``."""
-
     arr = np.clip(arr, 0, 1)
     arr = (arr * 255.0 + 0.5).astype(np.uint8)
     return Image.fromarray(arr)
@@ -117,10 +140,8 @@ def np_to_pil(arr: np.ndarray) -> Image.Image:
 @lru_cache(maxsize=16)
 def _load_texture_base(path: str) -> np.ndarray:
     """Return the RGB float texture at ``path`` normalised to ``[0, 1]``."""
-
     if not path:
         raise ValueError("Texture path must be a non-empty string")
-
     try:
         with Image.open(path) as img:
             texture = img.convert("RGB")
@@ -133,7 +154,6 @@ def _load_texture_base(path: str) -> np.ndarray:
 
 def _prepare_texture(path: str, target_shape: tuple[int, int], scale: float = 1.0) -> np.ndarray:
     """Load ``path`` and tile/resize so it fills ``target_shape``."""
-
     base = _load_texture_base(path)
     height, width = target_shape
 
@@ -160,7 +180,6 @@ def resize_to_multiple(
     target: Optional[Tuple[int, int]] = None,
 ) -> Image.Image:
     """Resize ``img`` so width/height are multiples of ``mult``."""
-
     if target is None:
         w, h = img.size
     else:
@@ -179,32 +198,29 @@ class Preprocessor:
 
     def __init__(self, canny_low: int = 100, canny_high: int = 200, use_depth: bool = True):
         """Create detectors for edge and depth guidance."""
-
+        if CannyDetector is None:
+            raise RuntimeError("controlnet-aux not installed. Install to enable Canny/Depth preprocessing.")
         self.canny = CannyDetector(low_threshold=canny_low, high_threshold=canny_high)
-        self.depth = self._load_depth_model() if use_depth else None
+        self.depth = self._load_depth_model() if (use_depth and MidasDetector is not None) else None
 
     @staticmethod
-    def _load_depth_model(model_type: str = "dpt_hybrid") -> Optional[MidasDetector]:
+    def _load_depth_model(model_type: str = "dpt_hybrid") -> Optional["MidasDetector"]:
         """Load a MiDaS depth model if available, otherwise return ``None``."""
-
         try:
-            return MidasDetector.from_pretrained("lllyasviel/ControlNet", model_type=model_type)
+            return MidasDetector.from_pretrained("lllyasviel/ControlNet", model_type=model_type)  # type: ignore
         except Exception as exc:  # pragma: no cover - best effort optional dependency
             print(f"[Warn] Depth estimator unavailable ({exc}). Continuing without depth guidance.")
             return None
 
     def make_canny(self, image: Image.Image) -> Image.Image:
         """Compute a Canny edge map for ControlNet conditioning."""
-
         return self.canny(image)
 
     def make_depth(self, image: Image.Image) -> Optional[Image.Image]:
         """Compute a MiDaS depth map when the model is available."""
-
         if self.depth is None:
             return None
         depth = self.depth(image)
-        # normalize depth for visualization/control
         arr = np.array(depth).astype(np.float32)
         arr = (arr - arr.min()) / max(1e-6, (arr.max() - arr.min()))
         return Image.fromarray((arr * 255).astype(np.uint8)).convert("L")
@@ -222,7 +238,6 @@ def aces_film_tonemap(rgb: np.ndarray) -> np.ndarray:
 
 def gray_world_white_balance(rgb: np.ndarray) -> np.ndarray:
     """Apply simple gray-world white balance to an RGB image."""
-
     mean = rgb.reshape(-1, 3).mean(axis=0) + 1e-6
     scale = mean.mean() / mean
     return np.clip(rgb * scale, 0.0, 1.0)
@@ -235,9 +250,7 @@ def add_bloom(
     intensity: float = 0.25,
 ) -> np.ndarray:
     """Add a soft bloom based on bright pixels exceeding ``threshold``."""
-
     from scipy.ndimage import gaussian_filter
-
     lum = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
     mask = (lum > threshold).astype(np.float32)
     glow = np.stack([gaussian_filter(rgb[..., i] * mask, blur_radius) for i in range(3)], axis=-1)
@@ -246,7 +259,6 @@ def add_bloom(
 
 def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     """Apply a radial vignette scaled by ``strength``."""
-
     h, w = rgb.shape[:2]
     yy, xx = np.mgrid[0:h, 0:w]
     cx, cy = w / 2.0, h / 2.0
@@ -256,10 +268,8 @@ def add_vignette(rgb: np.ndarray, strength: float = 0.2) -> np.ndarray:
     return np.clip(rgb * mask[..., None], 0.0, 1.0)
 
 
-
 def add_film_grain(rgb: np.ndarray, amount: float = 0.02, seed: int = 0) -> np.ndarray:
     """Blend Gaussian noise into ``rgb`` for a subtle film grain look."""
-
     rng = np.random.default_rng(seed)
     noise = rng.normal(0.0, amount, size=rgb.shape).astype(np.float32)
     return np.clip(rgb + noise, 0.0, 1.0)
@@ -302,8 +312,7 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
 
     Emphasizes texture, shadowing, atmosphere, and sky plates.
     """
-
-    # Lazy import: only load SciPy filters when finishing is requested.
+    # Lazy import for speed/CI
     from scipy.ndimage import gaussian_filter, sobel
 
     rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
@@ -314,7 +323,6 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
     sky_environment_strength = float(np.clip(sky_environment_strength, 0.0, 1.0))
 
     if texture_boost > 0:
-        # High-frequency boost to reveal subtle grain and fabric weave
         blurred = gaussian_filter(rgb, sigma=(1.1, 1.1, 0))
         detail = rgb - blurred
         rgb = np.clip(rgb + texture_boost * detail, 0.0, 1.0)
@@ -373,7 +381,6 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         rgb = np.clip(rgb * (1.0 - pool_blend) + pool_mix * pool_blend, 0.0, 1.0)
 
     if ambient_occlusion > 0:
-        # Edge-based occlusion mask to ground furniture with the floor
         grad_x = sobel(lum, axis=1)
         grad_y = sobel(lum, axis=0)
         edge_mag = np.hypot(grad_x, grad_y)
@@ -386,7 +393,6 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         shadow = 1.0 - ambient_occlusion * (occlusion + 0.6 * contact_weight)
         rgb = np.clip(rgb * shadow[..., None], 0.0, 1.0)
 
-    # Floor plank definition + specular streaks guided by perspective gradient
     if floor_plank_contrast > 0:
         floor_detail = rgb * floor_mask[..., None]
         blurred_floor = gaussian_filter(floor_detail, sigma=(1.6, 1.2, 0))
@@ -418,14 +424,12 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         rgb = np.clip(rgb + streak_contrib, 0.0, 1.0)
 
     if textile_contrast > 0:
-        # Identify whites/neutrals with low saturation for linen separation
         textile_mask = np.clip((lum - 0.45) / 0.35, 0.0, 1.0) * np.clip(0.28 - sat, 0.0, 1.0) / 0.28
         textile_mask = gaussian_filter(textile_mask, sigma=1.1)
         textile_detail = rgb - gaussian_filter(rgb, sigma=(1.4, 1.4, 0))
         rgb = np.clip(rgb + textile_contrast * textile_mask[..., None] * textile_detail, 0.0, 1.0)
 
     if leather_sheen > 0:
-        # Neutral mid-tone mask for leather upholstery
         leather_mask = (
             np.clip((0.55 - lum) / 0.35, 0.0, 1.0)
             * np.clip((0.22 - sat), 0.0, 1.0)
@@ -494,7 +498,6 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         rgb = np.clip(blend, 0.0, 1.0)
 
     if highlight_warmth > 0:
-        # Warm the brightest values to simulate fireplace spill and sunlit reflections
         highlight_mask = np.clip((lum - 0.58) / 0.35, 0.0, 1.0)
         warm_color = np.array([1.0, 0.78, 0.55], dtype=np.float32)
         rgb = np.clip(
@@ -504,7 +507,6 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
         )
 
     if haze_strength > 0:
-        # Vertical gradient bias with gentle falloff toward window region
         gradient = y_norm.astype(np.float32)
         haze = haze_strength * gradient
         tint = np.array(haze_tint, dtype=np.float32)
@@ -514,7 +516,9 @@ def apply_material_response_finishing(  # pylint: disable=too-many-arguments,too
     if bedding_relief > 0:
         bedding_mask = np.clip((lum - 0.35) / 0.35, 0.0, 1.0) * np.clip((0.3 - sat) / 0.3, 0.0, 1.0)
         bedding_mask *= np.clip((0.75 - y_norm) / 0.75, 0.0, 1.0)
-        bedding_mask = gaussian_filter(bedding_mask, sigma=1.0)
+        bedding_mask = np.asarray(
+            gaussian_filter(bedding_mask, sigma=1.0), dtype=np.float32
+        )
         bedding_detail = rgb - gaussian_filter(rgb, sigma=(1.0, 1.0, 0))
         shading = gaussian_filter(lum, sigma=1.6) - gaussian_filter(lum, sigma=4.2)
         shading = np.clip(shading, -0.25, 0.25)
@@ -567,14 +571,11 @@ def adjust_contrast_saturation(
     saturation: float = 1.05,
 ) -> np.ndarray:
     """Normalize contrast and saturation while keeping values in ``[0, 1]``."""
-
-    # Contrast in linear light
     gray = rgb.mean(axis=2, keepdims=True)
     rgb = (rgb - gray) * contrast + gray
-    # Saturation in HSV-like space (simple)
     maxc = rgb.max(axis=2, keepdims=True)
     minc = rgb.min(axis=2, keepdims=True)
-    sat = (maxc - minc) + 1e-6
+    _ = (maxc - minc) + 1e-6  # keep var for future HSV ops; avoid linters
     mean = rgb.mean(axis=2, keepdims=True)
     rgb = (rgb - mean) * saturation + mean
     return np.clip(rgb, 0.0, 1.0)
@@ -589,7 +590,6 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
     margin: int = 36,
 ) -> Image.Image:
     """Overlay caption text and optional logo onto ``img``."""
-
     canvas = img.copy()
     draw = ImageDraw.Draw(canvas)
     width_px, height_px = canvas.size
@@ -597,7 +597,6 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
     # Caption
     if text:
         try:
-            # Use a clean sans (replace with your corporate font)
             font = ImageFont.truetype("arial.ttf", size=max(22, height_px // 40))
         except (OSError, IOError):
             font = ImageFont.load_default()
@@ -606,7 +605,6 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         x = margin
         y = height_px - th - margin
-        # subtle text box (white on black with 60% alpha)
         pad = 14
         box = [x - pad, y - pad, x + tw + pad, y + th + pad]
         draw.rectangle(box, fill=(0, 0, 0, 160))
@@ -615,7 +613,6 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
     # Logo
     if logo_path and Path(logo_path).exists():
         logo = Image.open(logo_path).convert("RGBA")
-        # scale ~10% of the short edge
         target_h = int(min(width_px, height_px) * 0.12)
         scale = target_h / logo.height
         new_size = (int(logo.width * scale), target_h)
@@ -637,7 +634,6 @@ def overlay_logo_caption(  # pylint: disable=too-many-locals
 @dataclass
 class ModelIDs:
     """Identifiers for diffusion base models, ControlNets, and upscalers."""
-
     base_model: str = "runwayml/stable-diffusion-v1-5"
     controlnet_canny: str = "lllyasviel/sd-controlnet-canny"
     controlnet_depth: str = "lllyasviel/sd-controlnet-depth"
@@ -648,7 +644,6 @@ class ModelIDs:
 @dataclass
 class RenderConfig:
     """Core image generation parameters for ControlNet-guided diffusion."""
-
     width: int = 1024
     height: int = 768
     steps: int = 30
@@ -660,7 +655,6 @@ class RenderConfig:
 @dataclass
 class FinishConfig:
     """Photo finishing recipe applied after diffusion and upscaling."""
-
     aces: bool = True
     contrast: float = 1.08
     saturation: float = 1.05
@@ -722,27 +716,31 @@ class LuxuryRenderPipeline:
         use_depth: bool = True,
     ):
         """Initialise diffusion pipelines, ControlNets, and optional upscalers."""
+        if ControlNetModel is None or StableDiffusionControlNetImg2ImgPipeline is None:
+            raise RuntimeError("diffusers not installed. Install to enable diffusion pipeline.")
 
         self.model_ids = model_ids
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.dtype = torch.float16 if (fp16 and torch.cuda.is_available()) else torch.float32
+        self.device = device or ("cuda" if (torch is not None and torch.cuda.is_available()) else "cpu")
+        self.dtype = (torch.float16 if (torch is not None and fp16 and torch.cuda.is_available()) else
+                      (torch.float32 if torch is not None else None))
+
         self._use_depth = use_depth
 
         # Load ControlNets
         print("[Load] ControlNets...")
         self.cn_canny = ControlNetModel.from_pretrained(
             model_ids.controlnet_canny,
-            torch_dtype=self.dtype,
+            torch_dtype=self.dtype,  # type: ignore[arg-type]
         )
         self.cn_depth = (
-            ControlNetModel.from_pretrained(model_ids.controlnet_depth, torch_dtype=self.dtype)
-            if self._use_depth
+            ControlNetModel.from_pretrained(model_ids.controlnet_depth, torch_dtype=self.dtype)  # type: ignore[arg-type]
+            if (self._use_depth)
             else None
         )
-        controlnets: List[ControlNetModel] = [self.cn_canny]
+        controlnets: List["ControlNetModel"] = [self.cn_canny]
         if self.cn_depth is not None:
             controlnets.append(self.cn_depth)
-        controlnet_arg: List[ControlNetModel] = controlnets
+        controlnet_arg: List["ControlNetModel"] = controlnets
 
         # Pick pipeline type based on base model family (SD1.5 vs SDXL)
         is_sdxl = "xl" in model_ids.base_model.lower()
@@ -756,14 +754,14 @@ class LuxuryRenderPipeline:
             self.pipe = StableDiffusionXLControlNetPipeline.from_pretrained(
                 model_ids.base_model,
                 controlnet=controlnet_arg,
-                torch_dtype=self.dtype,
+                torch_dtype=self.dtype,  # type: ignore[arg-type]
                 add_watermarker=False,
             )
             if model_ids.refiner:
                 print("[Load] SDXL refiner...")
                 self.refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained(
                     model_ids.refiner,
-                    torch_dtype=self.dtype,
+                    torch_dtype=self.dtype,  # type: ignore[arg-type]
                     add_watermarker=False,
                 )
             else:
@@ -773,12 +771,14 @@ class LuxuryRenderPipeline:
             self.pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
                 model_ids.base_model,
                 controlnet=controlnet_arg,
-                torch_dtype=self.dtype,
+                torch_dtype=self.dtype,  # type: ignore[arg-type]
                 safety_checker=None,
                 feature_extractor=None,
             )
             self.refiner = None
 
+        if UniPCMultistepScheduler is None:
+            raise RuntimeError("diffusers scheduler UniPCMultistepScheduler not available.")
         self.pipe.scheduler = UniPCMultistepScheduler.from_config(self.pipe.scheduler.config)
         self.pipe.to(self.device)
 
@@ -786,14 +786,14 @@ class LuxuryRenderPipeline:
         print("[Load] Latent x2 upscaler...")
         try:
             self.upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(
-                model_ids.upscaler_id, torch_dtype=self.dtype
+                model_ids.upscaler_id, torch_dtype=self.dtype  # type: ignore[arg-type]
             ).to(self.device)
-        except (OSError, RuntimeError, ValueError) as e:
+        except Exception as e:
             print(f"[Warn] Latent upscaler not available ({e}). Will skip latent upscaling.")
             self.upscaler = None
 
         # Real-ESRGAN (optional)
-        self._use_realesrgan = use_realesrgan and _HAS_REALESRGAN
+        self._use_realesrgan = bool(use_realesrgan and _HAS_REALESRGAN)
         if use_realesrgan and not _HAS_REALESRGAN:
             print(
                 "[Warn] Real-ESRGAN requested but not installed. "
@@ -801,9 +801,7 @@ class LuxuryRenderPipeline:
             )
         if self._use_realesrgan:
             print("[Load] Real-ESRGAN x4...")
-            # RealESRGANer expects model_path parameter
-            # If weights don't exist locally, the package will download them
-            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
+            from realesrgan.archs.srvgg_arch import SRVGGNetCompact  # type: ignore
             model = SRVGGNetCompact(num_in_ch=3, num_out_ch=3, num_feat=64, num_conv=32, upscale=4, act_type='prelu')
             self.realesrgan = RealESRGANer(
                 scale=4,
@@ -812,14 +810,18 @@ class LuxuryRenderPipeline:
                 tile=0,
                 tile_pad=10,
                 pre_pad=0,
-                half=(self.dtype == torch.float16),
+                half=(self.dtype == (torch.float16 if torch is not None else None)),
                 device=self.device
             )
 
         # Preprocessor
         self.pre = Preprocessor(use_depth=self._use_depth)
 
-    @torch.inference_mode()
+    def _ensure_torch(self) -> None:
+        if torch is None:
+            raise RuntimeError("torch not installed. Install to run diffusion pipeline.")
+
+    @torch.inference_mode() if torch is not None else (lambda f: f)  # type: ignore[misc]
     def enhance(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches
         self,
         init_image: Image.Image,
@@ -832,6 +834,7 @@ class LuxuryRenderPipeline:
         export_4k: bool = False,
     ) -> Image.Image:
         """Run the full pipeline for a single image and return the finished render."""
+        self._ensure_torch()
 
         # 1) Prepare images
         init = resize_to_multiple(init_image, mult=8, target=(cfg.width, cfg.height))
@@ -858,7 +861,7 @@ class LuxuryRenderPipeline:
         out = self.pipe(**pipe_kwargs).images[0]
 
         # 3) Optional SDXL refiner pass (if configured)
-        if self.refiner is not None:
+        if getattr(self, "refiner", None) is not None:
             print("[Run] SDXL refiner pass...")
             out = self.refiner(
                 prompt=prompt,
@@ -871,7 +874,7 @@ class LuxuryRenderPipeline:
             ).images[0]
 
         # 4) Latent x2 upscale
-        if self.upscaler is not None:
+        if getattr(self, "upscaler", None) is not None:
             print("[Run] Latent x2 upscale...")
             out = self.upscaler(
                 image=out,
@@ -881,19 +884,13 @@ class LuxuryRenderPipeline:
             ).images[0]
 
         # 5) Real-ESRGAN (crisp tiled upscaling to 4K/8K)
-        if export_4k:
-            target_min = 2160  # min edge ~ 4K height
-        else:
-            target_min = min(out.size)
-
-        if self._use_realesrgan and (export_4k or min(out.size) < target_min):
+        target_min = 2160 if export_4k else min(out.size)
+        if getattr(self, "_use_realesrgan", False) and (export_4k or min(out.size) < target_min):
             print("[Run] Real-ESRGAN x4 (as needed)...")
-            # upscale progressively until min edge >= target_min
             pil = out
             while min(pil.size) < target_min:
-                # RealESRGANer.enhance() expects numpy array and returns (output, _)
                 img_np = np.array(pil)
-                upscaled_np, _ = self.realesrgan.enhance(img_np, outscale=4)
+                upscaled_np, _ = self.realesrgan.enhance(img_np, outscale=4)  # type: ignore[attr-defined]
                 pil = Image.fromarray(upscaled_np)
             out = pil
 
@@ -965,7 +962,6 @@ app = typer.Typer(add_completion=False)
 
 def parse_float_triplet(value: str) -> Tuple[float, float, float]:
     """Parse and clamp three comma-separated floats from a CLI argument."""
-
     message = (
         "Expected three comma-separated floats between 0 and 1, e.g. '0.82,0.88,0.96'"
     )
@@ -1165,7 +1161,6 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     ),
 ):
     """Batch CLI entry point for the luxury render pipeline."""
-
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
