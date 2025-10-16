@@ -371,6 +371,7 @@ def enhance_aerial(
     *,
     k: int = 8,
     analysis_max: int = 1280,
+    analysis_max_dim: Optional[int] = None,  # Backward compat alias
     seed: int = 22,
     target_width: int | None = 4096,
     palette_path: Optional[Path | str] = None,
@@ -395,6 +396,7 @@ def enhance_aerial(
         output_path: Path to save enhanced output
         k: Number of color clusters (2-256, default: 8)
         analysis_max: Max dimension for clustering image (default: 1280)
+        analysis_max_dim: Alias for analysis_max (backward compatibility)
         seed: Random seed for reproducibility (default: 22)
         target_width: Output width in pixels, None to preserve original (default: 4096)
         palette_path: Optional JSON file with cluster→material assignments
@@ -407,6 +409,10 @@ def enhance_aerial(
         Path to the saved output image
     """
     overall_start = time.time()
+
+    # Backward compatibility: accept analysis_max_dim as alias
+    if analysis_max_dim is not None:
+        analysis_max = analysis_max_dim
 
     # Validate parameters early
     _validate_parameters(k, analysis_max, seed, target_width)
