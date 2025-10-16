@@ -242,7 +242,7 @@ class TestMemoryEfficiency:
         xx, yy = np.meshgrid(x, y)
         r = 200 + 50 * np.sin(xx / 50)
         g = 180 + 50 * np.cos(yy / 50)
-        b = np.full_like(r, 160)
+        b = np.broadcast_to(160, r.shape)
         arr = np.stack([r, g, b], axis=-1).astype(np.uint8)
         image = Image.fromarray(arr, "RGB")
 
