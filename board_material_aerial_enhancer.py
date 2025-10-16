@@ -497,9 +497,8 @@ def enhance_aerial(
     output_start = time.time()
     np.clip(enhanced, 0.0, 1.0, out=enhanced)  # In-place clip
     enhanced *= 255.0
-    # Add 0.5 before conversion to uint8 to ensure proper rounding to nearest integer
-    enhanced += 0.5
-    out_img = Image.fromarray(enhanced.astype("uint8"), mode="RGB")
+    # Use np.rint for explicit rounding to nearest integer before conversion to uint8
+    out_img = Image.fromarray(np.rint(enhanced).astype("uint8"), mode="RGB")
 
     if target_width and out_img.width != target_width:
         tw = int(target_width)
