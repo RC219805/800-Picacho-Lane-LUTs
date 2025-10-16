@@ -956,7 +956,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     # Logging control
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument("--verbose", action="store_true", help="Enable info/debug logging")
-    grp.add_argument("--quiet", action="store_true", help="Errors only")
+    grp.add_argument("--quiet", action="store_true", help("Errors only"))
 
     return parser.parse_args(argv)
 
