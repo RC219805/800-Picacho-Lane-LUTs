@@ -47,12 +47,6 @@ except Exception:  # pragma: no cover - optional
     HAS_CUPY = False
 
 # Optional: parallel processing (reserved for future use)
-try:  # pragma: no cover - optional
-    from joblib import Parallel, delayed  # type: ignore  # noqa: F401
-    HAS_JOBLIB = True
-except Exception:  # pragma: no cover - optional
-    HAS_JOBLIB = False
-
 # If the real class is available elsewhere, use it only for typing;
 # otherwise provide a tiny stub that satisfies runtime & tests.
 if TYPE_CHECKING:  # pragma: no cover
