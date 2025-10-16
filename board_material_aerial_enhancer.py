@@ -565,8 +565,6 @@ def apply_materials(
 
         # Find bounding box of mask
         ys, xs = np.where(mask)
-        if len(ys) == 0 or len(xs) == 0:
-            continue
         y_min, y_max = ys.min(), ys.max()
         x_min, x_max = xs.min(), xs.max()
         box_height = y_max - y_min + 1
