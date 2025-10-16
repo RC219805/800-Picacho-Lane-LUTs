@@ -271,13 +271,13 @@ class TestPerformanceBenchmark:
 
     def test_processing_time_reasonable(self, tmp_path: Path):
         """Test that processing completes in reasonable time."""
-        # Create test image
-        image = Image.new("RGB", (400, 400))
-        pixels = image.load()
-        for x in range(400):
-            for y in range(400):
-                val = (x + y) % 256
-                pixels[x, y] = (val, val, val)
+        # Create test image (vectorized for efficiency)
+        x = np.arange(400)
+        y = np.arange(400)
+        xx, yy = np.meshgrid(x, y, indexing='ij')
+        val = (xx + yy) % 256
+        arr = np.stack([val, val, val], axis=-1).astype(np.uint8)
+        image = Image.fromarray(arr, "RGB")
 
         input_path = tmp_path / "input.png"
         image.save(input_path)
