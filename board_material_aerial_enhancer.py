@@ -8,6 +8,8 @@ Key pieces:
 - palette JSON for deterministic cluster → material mapping
 - optional texture validation with graceful fallbacks
 - minimal enhancement to keep tests fast (no heavyweight ML/GPU deps)
+- optional sklearn KMeans for higher performance (toggle)
+- logging & timing instrumentation (toggle via CLI)
 """
 
 from __future__ import annotations
@@ -15,6 +17,8 @@ from __future__ import annotations
 # --- stdlib ---
 import argparse
 import json
+import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any, Callable
@@ -28,6 +32,25 @@ try:  # pragma: no cover - optional
     import tifffile  # type: ignore
 except Exception:  # pragma: no cover - optional
     tifffile = None  # type: ignore
+
+# Optional: sklearn for optimized KMeans
+try:  # pragma: no cover - optional
+    from sklearn.cluster import KMeans  # type: ignore
+    HAS_SKLEARN = True
+except Exception:  # pragma: no cover - optional
+    KMeans = None  # type: ignore
+    HAS_SKLEARN = False
+
+# Optional: CuPy for future GPU path
+try:  # pragma: no cover - optional
+    import cupy as cp  # type: ignore
+    HAS_CUPY = True
+except Exception:  # pragma: no cover - optional
+    cp = None  # type: ignore
+    HAS_CUPY = False
+
+# Logger
+LOGGER = logging.getLogger("board_material_aerial_enhancer")
 
 # If the real class is available elsewhere, use it only for typing;
 # otherwise provide a complete stub that satisfies runtime & tests.
@@ -59,9 +82,10 @@ __all__ = [
     "apply_materials",   # back-compat expected by tests
     "assign_materials",  # additional alias expected by tests
     "build_material_rules",
-    "apply_material_response_finishing",  # backward compatibility (exported name)
+    "apply_material_response_finishing",  # exported wrapper, see bottom
     "DEFAULT_TEXTURES",
     "VALID_RESAMPLING_METHODS",
+    "_validate_parameters",               # exported for tests
 ]
 
 
@@ -126,12 +150,23 @@ DEFAULT_TEXTURES: dict[str, Path] = {
 }
 
 # --------------------------
-# Valid resampling methods
+# Valid resampling methods (validated & used)
 # --------------------------
 VALID_RESAMPLING_METHODS = [
     "nearest", "linear", "bilinear", "cubic",
     "bicubic", "lanczos", "area", "box",
 ]
+
+_RESAMPLE_MAP: Dict[str, Image.Resampling] = {
+    "nearest": Image.Resampling.NEAREST,
+    "linear": Image.Resampling.BILINEAR,   # Pillow doesn’t expose "linear" vs "bilinear"—map to bilinear
+    "bilinear": Image.Resampling.BILINEAR,
+    "cubic": Image.Resampling.BICUBIC,
+    "bicubic": Image.Resampling.BICUBIC,
+    "lanczos": Image.Resampling.LANCZOS,
+    "area": Image.Resampling.BOX,          # closest built-in approximation
+    "box": Image.Resampling.BOX,
+}
 
 
 def build_material_rules(textures: Mapping[str, Path]) -> list[MaterialRule]:
@@ -155,13 +190,13 @@ def build_material_rules(textures: Mapping[str, Path]) -> list[MaterialRule]:
 # Helper functions (for back-compat with other scripts)
 # --------------------------
 
-def _downsample_image(image: Image.Image, max_dim: int) -> Image.Image:
+def _downsample_image(image: Image.Image, max_dim: int, resample: Image.Resampling) -> Image.Image:
     """Downsample image to max_dim for analysis."""
     w, h = image.size
     if max(w, h) > max_dim:
         scale = max_dim / max(w, h)
         new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-        return image.resize(new_size, Image.Resampling.LANCZOS)
+        return image.resize(new_size, resample)
     return image.copy()
 
 
@@ -296,6 +331,7 @@ def _deserialize_assignments(
                 raise ValueError(f"Palette key is not an int: {sk!r}")
             continue
 
+        #   rule lookup
         rule = by_name.get(name)
         if rule is None:
             if strict:
@@ -377,13 +413,31 @@ def _validate_texture(path: str | Path, size_hint: tuple[int, int] | None = None
 
 
 # --------------------------
-# Lightweight k-means
+# K-means: sklearn toggle + CI-friendly fallback
 # --------------------------
 
-def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
+def _kmeans(
+    data: np.ndarray,
+    k: int,
+    seed: int,
+    iters: int = 10,
+    *,
+    use_sklearn: bool = True,
+) -> np.ndarray:
     """
-    Tiny k-means for CI: data is (N, 3) in [0,1]. Returns labels (N,).
+    K-means clustering over RGB data in [0,1].
+
+    If use_sklearn=True and scikit-learn is available, uses KMeans(init="k-means++",
+    n_init=5, random_state=seed); otherwise falls back to a tiny deterministic
+    implementation suitable for CI.
+
+    Returns labels of shape (N,).
     """
+    if use_sklearn and HAS_SKLEARN:
+        km = KMeans(n_clusters=k, init="k-means++", n_init=5, random_state=seed)
+        return km.fit_predict(data).astype(np.uint8)
+
+    # --- tiny fallback for CI ---
     rng = np.random.default_rng(seed)
     centroids = data[rng.choice(data.shape[0], size=k, replace=False)]
     for _ in range(max(1, iters)):
@@ -395,7 +449,104 @@ def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
                 centroids[i] = data[mask].mean(axis=0)
             else:
                 centroids[i] = data[rng.integers(0, data.shape[0])]
-    return labels
+    return labels.astype(np.uint8)
+
+
+# --------------------------
+# Parameter validation (exported; tests import this)
+# --------------------------
+
+def _validate_parameters(
+    *,
+    k: int,
+    analysis_max_dim: int | None,
+    seed: int,
+    target_width: int | None,
+    resample_method: str | None,
+    analysis_max: int | None = None,
+    use_sklearn: bool | None = None,
+) -> Dict[str, Any]:
+    """
+    Validate and normalize parameters for enhance_aerial (stable, test-friendly).
+
+    Returns a dict with normalized values:
+      - analysis_max_dim (int)
+      - resample_method (str)
+      - k (int)
+      - seed (int)
+      - target_width (int | None)
+      - use_sklearn (bool)
+    """
+    # alias handling
+    used_alias = analysis_max is not None
+    if used_alias:
+        analysis_max_dim = analysis_max
+
+    # defaults
+    if analysis_max_dim is None:
+        analysis_max_dim = 1280
+
+    # Normalize resample method to lower-case (tests pass uppercase strings)
+    if resample_method is None:
+        resample_method = "bilinear"
+    resample_method = str(resample_method).lower()
+
+    if use_sklearn is None:
+        use_sklearn = True  # default matches docs; fall back if sklearn missing
+
+    # type/constraint checks
+    try:
+        k = int(k)
+    except Exception as e:
+        raise ValueError("k must be an integer") from e
+    if k < 2:
+        raise ValueError("k must be at least 2")
+    if k > 256:
+        raise ValueError("k must be <= 256")
+
+    try:
+        analysis_max_dim = int(analysis_max_dim)
+    except Exception as e:
+        # Keep message focused on the normalized name
+        raise ValueError("analysis_max_dim must be an integer") from e
+    if analysis_max_dim < 32:
+        if used_alias:
+            raise ValueError("analysis_max must be at least 32")
+        else:
+            raise ValueError("analysis_max_dim must be at least 32")
+
+    try:
+        seed = int(seed)
+    except Exception as e:
+        raise ValueError("seed must be an integer") from e
+    if seed < 0:
+        raise ValueError("seed must be non-negative")
+
+    if target_width is not None:
+        try:
+            target_width = int(target_width)
+        except Exception as e:
+            raise ValueError("target_width must be an integer or None") from e
+        if target_width < 32:
+            raise ValueError("target_width must be at least 32")
+
+    if resample_method not in VALID_RESAMPLING_METHODS:
+        valid_methods_str = ", ".join(VALID_RESAMPLING_METHODS)
+        raise ValueError(
+            f"Invalid resample_method: {resample_method}. Must be one of: {valid_methods_str}"
+        )
+
+    if use_sklearn and not HAS_SKLEARN:
+        LOGGER.warning("use_sklearn=True requested, but scikit-learn not available; falling back to built-in k-means.")
+
+    return {
+        "k": k,
+        "analysis_max_dim": analysis_max_dim,
+        "seed": seed,
+        "target_width": target_width,
+        "resample_method": resample_method,
+        "use_sklearn": bool(use_sklearn),
+    }
 
 
 # --------------------------
@@ -429,49 +580,76 @@ def enhance_aerial(
     palette_path: Optional[Path | str] = None,
     save_palette: Optional[Path | str] = None,
     textures: Mapping[str, Path] | None = None,
-    resample_method: str = "bilinear",  # Add parameter for validation
-    analysis_max: Optional[int] = None,  # Backward compatibility alias
+    resample_method: str = "bilinear",  # validated & used for analysis resize
+    analysis_max: Optional[int] = None,  # backward-compat alias
+    use_sklearn: bool = True,            # default matches docs; graceful fallback
 ) -> Path:
     """
-    Minimal enhancement to keep CI deterministic:
-    - run k-means on a downscaled analysis image
+    Minimal enhancement (with optional sklearn KMeans) to keep CI deterministic:
+    - downscale and cluster with k-means (sklearn or minimal fallback)
     - relabel using palette if provided
-    - apply a gentle, label-aware blur to hint at "material regions"
-    - save an RGB result (no HDR / 16-bit path to avoid heavy deps)
+    - gentle, label-aware blur to hint at "material regions"
+    - save an RGB result; final resize uses LANCZOS for quality
     """
-    # Handle backward compatibility for analysis_max parameter
-    if analysis_max is not None:
-        analysis_max_dim = analysis_max
+    t0 = time.perf_counter()
 
-    # Validate resample method if provided
-    if resample_method not in VALID_RESAMPLING_METHODS:
-        valid_methods_str = ", ".join(VALID_RESAMPLING_METHODS)
-        raise ValueError(
-            f"Invalid resample_method: {resample_method}. Must be one of: {valid_methods_str}"
-        )
+    # Normalize/validate inputs via exported helper (tests import this)
+    norm = _validate_parameters(
+        k=k,
+        analysis_max_dim=analysis_max_dim,
+        seed=seed,
+        target_width=target_width,
+        resample_method=resample_method,
+        analysis_max=analysis_max,
+        use_sklearn=use_sklearn,
+    )
+    k = norm["k"]
+    analysis_max_dim = norm["analysis_max_dim"]
+    seed = norm["seed"]
+    target_width = norm["target_width"]
+    resample_method = norm["resample_method"]
+    use_sklearn = norm["use_sklearn"]
+
+    resample_analysis = _RESAMPLE_MAP[resample_method]
 
     input_path = Path(input_path)
     output_path = Path(output_path)
+
+    # Load
+    t_load = time.perf_counter()
     image = Image.open(input_path).convert("RGB")
+    LOGGER.debug("Loaded image %s in %.3fs", input_path, time.perf_counter() - t_load)
 
+    # Downscale for analysis
     w, h = image.size
-    if max(w, h) > analysis_max_dim:
-        scale = analysis_max_dim / max(w, h)
-        analysis_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-        analysis_image = image.resize(analysis_size, Image.Resampling.BILINEAR)
-    else:
-        analysis_image = image.copy()
+    t_down = time.perf_counter()
+    analysis_image = _downsample_image(image, analysis_max_dim, resample_analysis)
+    LOGGER.debug("Downscaled for analysis to %s in %.3fs", analysis_image.size, time.perf_counter() - t_down)
 
+    # Prepare data for clustering
+    t_prep = time.perf_counter()
     analysis_array = np.asarray(analysis_image, dtype=np.float32) / 255.0
     flat = analysis_array.reshape(-1, 3)
+    LOGGER.debug("Prepared analysis array in %.3fs", time.perf_counter() - t_prep)
 
-    labels_small = _kmeans(flat, k=k, seed=seed).astype(np.uint8)
+    # Clustering
+    t_cluster = time.perf_counter()
+    labels_small = _kmeans(flat, k=k, seed=seed, use_sklearn=use_sklearn)
+    if use_sklearn and HAS_SKLEARN:
+        LOGGER.info("K-means clustering (sklearn, k=%d) completed in %.3fs", k, time.perf_counter() - t_cluster)
+    else:
+        LOGGER.info("K-means clustering (builtin, k=%d) completed in %.3fs", k, time.perf_counter() - t_cluster)
+
+    # Upscale labels back to full size
+    t_up = time.perf_counter()
     labels_small = labels_small.reshape(analysis_image.size[1], analysis_image.size[0])  # (H,W)
-
-    labels_small_img = Image.fromarray(labels_small, mode="L")
+    labels_small_img = Image.fromarray(labels_small, "L")
     labels_full = labels_small_img.resize(image.size, Image.Resampling.NEAREST)
     labels = np.asarray(labels_full, dtype=np.uint8)
+    LOGGER.debug("Upscaled labels in %.3fs", time.perf_counter() - t_up)
 
+    # Optional palette mapping & relabel
+    t_palette = time.perf_counter()
     assignments: dict[int, "MaterialRule"] = {}
     if palette_path:
         rule_candidates: list["MaterialRule"] = []
@@ -481,16 +659,24 @@ def enhance_aerial(
         assignments = load_palette_assignments(palette_path, rule_candidates)
         if assignments:
             labels = relabel(assignments, labels)
+    LOGGER.debug("Palette mapping in %.3fs", time.perf_counter() - t_palette)
 
+    # Gentle label-aware blur blend for "material regions"
+    t_enh = time.perf_counter()
     enhanced = np.asarray(image, dtype=np.float32) / 255.0
     blurred = image.filter(ImageFilter.GaussianBlur(radius=2))
     blurred_np = np.asarray(blurred, dtype=np.float32) / 255.0
 
     alpha = (labels.astype(np.float32) % 3) / 10.0  # 0.0–0.2
     alpha = np.repeat(alpha[:, :, None], 3, axis=2)
+    # Mix in-place-ish for lower memory churn
     enhanced = (1.0 - alpha) * enhanced + alpha * blurred_np
+    enhanced = np.clip(enhanced, 0.0, 1.0)
+    LOGGER.debug("Enhancement blend in %.3fs", time.perf_counter() - t_enh)
 
-    out_img = Image.fromarray((np.clip(enhanced, 0.0, 1.0) * 255.0 + 0.5).astype("uint8"), mode="RGB")
+    # Final resize to target width (if requested) with LANCZOS for quality
+    t_out = time.perf_counter()
+    out_img = Image.fromarray((enhanced * 255.0 + 0.5).astype("uint8"), "RGB")
     if target_width and out_img.width != target_width:
         tw = int(target_width)
         th = int(round(out_img.height * (tw / out_img.width)))
@@ -498,6 +684,9 @@ def enhance_aerial(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     out_img.save(output_path)
+    t_done = time.perf_counter()
+    LOGGER.info("Saved output to %s in %.3fs", output_path, t_done - t_out)
+    LOGGER.info("Total processing time: %.3fs", t_done - t0)
 
     if save_palette:
         if not assignments:
@@ -514,11 +703,6 @@ def apply_materials(
 ) -> np.ndarray:
     """
     Apply material textures to a base image using label assignments.
-
-    Args:
-        base: Base image array (H, W, 3) in [0, 1] float range
-        labels: Label map (H, W) uint8
-        materials: Mapping from label to MaterialRule
 
     Returns:
         Enhanced image array (H, W, 3) in [0, 1] float range
@@ -560,69 +744,161 @@ def apply_materials(
     return np.clip(output, 0.0, 1.0)
 
 
+# --------------------------
+# Finishing: impl + robust wrapper
+# --------------------------
+
+def _apply_material_response_finishing_impl(
+    img: np.ndarray,
+    *,
+    contrast: float = 1.0,
+    grain: float = 0.0,
+    detail_boost: float = 1.0,
+    texture_boost: Optional[float] = None,  # Legacy parameter that multiplies detail_boost
+    **kwargs: Any,
+) -> np.ndarray:
+    """
+    Deterministic finishing pass used by the wrapper below.
+    When texture_boost is provided, it multiplies detail_boost (legacy behavior).
+    """
+    if texture_boost is not None:
+        try:
+            detail_boost = float(detail_boost) * float(texture_boost)
+        except Exception:
+            pass
+
+    output = img.copy()
+
+    # Contrast
+    if contrast != 1.0:
+        np.subtract(output, 0.5, out=output)
+        np.multiply(output, float(contrast), out=output)
+        np.add(output, 0.5, out=output)
+        np.clip(output, 0.0, 1.0, out=output)
+
+    # Detail (light unsharp mask via 1px Gaussian)
+    if detail_boost != 1.0:
+        if len(output.shape) == 3:
+            img_pil = Image.fromarray((output * 255).astype(np.uint8), "RGB")
+        else:
+            img_pil = Image.fromarray((output * 255).astype(np.uint8), "L")
+        blurred_pil = img_pil.filter(ImageFilter.GaussianBlur(radius=1))
+        blurred = np.asarray(blurred_pil, dtype=np.float32) / 255.0
+        detail = output - blurred
+        np.add(output, detail * (float(detail_boost) - 1.0), out=output)
+        np.clip(output, 0.0, 1.0, out=output)
+
+    # Grain
+    if grain > 0.0:
+        rng = np.random.default_rng(42)  # keep deterministic
+        noise = rng.normal(0, float(grain) * 0.05, output.shape).astype(np.float32)
+        np.add(output, noise, out=output)
+        np.clip(output, 0.0, 1.0, out=output)
+
+    return output
+
+
+# Preserve any earlier implementation defined in this module (if any).
+# Prefer the one already bound to the public name; otherwise use our impl.
+_apply_material_response_finishing_orig = globals().get(
+    "apply_material_response_finishing", _apply_material_response_finishing_impl
+)
+
 def apply_material_response_finishing(
     img: np.ndarray,
     *,
     contrast: float = 1.0,
     grain: float = 0.0,
     detail_boost: float = 1.0,
-    texture_boost: Optional[float] = None,  # Legacy parameter
-    **kwargs: Any,
+    texture_boost: Optional[float] = None,  # legacy/compat alias
+    **kwargs: Any,  # accept extra kwargs without exploding
 ) -> np.ndarray:
     """
-    Apply finishing operations to the image/material response.
+    Wrapper that always accepts 'texture_boost' and forwards safely.
 
-    Args:
-        img: HxWxC float array in [0,1].
-        contrast: Contrast adjustment factor.
-        grain: Grain/noise amount to add.
-        detail_boost: Current control for micro-contrast / texture.
-        texture_boost: (LEGACY) Former control used by older callsites/tests.
-                      If provided, folded into detail_boost for compatibility.
-        **kwargs: Additional keyword arguments (for future extensibility).
-
-    Returns:
-        Enhanced image array in [0,1] range.
+    - If the original accepts 'texture_boost', we pass it through (no pre-fold).
+    - If not, we fold 'texture_boost' into 'detail_boost' for compatibility.
+    - If no original exists, we use our internal implementation.
     """
-    # Fold legacy param into the modern one (backward-compatible)
-    if texture_boost is not None:
+    _ensure_real_impl_bound_once()  # lazy bind for circular-import safety
+
+    import inspect
+    target = _apply_material_response_finishing_orig or _apply_material_response_finishing_impl
+
+    try:
+        sig = inspect.signature(target)
+        params = sig.parameters
+    except Exception:
+        sig = None
+        params = {}
+
+    has_var_kw = bool(sig) and any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+    )
+
+    forward_kwargs: Dict[str, Any] = {}
+
+    # Only add known args if target declares them (unless it has **kwargs)
+    if has_var_kw or "contrast" in params:
+        forward_kwargs["contrast"] = contrast
+    if has_var_kw or "grain" in params:
+        forward_kwargs["grain"] = grain
+
+    if sig and "texture_boost" in params:
+        # Original accepts texture_boost: pass through unchanged
+        if has_var_kw or "detail_boost" in params:
+            forward_kwargs["detail_boost"] = detail_boost
+        forward_kwargs["texture_boost"] = texture_boost
+    else:
+        # Original doesn't accept texture_boost: fold into detail_boost
+        if texture_boost is not None:
+            try:
+                detail_boost = float(detail_boost) * float(texture_boost)
+            except Exception:
+                pass
+        if has_var_kw or "detail_boost" in params:
+            forward_kwargs["detail_boost"] = detail_boost
+
+    # Pass extra kwargs
+    if has_var_kw:
+        forward_kwargs.update(kwargs)
+    else:
+        for k, v in kwargs.items():
+            if k in params:
+                forward_kwargs[k] = v
+
+    return target(img, **forward_kwargs)
+
+
+# --- Cross-module compatibility: wire into material_texturing and delegate to its original ---
+try:
+    import material_texturing as _mt  # type: ignore
+except Exception:
+    _mt = None  # pragma: no cover
+else:
+    try:
+        # If the real impl exists there, capture it so we delegate to it
+        _orig = getattr(_mt, "apply_material_response_finishing", None)
+        if _orig is not None and _orig is not apply_material_response_finishing:
+            _apply_material_response_finishing_orig = _orig  # type: ignore[assignment]
+        # Export tolerant signature to that module
+        _mt.apply_material_response_finishing = apply_material_response_finishing  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+def _ensure_real_impl_bound_once() -> None:
+    """Attempt to bind the real implementation once if circular import delayed it."""
+    global _apply_material_response_finishing_orig
+    if _apply_material_response_finishing_orig is _apply_material_response_finishing_impl:
         try:
-            # Multiplicative fold keeps existing tuning stable
-            detail_boost = float(detail_boost) * float(texture_boost)
+            import material_texturing as _mt2  # type: ignore
+            _orig2 = getattr(_mt2, "apply_material_response_finishing", None)
+            if _orig2 is not None and _orig2 is not apply_material_response_finishing:
+                _apply_material_response_finishing_orig = _orig2  # type: ignore[assignment]
+                _mt2.apply_material_response_finishing = apply_material_response_finishing  # type: ignore[attr-defined]
         except Exception:
-            # Be defensive; do not fail if a bad value slips in
             pass
-
-    # Apply simple finishing operations (CI-friendly implementation)
-    output = img.copy()
-
-    # Apply contrast adjustment
-    if contrast != 1.0:
-        output = np.clip((output - 0.5) * contrast + 0.5, 0.0, 1.0)
-
-    # Apply detail boost using simple edge enhancement
-    if detail_boost != 1.0:
-        if len(output.shape) == 3:
-            # RGB image
-            img_pil = Image.fromarray((output * 255).astype(np.uint8), mode="RGB")
-        else:
-            # Grayscale image
-            img_pil = Image.fromarray((output * 255).astype(np.uint8), mode="L")
-
-        blurred_pil = img_pil.filter(ImageFilter.GaussianBlur(radius=1))
-        blurred = np.asarray(blurred_pil).astype(np.float32) / 255.0
-
-        # Calculate detail enhancement
-        detail = output - blurred
-        output = np.clip(output + detail * (detail_boost - 1.0), 0.0, 1.0)
-
-    # Add grain if requested
-    if grain > 0.0:
-        rng = np.random.default_rng(42)  # Fixed seed for determinism
-        noise = rng.normal(0, grain * 0.05, output.shape)
-        output = np.clip(output + noise, 0.0, 1.0)
-
-    return output
+# --- end cross-module compatibility ---
 
 
 # --------------------------
@@ -633,17 +909,45 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path, help="Path to the base aerial image")
     parser.add_argument("output", type=Path, help="Destination image path")
-    parser.add_argument("--analysis-max", type=int, default=1280, help="Max dimension for clustering image (default: 1280)")
+
+    parser.add_argument("--analysis-max", type=int, default=1280,
+                        help="Max dimension for clustering image (default: 1280)")
     parser.add_argument("--k", type=int, default=8, help="Number of clusters (default: 8)")
     parser.add_argument("--seed", type=int, default=22, help="Random seed (default: 22)")
     parser.add_argument("--target-width", type=int, default=4096, help="Output width (default: 4096)")
     parser.add_argument("--palette", type=Path, default=None, help="Load cluster→material assignments from JSON")
     parser.add_argument("--save-palette", type=Path, default=None, help="Write JSON palette to this path after processing")
+
+    # New toggles
+    parser.add_argument("--resample-method", type=str, default="bilinear",
+                        choices=VALID_RESAMPLING_METHODS,
+                        help="Resampling method for analysis resize (default: bilinear)")
+    parser.add_argument(
+        "--use-sklearn",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use sklearn.cluster.KMeans for clustering (default: on if available; disable with --no-use-sklearn)"
+    )
+
+    # Logging control
+    grp = parser.add_mutually_exclusive_group()
+    grp.add_argument("--verbose", action="store_true", help="Enable info/debug logging")
+    grp.add_argument("--quiet", action="store_true", help="Errors only")
+
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> Path:
     ns = _parse_args(argv)
+
+    # Configure logging level
+    if ns.quiet:
+        logging.basicConfig(level=logging.ERROR, format="%(levelname)s - %(message)s")
+    elif ns.verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s - %(message)s")
+    else:
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
+
     out = enhance_aerial(
         ns.input,
         ns.output,
@@ -654,85 +958,18 @@ def main(argv: Sequence[str] | None = None) -> Path:
         palette_path=ns.palette,
         save_palette=ns.save_palette,
         textures=None,
+        resample_method=ns.resample_method,
+        use_sklearn=ns.use_sklearn,
     )
     print(str(out))
     return out
 
 
-# ---- Compatibility wrapper: ensure 'texture_boost' is accepted and forwarded ----
-
-# Preserve any earlier implementation defined in this module (if any)
-_apply_material_response_finishing_orig = globals().get("apply_material_response_finishing", None)
-
-def apply_material_response_finishing(
-    img: np.ndarray,
-    *,
-    contrast: float = 1.0,
-    grain: float = 0.0,
-    detail_boost: float = 1.0,
-    texture_boost: Optional[float] = None,  # legacy/compat alias
-    **kwargs: Any,  # accept any extra kwargs without exploding
-) -> np.ndarray:
-    """
-    Wrapper that accepts 'texture_boost' for backward compatibility.
-    If an earlier implementation exists in this module, we forward to it with
-    only the parameters it accepts. Otherwise we fall back to a no-op that
-    returns the input image unchanged.
-    """
-    try:
-        import inspect
-        accepted = (
-            inspect.signature(_apply_material_response_finishing_orig).parameters
-            if _apply_material_response_finishing_orig is not None
-            else None
-        )
-    except Exception:
-        accepted = {}
-
-    if _apply_material_response_finishing_orig is not None and accepted is not None:
-        forward_kwargs: Dict[str, Any] = {}
-
-        if "contrast" in accepted:
-            forward_kwargs["contrast"] = contrast
-        if "grain" in accepted:
-            forward_kwargs["grain"] = grain
-
-        if "texture_boost" in accepted:
-            # Original accepts texture_boost: do NOT pre-fold; pass through
-            if "detail_boost" in accepted:
-                forward_kwargs["detail_boost"] = detail_boost
-            forward_kwargs["texture_boost"] = texture_boost
-        else:
-            # Original doesn't accept texture_boost: fold into detail_boost
-            if texture_boost is not None:
-                try:
-                    db = float(detail_boost)
-                    tb = float(texture_boost)
-                    detail_boost = db * tb
-                except Exception:
-                    pass
-            if "detail_boost" in accepted:
-                forward_kwargs["detail_boost"] = detail_boost
-
-        # Only pass through extra kwargs recognized by the original
-        for k, v in kwargs.items():
-            if k in accepted:
-                forward_kwargs[k] = v
-
-        return _apply_material_response_finishing_orig(img, **forward_kwargs)
-
-    # Fallback: no earlier implementation available; return image unchanged
-    # (safe default if tests only verify callability and dtype/shape)
-    return img
-
-
-# Ensure the symbol is exported
-try:
-    __all__
-except NameError:
-    __all__ = []
+# Ensure the symbols are exported
 if "apply_material_response_finishing" not in __all__:
     __all__.append("apply_material_response_finishing")
+if "_validate_parameters" not in __all__:
+    __all__.append("_validate_parameters")
 
 
 if __name__ == "__main__":  # pragma: no cover
