@@ -156,13 +156,19 @@ def _downsample_image(image: Image.Image, max_dim: int) -> Image.Image:
 
 
 def _assign_full_image(image_array: np.ndarray, centroids: np.ndarray) -> np.ndarray:
-    """Assign each pixel to nearest centroid."""
+    """Assign each pixel to nearest centroid, processing in batches to bound memory."""
     pixels = image_array.reshape(-1, 3)
     # Normalize integer pixel data to [0,1] for robust distance computation
     if np.issubdtype(pixels.dtype, np.integer):
         pixels = pixels.astype(np.float32) / 255.0
-    distances = ((pixels[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
-    labels = distances.argmin(axis=1)
+    batch_size = 10000  # Tune as needed for memory constraints
+    n_pixels = pixels.shape[0]
+    labels = np.empty(n_pixels, dtype=np.uint8)
+    for start in range(0, n_pixels, batch_size):
+        end = min(start + batch_size, n_pixels)
+        batch = pixels[start:end]
+        distances = ((batch[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
+        labels[start:end] = distances.argmin(axis=1)
     # Choose dtype based on number of centroids to avoid overflow
     n_centroids = centroids.shape[0]
     if n_centroids < 256:
