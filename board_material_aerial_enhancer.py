@@ -168,13 +168,8 @@ def _assign_full_image(image_array: np.ndarray, centroids: np.ndarray) -> np.nda
 
 
 def _cluster_stats(base_array: np.ndarray, labels: np.ndarray) -> list[ClusterStats]:
-    """Compute cluster statistics - wrapper for compute_cluster_stats."""
-    # Only scale and quantize if input is integer type
-    if np.issubdtype(base_array.dtype, np.integer):
-        arr = base_array
-    else:
-        arr = base_array
-    return compute_cluster_stats(labels, arr)
+    """Compute cluster statistics using compute_cluster_stats."""
+    return compute_cluster_stats(labels, base_array)
 
 
 def assign_materials(
