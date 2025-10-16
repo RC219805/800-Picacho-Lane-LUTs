@@ -132,9 +132,9 @@ def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterSt
             std_rgb = flat[mask].std(axis=0)
         else:
             centroid = (0.0, 0.0, 0.0)
-            mean_rgb = np.zeros(3, dtype=np.float32)
-            mean_hsv = np.zeros(3, dtype=np.float32)
-            std_rgb = np.zeros(3, dtype=np.float32)
+            mean_rgb = np.zeros(3, dtype=flat.dtype)
+            mean_hsv = np.zeros(3, dtype=flat_hsv.dtype)
+            std_rgb = np.zeros(3, dtype=flat.dtype)
         out.append(ClusterStats(
             label=int(lab),
             count=cnt,
