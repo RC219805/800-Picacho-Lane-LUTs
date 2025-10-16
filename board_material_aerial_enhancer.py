@@ -483,7 +483,7 @@ def enhance_aerial(
     enhanced /= 255.0  # In-place normalization
 
     blurred = image.filter(ImageFilter.GaussianBlur(radius=2))
-    blurred_np = np.asarray(blurred, dtype=np.float32)
+    blurred_np = np.array(blurred, dtype=np.float32)
     blurred_np /= 255.0  # In-place normalization
 
     # Compute alpha blend weights (memory efficient)
