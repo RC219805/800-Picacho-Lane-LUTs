@@ -78,7 +78,15 @@ class ClusterStats:
 
 
 def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
-    """Convert RGB [0,1] to HSV [0,1]."""
+    """
+    Convert RGB [0,1] to HSV [0,1].
+
+    Args:
+        rgb: Array of shape (..., 3) with RGB values in [0,1]
+
+    Returns:
+        Array of shape (..., 3) with HSV values in [0,1]
+    """
     r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
     maxc = np.maximum(np.maximum(r, g), b)
     minc = np.minimum(np.minimum(r, g), b)
