@@ -60,10 +60,6 @@ __all__ = [
     "assign_materials",  # additional alias expected by tests
     "build_material_rules",
     "DEFAULT_TEXTURES",
-    "_downsample_image",
-    "_kmeans",
-    "_assign_full_image",
-    "_cluster_stats",
 ]
 
 
