@@ -563,21 +563,21 @@ def apply_materials(
         if not mask.any():
             continue
 
+        # Find bounding box of mask
+        ys, xs = np.where(mask)
+        if len(ys) == 0 or len(xs) == 0:
+            continue
+        y_min, y_max = ys.min(), ys.max()
+        x_min, x_max = xs.min(), xs.max()
+        box_height = y_max - y_min + 1
+        box_width = x_max - x_min + 1
         # Load and resize texture only to the bounding box of the mask
         try:
             texture_img = Image.open(rule.texture).convert("RGB")
-            # Find bounding box of mask
-            ys, xs = np.where(mask)
-            if len(ys) == 0 or len(xs) == 0:
-                continue
-            y_min, y_max = ys.min(), ys.max()
-            x_min, x_max = xs.min(), xs.max()
-            box_height = y_max - y_min + 1
-            box_width = x_max - x_min + 1
             # Resize texture to bounding box size
             texture_resized = texture_img.resize((box_width, box_height), Image.Resampling.BILINEAR)
             texture_array = np.asarray(texture_resized, dtype=np.float32) / 255.0
-        except Exception:
+        except (OSError, IOError, ValueError):
             # Fallback to neutral color if texture can't be loaded
             texture_array = np.ones((box_height, box_width, 3), dtype=np.float32) * 0.5
 
