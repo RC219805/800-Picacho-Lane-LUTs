@@ -34,9 +34,14 @@ except Exception:  # pragma: no cover - optional
 if TYPE_CHECKING:  # pragma: no cover
     from material_response import MaterialRule  # type: ignore
 else:
+    from typing import Callable
+
     @dataclass(frozen=True)
-    class MaterialRule:  # minimal stub
+    class MaterialRule:  # minimal stub with extended attributes
         name: str
+        texture: str = ""
+        blend: float = 0.8
+        score_fn: Callable[["ClusterStats"], float] = lambda _: 0.0
 
 
 # --------------------------
@@ -45,13 +50,15 @@ else:
 
 __all__ = [
     "ClusterStats",
+    "MaterialRule",
     "compute_cluster_stats",
     "load_palette_assignments",
     "save_palette_assignments",
     "relabel",
     "enhance_aerial",
-    "apply_materials",   # back-compat expected by tests
-    "assign_materials",  # additional alias expected by tests
+    "apply_materials",
+    "assign_materials",
+    "build_material_rules",
 ]
 
 
@@ -64,7 +71,32 @@ class ClusterStats:
     """Statistics for a single color cluster in the aerial image."""
     label: int
     count: int
-    centroid: tuple[float, float, float]  # (r,g,b) in [0,1]
+    centroid: tuple[float, float, float] = (0.0, 0.0, 0.0)  # (r,g,b) in [0,1]
+    mean_rgb: Optional[np.ndarray] = None
+    mean_hsv: Optional[np.ndarray] = None
+    std_rgb: Optional[np.ndarray] = None
+
+
+def _rgb_to_hsv(rgb: np.ndarray) -> np.ndarray:
+    """Convert RGB [0,1] to HSV [0,1]."""
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    maxc = np.maximum(np.maximum(r, g), b)
+    minc = np.minimum(np.minimum(r, g), b)
+    v = maxc
+
+    delta = maxc - minc
+    s = np.where(maxc != 0, delta / maxc, 0.0)
+
+    rc = np.where(delta != 0, (maxc - r) / delta, 0.0)
+    gc = np.where(delta != 0, (maxc - g) / delta, 0.0)
+    bc = np.where(delta != 0, (maxc - b) / delta, 0.0)
+
+    h = np.where(r == maxc, bc - gc,
+                 np.where(g == maxc, 2.0 + rc - bc, 4.0 + gc - rc))
+    h = (h / 6.0) % 1.0
+    h = np.where(delta == 0, 0.0, h)
+
+    return np.stack([h, s, v], axis=-1)
 
 
 def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterStats]:
@@ -72,6 +104,7 @@ def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterSt
     Compute simple stats per label:
       - pixel count
       - centroid color (mean RGB in [0,1])
+      - mean RGB, HSV, and standard deviation
 
     labels: (H, W) uint dtype
     rgb:    (H, W, 3) uint8 or float in [0,1]
@@ -84,16 +117,32 @@ def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterSt
     labs = labels.reshape(-1)
     flat = rgb_f.reshape(-1, 3)
 
+    # Convert to HSV
+    hsv_f = _rgb_to_hsv(rgb_f)
+    flat_hsv = hsv_f.reshape(-1, 3)
+
     out: list[ClusterStats] = []
     for lab in np.unique(labs).tolist():
         mask = labs == lab
         cnt = int(mask.sum())
         if cnt:
-            mean = flat[mask].mean(axis=0)
-            centroid = (float(mean[0]), float(mean[1]), float(mean[2]))
+            mean_rgb = flat[mask].mean(axis=0)
+            centroid = (float(mean_rgb[0]), float(mean_rgb[1]), float(mean_rgb[2]))
+            mean_hsv = flat_hsv[mask].mean(axis=0)
+            std_rgb = flat[mask].std(axis=0)
         else:
             centroid = (0.0, 0.0, 0.0)
-        out.append(ClusterStats(label=int(lab), count=cnt, centroid=centroid))
+            mean_rgb = np.zeros(3, dtype=np.float32)
+            mean_hsv = np.zeros(3, dtype=np.float32)
+            std_rgb = np.zeros(3, dtype=np.float32)
+        out.append(ClusterStats(
+            label=int(lab),
+            count=cnt,
+            centroid=centroid,
+            mean_rgb=mean_rgb,
+            mean_hsv=mean_hsv,
+            std_rgb=std_rgb
+        ))
     return out
 
 
@@ -272,6 +321,7 @@ def enhance_aerial(
     *,
     k: int = 8,
     analysis_max: int = 1280,
+    analysis_max_dim: Optional[int] = None,
     seed: int = 22,
     target_width: int | None = 4096,
     palette_path: Optional[Path | str] = None,
@@ -285,6 +335,10 @@ def enhance_aerial(
     - apply a gentle, label-aware blur to hint at "material regions"
     - save an RGB result (no HDR / 16-bit path to avoid heavy deps)
     """
+    # Support both analysis_max and analysis_max_dim for backward compatibility
+    if analysis_max_dim is not None:
+        analysis_max = analysis_max_dim
+
     input_path = Path(input_path)
     output_path = Path(output_path)
     image = Image.open(input_path).convert("RGB")
@@ -342,59 +396,180 @@ def enhance_aerial(
     return output_path
 
 
-def apply_materials(
-    input_path: Path,
-    output_path: Path,
-    *,
-    k: int = 8,
-    analysis_max: int = 1280,
-    seed: int = 22,
-    target_width: int | None = 4096,
-    palette_path: Optional[Path | str] = None,
-    save_palette: Optional[Path | str] = None,
-    textures: Mapping[str, Path] | None = None,
-) -> Path:
+def build_material_rules(textures: Mapping[str, Path]) -> list[MaterialRule]:
     """
-    Back-compat wrapper expected by tests. Delegates to `enhance_aerial`.
-    Kept intentionally simple/deterministic for CI.
+    Build material rules from texture paths with default scoring functions.
+
+    Each material is assigned a scoring function based on typical properties:
+    - plaster: prefers light, neutral colors (high value, low saturation)
+    - stone: prefers medium-light colors with some texture variation
+    - cladding: prefers medium tones
+    - screens: prefers medium-dark colors
+    - equitone: prefers darker colors with low saturation
+    - roof: prefers medium to dark grays
+    - bronze: prefers darker, warmer tones
+    - shade: prefers very light colors (shadows/openings)
     """
-    return enhance_aerial(
-        input_path=input_path,
-        output_path=output_path,
-        k=k,
-        analysis_max=analysis_max,
-        seed=seed,
-        target_width=target_width,
-        palette_path=palette_path,
-        save_palette=save_palette,
-        textures=textures,
-    )
+    def plaster_score(stats: ClusterStats) -> float:
+        """Score for plaster - prefers light, neutral colors."""
+        if stats.mean_hsv is None:
+            return 0.0
+        s, v = stats.mean_hsv[1], stats.mean_hsv[2]
+        # High value (brightness), low saturation
+        return float(v * (1.0 - s * 0.5))
+
+    def stone_score(stats: ClusterStats) -> float:
+        """Score for stone - prefers medium-light colors with texture."""
+        if stats.mean_hsv is None or stats.std_rgb is None:
+            return 0.0
+        v = stats.mean_hsv[2]
+        texture = float(stats.std_rgb.mean())
+        # Medium to light value, some texture variation
+        return float((1.0 - abs(v - 0.65)) * (1.0 + texture * 2.0))
+
+    def cladding_score(stats: ClusterStats) -> float:
+        """Score for cladding - prefers medium tones."""
+        if stats.mean_hsv is None:
+            return 0.0
+        v = stats.mean_hsv[2]
+        # Medium value range
+        return float(1.0 - abs(v - 0.55))
+
+    def screens_score(stats: ClusterStats) -> float:
+        """Score for screens - prefers medium-dark colors."""
+        if stats.mean_hsv is None:
+            return 0.0
+        v = stats.mean_hsv[2]
+        # Medium-dark value
+        return float(1.0 - abs(v - 0.45))
+
+    def equitone_score(stats: ClusterStats) -> float:
+        """Score for equitone - prefers darker colors with low saturation."""
+        if stats.mean_hsv is None:
+            return 0.0
+        s, v = stats.mean_hsv[1], stats.mean_hsv[2]
+        # Dark value, low saturation
+        return float((1.0 - v) * (1.0 - s * 0.5))
+
+    def roof_score(stats: ClusterStats) -> float:
+        """Score for roof - prefers medium to dark grays."""
+        if stats.mean_hsv is None:
+            return 0.0
+        s, v = stats.mean_hsv[1], stats.mean_hsv[2]
+        # Medium-dark value, very low saturation
+        return float((1.0 - abs(v - 0.5)) * (1.0 - s))
+
+    def bronze_score(stats: ClusterStats) -> float:
+        """Score for bronze - prefers darker, warmer tones."""
+        if stats.mean_hsv is None:
+            return 0.0
+        h, v = stats.mean_hsv[0], stats.mean_hsv[2]
+        # Dark value, warm hue (orange-brown range)
+        warm = 1.0 if 0.0 <= h <= 0.15 else 0.5
+        return float((1.0 - v) * warm)
+
+    def shade_score(stats: ClusterStats) -> float:
+        """Score for shade - prefers very light colors."""
+        if stats.mean_hsv is None:
+            return 0.0
+        v = stats.mean_hsv[2]
+        # Very high value (brightness)
+        return float(v ** 2)
+
+    # Map material names to scoring functions
+    score_functions = {
+        "plaster": plaster_score,
+        "stone": stone_score,
+        "cladding": cladding_score,
+        "screens": screens_score,
+        "equitone": equitone_score,
+        "roof": roof_score,
+        "bronze": bronze_score,
+        "shade": shade_score,
+    }
+
+    rules: list[MaterialRule] = []
+    for name, texture_path in textures.items():
+        score_fn = score_functions.get(name, lambda stats: 0.5)
+        rules.append(MaterialRule(
+            name=name,
+            texture=str(texture_path),
+            blend=0.8,
+            score_fn=score_fn
+        ))
+
+    return rules
 
 
 def assign_materials(
-    input_path: Path,
-    output_path: Path,
-    *,
-    k: int = 8,
-    analysis_max: int = 1280,
-    seed: int = 22,
-    target_width: int | None = 4096,
-    palette_path: Optional[Path | str] = None,
-    save_palette: Optional[Path | str] = None,
-    textures: Mapping[str, Path] | None = None,
-) -> Path:
-    """Back-compat alias expected by tests."""
-    return apply_materials(
-        input_path=input_path,
-        output_path=output_path,
-        k=k,
-        analysis_max=analysis_max,
-        seed=seed,
-        target_width=target_width,
-        palette_path=palette_path,
-        save_palette=save_palette,
-        textures=textures,
-    )
+    stats: Sequence[ClusterStats],
+    rules: Sequence[MaterialRule]
+) -> dict[int, MaterialRule]:
+    """
+    Assign materials to clusters based on scoring functions.
+
+    For each cluster, evaluate all material rules and assign the one with
+    the highest score. This allows materials to be matched to clusters based
+    on their visual properties (color, saturation, texture, etc.).
+    """
+    assignments: dict[int, MaterialRule] = {}
+
+    for cluster in stats:
+        best_rule: Optional[MaterialRule] = None
+        best_score = -1.0
+
+        for rule in rules:
+            score = rule.score_fn(cluster)
+            if score > best_score:
+                best_score = score
+                best_rule = rule
+
+        if best_rule is not None:
+            assignments[cluster.label] = best_rule
+
+    return assignments
+
+
+def apply_materials(
+    base: np.ndarray,
+    labels: np.ndarray,
+    assignments: dict[int, MaterialRule],
+) -> np.ndarray:
+    """
+    Apply materials to an image array using texture blending.
+
+    Args:
+        base: Base image array (H, W, 3) in float [0,1]
+        labels: Label array (H, W) with cluster assignments
+        assignments: Mapping from cluster labels to MaterialRule instances
+
+    Returns:
+        Enhanced image array with textures blended
+    """
+    result = base.copy()
+
+    # Apply each material's texture
+    for label, rule in assignments.items():
+        mask = labels == label
+        if not mask.any():
+            continue
+
+        # Load and resize texture
+        try:
+            texture_img = Image.open(rule.texture).convert("RGB")
+            texture_img = texture_img.resize((base.shape[1], base.shape[0]), Image.Resampling.BILINEAR)
+            texture_array = np.asarray(texture_img, dtype=np.float32) / 255.0
+        except Exception:
+            # Fallback to neutral color if texture can't be loaded
+            texture_array = np.ones_like(base) * 0.5
+
+        # Blend texture with base image
+        mask_3d = np.repeat(mask[:, :, None], 3, axis=2)
+        result = np.where(mask_3d,
+                          base * (1.0 - rule.blend) + texture_array * rule.blend,
+                          result)
+
+    return result
 
 
 # --------------------------
