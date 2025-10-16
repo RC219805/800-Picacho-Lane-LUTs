@@ -40,6 +40,21 @@ else:
 
 
 # --------------------------
+# Public API
+# --------------------------
+
+__all__ = [
+    "ClusterStats",
+    "compute_cluster_stats",
+    "load_palette_assignments",
+    "save_palette_assignments",
+    "relabel",
+    "enhance_aerial",
+    "apply_materials",  # back-compat symbol expected by tests
+]
+
+
+# --------------------------
 # Cluster statistics (exported for tests)
 # --------------------------
 
@@ -128,7 +143,7 @@ def _deserialize_assignments(
                 raise ValueError(f"Palette key is not an int: {sk!r}")
             continue
 
-    # Ensure name is string-like
+        # Ensure name maps to a known rule
         rule = by_name.get(name)
         if rule is None:
             if strict:
@@ -325,6 +340,35 @@ def enhance_aerial(
         save_palette_assignments(assignments, save_palette)
 
     return output_path
+
+
+def apply_materials(
+    input_path: Path,
+    output_path: Path,
+    *,
+    k: int = 8,
+    analysis_max: int = 1280,
+    seed: int = 22,
+    target_width: int | None = 4096,
+    palette_path: Optional[Path | str] = None,
+    save_palette: Optional[Path | str] = None,
+    textures: Mapping[str, Path] | None = None,
+) -> Path:
+    """
+    Back-compat wrapper expected by tests. Delegates to `enhance_aerial`.
+    Kept intentionally simple/deterministic for CI.
+    """
+    return enhance_aerial(
+        input_path=input_path,
+        output_path=output_path,
+        k=k,
+        analysis_max=analysis_max,
+        seed=seed,
+        target_width=target_width,
+        palette_path=palette_path,
+        save_palette=save_palette,
+        textures=textures,
+    )
 
 
 # --------------------------
