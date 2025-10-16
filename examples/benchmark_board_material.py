@@ -120,7 +120,7 @@ def main():
             )
 
             # Calculate speedup
-            speedup = time_basic / time_sklearn if time_sklearn > 0 else 0
+            speedup = time_basic / time_sklearn if time_sklearn > 1e-9 else 0
 
             # Display results
             print(f"  Results:")
