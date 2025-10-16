@@ -23,30 +23,25 @@ from board_material_aerial_enhancer import enhance_aerial
 def create_test_image(size: tuple[int, int], num_regions: int = 4) -> Image.Image:
     """Create a synthetic aerial image with distinct color regions."""
     width, height = size
-    image = Image.new("RGB", (width, height))
-    pixels = image.load()
+    # Create meshgrid for pixel coordinates
+    x = np.arange(width)
+    y = np.arange(height)
+    xx, yy = np.meshgrid(x, y, indexing='ij')
 
-    # Create regions with different colors
     region_width = width // num_regions
+    region = np.where(region_width > 0, xx // region_width, 0)
+    base_val = 50 + region * 50
+    noise = (20 * np.sin(xx / 20) * np.cos(yy / 20)).astype(int)
+    val = base_val + noise
 
-    for x in range(width):
-        for y in range(height):
-            region = x // region_width
-            # Create variation within regions
-            base_val = 50 + region * 50
-            noise = int(20 * np.sin(x / 20) * np.cos(y / 20))
-            val = base_val + noise
+    r = val + (30 * np.sin(xx / 30)).astype(int)
+    g = val + (20 * np.cos(yy / 25)).astype(int)
+    b = val - (15 * np.sin((xx + yy) / 35)).astype(int)
 
-            r = val + int(30 * np.sin(x / 30))
-            g = val + int(20 * np.cos(y / 25))
-            b = val - int(15 * np.sin((x + y) / 35))
+    rgb = np.stack([r, g, b], axis=-1)
+    rgb = np.clip(rgb, 0, 255).astype(np.uint8)
 
-            pixels[x, y] = (
-                max(0, min(255, r)),
-                max(0, min(255, g)),
-                max(0, min(255, b))
-            )
-
+    image = Image.fromarray(rgb, "RGB")
     return image
 
 
