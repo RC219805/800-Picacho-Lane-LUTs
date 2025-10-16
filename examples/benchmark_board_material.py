@@ -31,7 +31,7 @@ def create_test_image(size: tuple[int, int], num_regions: int = 4) -> Image.Imag
 
     for x in range(width):
         for y in range(height):
-            region = x // region_width if region_width > 0 else 0
+            region = x // region_width
             # Create variation within regions
             base_val = 50 + region * 50
             noise = int(20 * np.sin(x / 20) * np.cos(y / 20))
