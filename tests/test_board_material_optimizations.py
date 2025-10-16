@@ -239,7 +239,7 @@ class TestMemoryEfficiency:
         # Add some variation (vectorized for efficiency)
         x = np.arange(500)
         y = np.arange(500)
-        xx, yy = np.meshgrid(x, y, indexing='ij')
+        xx, yy = np.meshgrid(x, y)
         r = 200 + 50 * np.sin(xx / 50)
         g = 180 + 50 * np.cos(yy / 50)
         b = np.full_like(r, 160)
