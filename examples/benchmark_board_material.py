@@ -26,7 +26,7 @@ def create_test_image(size: tuple[int, int], num_regions: int = 4) -> Image.Imag
     # Create meshgrid for pixel coordinates
     x = np.arange(width)
     y = np.arange(height)
-    xx, yy = np.meshgrid(x, y, indexing='ij')
+    xx, yy = np.meshgrid(x, y)
 
     region_width = width // num_regions
     region = np.where(region_width > 0, xx // region_width, 0)
