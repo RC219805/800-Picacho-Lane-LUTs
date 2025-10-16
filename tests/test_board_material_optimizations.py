@@ -273,7 +273,7 @@ class TestPerformanceBenchmark:
         # Vectorized image creation for efficiency
         x = np.arange(400)
         y = np.arange(400)
-        xx, yy = np.meshgrid(x, y)  # Use default Cartesian indexing ('xy')
+        xx, yy = np.meshgrid(x, y)  # Use default Cartesian indexing ('xy'); this ensures the generated image has the expected orientation for this test, and documents the intentional choice to rely on the default parameter.
         val = (xx + yy) % 256
         arr = np.stack([val, val, val], axis=-1).astype(np.uint8)
         image = Image.fromarray(arr, "RGB")
