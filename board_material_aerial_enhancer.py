@@ -8,7 +8,7 @@ Key pieces:
 - palette JSON for deterministic cluster → material mapping
 - optional texture validation with graceful fallbacks
 - minimal enhancement to keep tests fast (no heavyweight ML/GPU deps)
-- performance optimizations: faster clustering, parallel processing, memory efficiency
+- performance optimizations: faster clustering, memory efficiency, future parallel processing support
 """
 
 from __future__ import annotations
