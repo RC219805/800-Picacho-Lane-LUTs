@@ -17,7 +17,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any
+from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any, Callable
 
 # --- third-party (kept light) ---
 import numpy as np
@@ -30,13 +30,18 @@ except Exception:  # pragma: no cover - optional
     tifffile = None  # type: ignore
 
 # If the real class is available elsewhere, use it only for typing;
-# otherwise provide a tiny stub that satisfies runtime & tests.
+# otherwise provide a complete stub that satisfies runtime & tests.
 if TYPE_CHECKING:  # pragma: no cover
     from material_response import MaterialRule  # type: ignore
 else:
     @dataclass(frozen=True)
-    class MaterialRule:  # minimal stub
+    class MaterialRule:  # complete stub for tests and other scripts
         name: str
+        texture: str = ""
+        blend: float = 1.0
+        score_fn: Callable[["ClusterStats"], float] | None = None
+        tint: tuple[int, int, int] | None = None
+        tint_strength: float = 0.0
 
 
 # --------------------------
@@ -45,6 +50,7 @@ else:
 
 __all__ = [
     "ClusterStats",
+    "MaterialRule",
     "compute_cluster_stats",
     "load_palette_assignments",
     "save_palette_assignments",
@@ -52,6 +58,12 @@ __all__ = [
     "enhance_aerial",
     "apply_materials",   # back-compat expected by tests
     "assign_materials",  # additional alias expected by tests
+    "build_material_rules",
+    "DEFAULT_TEXTURES",
+    "_downsample_image",
+    "_kmeans",
+    "_assign_full_image",
+    "_cluster_stats",
 ]
 
 
@@ -64,7 +76,10 @@ class ClusterStats:
     """Statistics for a single color cluster in the aerial image."""
     label: int
     count: int
-    centroid: tuple[float, float, float]  # (r,g,b) in [0,1]
+    centroid: tuple[float, float, float] = (0.0, 0.0, 0.0)  # (r,g,b) in [0,1]
+    mean_rgb: np.ndarray | None = None  # mean RGB values
+    mean_hsv: np.ndarray | None = None  # mean HSV values
+    std_rgb: np.ndarray | None = None  # standard deviation of RGB
 
 
 def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterStats]:
@@ -95,6 +110,120 @@ def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterSt
             centroid = (0.0, 0.0, 0.0)
         out.append(ClusterStats(label=int(lab), count=cnt, centroid=centroid))
     return out
+
+
+# --------------------------
+# Default textures and material building (for back-compat)
+# --------------------------
+
+DEFAULT_TEXTURES: dict[str, Path] = {
+    "plaster": Path("textures/plaster.png"),
+    "stone": Path("textures/stone.png"),
+    "cladding": Path("textures/cladding.png"),
+    "screens": Path("textures/screens.png"),
+    "equitone": Path("textures/equitone.png"),
+    "roof": Path("textures/roof.png"),
+    "bronze": Path("textures/bronze.png"),
+    "shade": Path("textures/shade.png"),
+}
+
+
+def build_material_rules(textures: Mapping[str, Path]) -> list[MaterialRule]:
+    """
+    Build a list of MaterialRule objects from a texture mapping.
+    This is a minimal implementation for back-compat with tests and scripts.
+    """
+    rules: list[MaterialRule] = []
+    for name, texture_path in textures.items():
+        rule = MaterialRule(
+            name=name,
+            texture=str(texture_path),
+            blend=0.6,
+            score_fn=lambda stats: 1.0,  # Default scoring
+        )
+        rules.append(rule)
+    return rules
+
+
+# --------------------------
+# Helper functions (for back-compat with other scripts)
+# --------------------------
+
+def _downsample_image(image: Image.Image, max_dim: int) -> Image.Image:
+    """Downsample image to max_dim for analysis."""
+    w, h = image.size
+    if max(w, h) > max_dim:
+        scale = max_dim / max(w, h)
+        new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+        return image.resize(new_size, Image.Resampling.BILINEAR)
+    return image.copy()
+
+
+def _assign_full_image(image_array: np.ndarray, centroids: np.ndarray) -> np.ndarray:
+    """Assign each pixel to nearest centroid."""
+    pixels = image_array.reshape(-1, 3)
+    distances = ((pixels[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
+    labels = distances.argmin(axis=1)
+    return labels.reshape(image_array.shape[:2]).astype(np.uint8)
+
+
+def _cluster_stats(base_array: np.ndarray, labels: np.ndarray) -> list[ClusterStats]:
+    """Compute cluster statistics - wrapper for compute_cluster_stats."""
+    return compute_cluster_stats(labels, (base_array * 255).astype(np.uint8))
+
+
+def assign_materials(
+    stats: Sequence[ClusterStats],
+    rules: Sequence[MaterialRule],
+) -> dict[int, MaterialRule]:
+    """
+    Assign materials to clusters based on scoring functions.
+    Each cluster gets the material with the highest score for that cluster.
+    
+    This is a minimal implementation for back-compat with tests.
+    """
+    assignments: dict[int, MaterialRule] = {}
+    used_rules: set[str] = set()
+    
+    # Sort stats by count (most common clusters first)
+    sorted_stats = sorted(stats, key=lambda s: s.count, reverse=True)
+    
+    for stat in sorted_stats:
+        best_rule: MaterialRule | None = None
+        best_score = -1.0
+        
+        # Score all rules for this cluster
+        for rule in rules:
+            # Prefer unused rules to get variety
+            if rule.name in used_rules:
+                continue
+                
+            if rule.score_fn is not None:
+                score = rule.score_fn(stat)
+            else:
+                score = 1.0
+            
+            if score > best_score:
+                best_score = score
+                best_rule = rule
+        
+        # If all rules are used, allow reuse
+        if best_rule is None:
+            for rule in rules:
+                if rule.score_fn is not None:
+                    score = rule.score_fn(stat)
+                else:
+                    score = 1.0
+                
+                if score > best_score:
+                    best_score = score
+                    best_rule = rule
+        
+        if best_rule is not None and best_score > 0.0:
+            assignments[stat.label] = best_rule
+            used_rules.add(best_rule.name)
+    
+    return assignments
 
 
 # --------------------------
@@ -271,7 +400,7 @@ def enhance_aerial(
     output_path: Path,
     *,
     k: int = 8,
-    analysis_max: int = 1280,
+    analysis_max_dim: int = 1280,
     seed: int = 22,
     target_width: int | None = 4096,
     palette_path: Optional[Path | str] = None,
@@ -290,8 +419,8 @@ def enhance_aerial(
     image = Image.open(input_path).convert("RGB")
 
     w, h = image.size
-    if max(w, h) > analysis_max:
-        scale = analysis_max / max(w, h)
+    if max(w, h) > analysis_max_dim:
+        scale = analysis_max_dim / max(w, h)
         analysis_size = (max(1, int(w * scale)), max(1, int(h * scale)))
         analysis_image = image.resize(analysis_size, Image.Resampling.BILINEAR)
     else:
@@ -343,58 +472,53 @@ def enhance_aerial(
 
 
 def apply_materials(
-    input_path: Path,
-    output_path: Path,
-    *,
-    k: int = 8,
-    analysis_max: int = 1280,
-    seed: int = 22,
-    target_width: int | None = 4096,
-    palette_path: Optional[Path | str] = None,
-    save_palette: Optional[Path | str] = None,
-    textures: Mapping[str, Path] | None = None,
-) -> Path:
+    base: np.ndarray,
+    labels: np.ndarray,
+    materials: Mapping[int, MaterialRule],
+) -> np.ndarray:
     """
-    Back-compat wrapper expected by tests. Delegates to `enhance_aerial`.
-    Kept intentionally simple/deterministic for CI.
+    Apply material textures to a base image using label assignments.
+    
+    Args:
+        base: Base image array (H, W, 3) in [0, 1] float range
+        labels: Label map (H, W) uint8
+        materials: Mapping from label to MaterialRule
+        
+    Returns:
+        Enhanced image array (H, W, 3) in [0, 1] float range
     """
-    return enhance_aerial(
-        input_path=input_path,
-        output_path=output_path,
-        k=k,
-        analysis_max=analysis_max,
-        seed=seed,
-        target_width=target_width,
-        palette_path=palette_path,
-        save_palette=save_palette,
-        textures=textures,
-    )
-
-
-def assign_materials(
-    input_path: Path,
-    output_path: Path,
-    *,
-    k: int = 8,
-    analysis_max: int = 1280,
-    seed: int = 22,
-    target_width: int | None = 4096,
-    palette_path: Optional[Path | str] = None,
-    save_palette: Optional[Path | str] = None,
-    textures: Mapping[str, Path] | None = None,
-) -> Path:
-    """Back-compat alias expected by tests."""
-    return apply_materials(
-        input_path=input_path,
-        output_path=output_path,
-        k=k,
-        analysis_max=analysis_max,
-        seed=seed,
-        target_width=target_width,
-        palette_path=palette_path,
-        save_palette=save_palette,
-        textures=textures,
-    )
+    output = base.copy()
+    
+    for label, rule in materials.items():
+        mask = labels == label
+        if not mask.any():
+            continue
+            
+        # Load texture if available
+        if rule.texture and Path(rule.texture).exists():
+            try:
+                texture_img = Image.open(rule.texture).convert("RGB")
+                # Tile texture to match output size
+                tex_array = np.asarray(texture_img, dtype=np.float32) / 255.0
+                h, w = output.shape[:2]
+                th, tw = tex_array.shape[:2]
+                
+                # Create tiled texture
+                tiles_h = (h + th - 1) // th
+                tiles_w = (w + tw - 1) // tw
+                tiled = np.tile(tex_array, (tiles_h, tiles_w, 1))
+                tiled = tiled[:h, :w]
+                
+                # Blend texture with base
+                blend = rule.blend
+                mask_3d = np.repeat(mask[:, :, None], 3, axis=2)
+                output = np.where(mask_3d, 
+                                  (1 - blend) * output + blend * tiled,
+                                  output)
+            except Exception:
+                pass  # If texture can't be loaded, skip blending
+    
+    return np.clip(output, 0.0, 1.0)
 
 
 # --------------------------
@@ -420,7 +544,7 @@ def main(argv: Sequence[str] | None = None) -> Path:
         ns.input,
         ns.output,
         k=ns.k,
-        analysis_max=ns.analysis_max,
+        analysis_max_dim=ns.analysis_max,
         seed=ns.seed,
         target_width=ns.target_width,
         palette_path=ns.palette,
