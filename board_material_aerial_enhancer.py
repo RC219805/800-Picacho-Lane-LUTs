@@ -285,7 +285,8 @@ def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10, use_sklearn: b
             n_clusters=k,
             random_state=seed,
             max_iter=max(10, iters),
-            n_init=10,  # Try multiple initializations for better results
+            n_init=1,  # Use single initialization for performance and determinism
+            init='k-means++',  # Explicit initialization method
             algorithm='lloyd',  # Most stable for small k
             tol=1e-4,
         )
