@@ -12,7 +12,7 @@ This document tracks the completion status of all requirements from the optimiza
 - Replaced `_kmeans` function with `sklearn.cluster.KMeans` (default)
 - Maintained backward compatibility with `use_sklearn=False` flag
 - Uses k-means++ initialization for better convergence
-- Single random initialization (n_init=1) for stable results
+- Multiple random initializations (n_init>1) for more stable clustering results
 
 **Code Location**: `board_material_aerial_enhancer.py`, lines 254-302
 
