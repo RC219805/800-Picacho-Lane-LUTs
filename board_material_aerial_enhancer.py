@@ -28,7 +28,7 @@ from PIL import Image, ImageFilter
 try:  # pragma: no cover - optional
     from sklearn.cluster import KMeans
     HAS_SKLEARN = True
-except Exception:  # pragma: no cover - optional
+except ImportError:  # pragma: no cover - optional
     KMeans = None  # type: ignore
     HAS_SKLEARN = False
 
