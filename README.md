@@ -176,7 +176,7 @@ python board_material_aerial_enhancer.py input.jpg output.jpg \
 ### **Advanced Flags**
 
 ```bash
-# Enable the sklearn KMeans path (optional speed-up)
+# Enable the sklearn KMeans path (optional speed-up; OFF by default)
 python board_material_aerial_enhancer.py input.jpg output.jpg --use-sklearn
 
 # Reproducibility
@@ -192,7 +192,8 @@ python board_material_aerial_enhancer.py input.jpg output.jpg --quiet
 
 **Notes:**
 
-* `--use-sklearn` toggles the sklearn clustering path for significant performance boosts on large images.
+* `--use-sklearn` toggles the sklearn clustering path (**default is off**) and can significantly speed up larger, real-world images.
+* On very small synthetic images, the sklearn path can be slower due to initialization overhead; the benefit grows with image size and texture complexity.
 * `--seed` ensures deterministic cluster assignments for reproducible runs.
 * `--palette` / `--save-palette` provide material mapping persistence across projects.
 * `--quiet` suppresses log output (pair with `--verbose` for full diagnostic mode).
