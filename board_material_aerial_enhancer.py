@@ -163,7 +163,15 @@ def _assign_full_image(image_array: np.ndarray, centroids: np.ndarray) -> np.nda
         pixels = pixels.astype(np.float32) / 255.0
     distances = ((pixels[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
     labels = distances.argmin(axis=1)
-    return labels.reshape(image_array.shape[:2]).astype(np.uint8)
+    # Choose dtype based on number of centroids to avoid overflow
+    n_centroids = centroids.shape[0]
+    if n_centroids < 256:
+        dtype = np.uint8
+    elif n_centroids < 65536:
+        dtype = np.uint16
+    else:
+        dtype = np.int32
+    return labels.reshape(image_array.shape[:2]).astype(dtype)
 
 
 def _cluster_stats(base_array: np.ndarray, labels: np.ndarray) -> list[ClusterStats]:
