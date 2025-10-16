@@ -578,7 +578,12 @@ def apply_materials(
         try:
             texture_img = Image.open(rule.texture).convert("RGB")
             # Resize texture to bounding box size
-            texture_resized = texture_img.resize((box_width, box_height), Image.Resampling.BILINEAR)
+            orig_width, orig_height = texture_img.size
+            if box_width > orig_width or box_height > orig_height:
+                resample_method = Image.Resampling.LANCZOS  # Upscaling
+            else:
+                resample_method = Image.Resampling.BOX      # Downscaling
+            texture_resized = texture_img.resize((box_width, box_height), resample=resample_method)
             texture_array = np.asarray(texture_resized, dtype=np.float32) / 255.0
         except (OSError, ValueError):
             # Fallback to neutral color if texture can't be loaded
