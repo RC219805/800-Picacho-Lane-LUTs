@@ -489,7 +489,7 @@ def _validate_parameters(
     # Normalize resample method to lower-case (tests pass uppercase strings)
     if resample_method is None:
         resample_method = "bilinear"
-    resample_method = str(resample_method).lower()
+    resample_method = resample_method.lower()
 
     if use_sklearn is None:
         use_sklearn = False  # default is off to keep deps minimal unless requested
