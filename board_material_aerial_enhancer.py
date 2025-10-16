@@ -422,7 +422,7 @@ def _kmeans(
     seed: int,
     iters: int = 10,
     *,
-    use_sklearn: bool = True,
+    use_sklearn: bool = False,
 ) -> np.ndarray:
     """
     K-means clustering over RGB data in [0,1].
@@ -459,10 +459,10 @@ def _kmeans(
 def _validate_parameters(
     *,
     k: int,
-    analysis_max_dim: int | None,
+    analysis_max_dim: int | None = None,
     seed: int,
-    target_width: int | None,
-    resample_method: str | None,
+    target_width: int | None = None,
+    resample_method: str | None = None,
     analysis_max: int | None = None,
     use_sklearn: bool | None = None,
 ) -> Dict[str, Any]:
@@ -492,7 +492,7 @@ def _validate_parameters(
     resample_method = str(resample_method).lower()
 
     if use_sklearn is None:
-        use_sklearn = True  # default matches docs; fall back if sklearn missing
+        use_sklearn = False  # opt-in per README; CI-friendly default
 
     # type/constraint checks
     try:
@@ -582,7 +582,7 @@ def enhance_aerial(
     textures: Mapping[str, Path] | None = None,
     resample_method: str = "bilinear",  # validated & used for analysis resize
     analysis_max: Optional[int] = None,  # backward-compat alias
-    use_sklearn: bool = True,            # default matches docs; graceful fallback
+    use_sklearn: bool = False,           # opt-in default to match README
 ) -> Path:
     """
     Minimal enhancement (with optional sklearn KMeans) to keep CI deterministic:
@@ -886,6 +886,23 @@ else:
     except Exception:
         pass
 
+# --- Cross-module compatibility (material_response) ---
+try:
+    import material_response as _mr  # type: ignore
+except Exception:
+    _mr = None  # pragma: no cover
+else:
+    try:
+        _orig_mr = getattr(_mr, "apply_material_response_finishing", None)
+        if _orig_mr is not None and _orig_mr is not apply_material_response_finishing:
+            # Allow wrapper to delegate to the real implementation found there
+            _apply_material_response_finishing_orig = _orig_mr  # type: ignore[assignment]
+        # Ensure imports from that module see the tolerant signature
+        _mr.apply_material_response_finishing = apply_material_response_finishing  # type: ignore[attr-defined]
+    except Exception:
+        pass
+# --- end cross-module compatibility ---
+
 def _ensure_real_impl_bound_once() -> None:
     """Attempt to bind the real implementation once if circular import delayed it."""
     global _apply_material_response_finishing_orig
@@ -898,7 +915,15 @@ def _ensure_real_impl_bound_once() -> None:
                 _mt2.apply_material_response_finishing = apply_material_response_finishing  # type: ignore[attr-defined]
         except Exception:
             pass
-# --- end cross-module compatibility ---
+        # Also try material_response (rare circular import timing)
+        try:
+            import material_response as _mr2  # type: ignore
+            _orig3 = getattr(_mr2, "apply_material_response_finishing", None)
+            if _orig3 is not None and _orig3 is not apply_material_response_finishing:
+                _apply_material_response_finishing_orig = _orig3  # type: ignore[assignment]
+                _mr2.apply_material_response_finishing = apply_material_response_finishing  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
 
 # --------------------------
@@ -924,9 +949,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help="Resampling method for analysis resize (default: bilinear)")
     parser.add_argument(
         "--use-sklearn",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use sklearn.cluster.KMeans for clustering (default: on if available; disable with --no-use-sklearn)"
+        action="store_true",
+        help="Enable sklearn.cluster.KMeans for clustering (optional speed-up; default: off)"
     )
 
     # Logging control
