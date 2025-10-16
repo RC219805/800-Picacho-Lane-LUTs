@@ -162,6 +162,9 @@ def _downsample_image(image: Image.Image, max_dim: int) -> Image.Image:
 def _assign_full_image(image_array: np.ndarray, centroids: np.ndarray) -> np.ndarray:
     """Assign each pixel to nearest centroid."""
     pixels = image_array.reshape(-1, 3)
+    # Normalize integer pixel data to [0,1] for robust distance computation
+    if np.issubdtype(pixels.dtype, np.integer):
+        pixels = pixels.astype(np.float32) / 255.0
     distances = ((pixels[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
     labels = distances.argmin(axis=1)
     return labels.reshape(image_array.shape[:2]).astype(np.uint8)
