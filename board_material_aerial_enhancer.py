@@ -432,7 +432,7 @@ def _kmeans(
     Returns labels of shape (N,).
     """
     if use_sklearn and HAS_SKLEARN:
-        km = KMeans(n_clusters=k, init="k-means++", n_init=5, random_state=seed)
+        km = KMeans(n_clusters=k, init="k-means++", n_init=10, random_state=seed)
         return km.fit_predict(data).astype(np.uint8)
 
     # --- tiny fallback for CI ---
