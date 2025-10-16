@@ -14,7 +14,7 @@ This document describes the performance optimizations made to `board_material_ae
 - 2-5x speedup for clustering operations on real-world images (higher speedups possible in synthetic or best-case scenarios)
 - More robust initialization with k-means++ algorithm
 - Better convergence with optimized Lloyd's algorithm
-- Single random initialization (n_init=1) for faster clustering
+- Multiple initializations (n_init=10) with k-means++ for robust clustering (default in scikit-learn)
 
 **Usage**:
 ```python
