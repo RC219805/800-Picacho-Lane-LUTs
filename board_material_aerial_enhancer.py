@@ -562,7 +562,7 @@ def apply_materials(
         # Find bounding box of mask
         ys, xs = np.where(mask)
         if ys.size == 0 or xs.size == 0:
-            raise ValueError(f"Empty mask detected for label {label} after mask.any() check. Defensive programming: ys and xs must not be empty.")
+            raise ValueError(f"Empty mask coordinates detected for label {label}")
         y_min, y_max = ys.min(), ys.max()
         x_min, x_max = xs.min(), xs.max()
         box_height = y_max - y_min + 1
