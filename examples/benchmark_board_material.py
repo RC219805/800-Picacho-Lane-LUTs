@@ -127,7 +127,8 @@ def main():
             print(f"    Sklearn time:  {time_sklearn:.3f}s")
             print(f"    Basic time:    {time_basic:.3f}s")
             print(f"    Speedup:       {speedup:.2f}x")
-            print(f"    Time saved:    {(time_basic - time_sklearn):.3f}s ({(((time_basic - time_sklearn) / time_basic * 100) if time_basic > 1e-9 else 0):.1f}%)")
+            percent_saved = ((time_basic - time_sklearn) / time_basic * 100) if time_basic > 1e-9 else 0
+            print(f"    Time saved:    {(time_basic - time_sklearn):.3f}s ({percent_saved:.1f}%)")
             print()
             print("-" * 70)
             print()
