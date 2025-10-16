@@ -580,12 +580,10 @@ def apply_materials(
         base_box = base[y_min:y_max+1, x_min:x_max+1]
         result_box = result[y_min:y_max+1, x_min:x_max+1]
         mask_box_3d = np.repeat(mask_box[:, :, None], 3, axis=2)
-        blended = np.where(
-            mask_box_3d,
-            base_box * (1.0 - rule.blend) + texture_array * rule.blend,
-            result_box
-        )
-        result[y_min:y_max+1, x_min:x_max+1] = blended
+        # Only blend masked pixels to avoid unnecessary computation
+        blended_pixels = base_box[mask_box] * (1.0 - rule.blend) + texture_array[mask_box] * rule.blend
+        result_box[mask_box] = blended_pixels
+        result[y_min:y_max+1, x_min:x_max+1] = result_box
 
     return result
 
