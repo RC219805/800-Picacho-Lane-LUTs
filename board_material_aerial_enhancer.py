@@ -38,9 +38,7 @@ try:  # pragma: no cover - optional
     from sklearn.cluster import KMeans  # type: ignore
     HAS_SKLEARN = True
 except Exception:  # pragma: no cover - optional
-    KMeans = None  # type: ignore
     HAS_SKLEARN = False
-
 # Optional: CuPy for future GPU path
 try:  # pragma: no cover - optional
     import cupy as cp  # type: ignore
