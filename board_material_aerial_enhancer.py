@@ -59,7 +59,9 @@ __all__ = [
     "apply_materials",   # back-compat expected by tests
     "assign_materials",  # additional alias expected by tests
     "build_material_rules",
+    "apply_material_response_finishing",  # backward compatibility
     "DEFAULT_TEXTURES",
+    "VALID_RESAMPLING_METHODS",
 ]
 
 
@@ -122,6 +124,14 @@ DEFAULT_TEXTURES: dict[str, Path] = {
     "bronze": Path("textures/bronze.png"),
     "shade": Path("textures/shade.png"),
 }
+
+# --------------------------
+# Valid resampling methods
+# --------------------------
+VALID_RESAMPLING_METHODS = [
+    'nearest', 'linear', 'bilinear', 'cubic', 
+    'bicubic', 'lanczos', 'area', 'box'
+]
 
 
 def build_material_rules(textures: Mapping[str, Path]) -> list[MaterialRule]:
@@ -419,6 +429,8 @@ def enhance_aerial(
     palette_path: Optional[Path | str] = None,
     save_palette: Optional[Path | str] = None,
     textures: Mapping[str, Path] | None = None,
+    resample_method: str = 'bilinear',  # Add parameter for validation
+    analysis_max: Optional[int] = None,  # Backward compatibility alias
 ) -> Path:
     """
     Minimal enhancement to keep CI deterministic:
@@ -427,6 +439,15 @@ def enhance_aerial(
     - apply a gentle, label-aware blur to hint at "material regions"
     - save an RGB result (no HDR / 16-bit path to avoid heavy deps)
     """
+    # Handle backward compatibility for analysis_max parameter
+    if analysis_max is not None:
+        analysis_max_dim = analysis_max
+    
+    # Validate resample method if provided
+    if resample_method not in VALID_RESAMPLING_METHODS:
+        valid_methods_str = ', '.join(VALID_RESAMPLING_METHODS)
+        raise ValueError(f"Invalid resample_method: {resample_method}. Must be one of: {valid_methods_str}")
+    
     input_path = Path(input_path)
     output_path = Path(output_path)
     image = Image.open(input_path).convert("RGB")
@@ -532,6 +553,73 @@ def apply_materials(
                 pass  # If texture can't be loaded, skip blending
     
     return np.clip(output, 0.0, 1.0)
+
+
+def apply_material_response_finishing(
+    img: np.ndarray,
+    *,
+    contrast: float = 1.0,
+    grain: float = 0.0,
+    detail_boost: float = 1.0,
+    texture_boost: Optional[float] = None,  # Legacy parameter
+    **kwargs
+) -> np.ndarray:
+    """
+    Apply finishing operations to the image/material response.
+    
+    Args:
+        img: HxWxC float array in [0,1].
+        contrast: Contrast adjustment factor.
+        grain: Grain/noise amount to add.
+        detail_boost: Current control for micro-contrast / texture.
+        texture_boost: (LEGACY) Former control used by older callsites/tests.
+                      If provided, folded into detail_boost for compatibility.
+        **kwargs: Additional keyword arguments (for future extensibility).
+    
+    Returns:
+        Enhanced image array in [0,1] range.
+    """
+    # Fold legacy param into the modern one (backward-compatible)
+    if texture_boost is not None:
+        try:
+            # Multiplicative fold keeps existing tuning stable
+            detail_boost = float(detail_boost) * float(texture_boost)
+        except Exception:
+            # Be defensive; do not fail if a bad value slips in
+            pass
+    
+    # Apply simple finishing operations (CI-friendly implementation)
+    output = img.copy()
+    
+    # Apply contrast adjustment
+    if contrast != 1.0:
+        output = np.clip((output - 0.5) * contrast + 0.5, 0.0, 1.0)
+    
+    # Apply detail boost using simple edge enhancement
+    if detail_boost != 1.0:
+        # Use PIL for Gaussian blur since it's already imported
+        h, w = output.shape[:2]
+        if len(output.shape) == 3:
+            # RGB image
+            img_pil = Image.fromarray((output * 255).astype(np.uint8), mode='RGB')
+        else:
+            # Grayscale image
+            img_pil = Image.fromarray((output * 255).astype(np.uint8), mode='L')
+        
+        blurred_pil = img_pil.filter(ImageFilter.GaussianBlur(radius=1))
+        blurred = np.asarray(blurred_pil).astype(np.float32) / 255.0
+        
+        # Calculate detail enhancement
+        detail = output - blurred
+        output = np.clip(output + detail * (detail_boost - 1.0), 0.0, 1.0)
+    
+    # Add grain if requested
+    if grain > 0.0:
+        rng = np.random.default_rng(42)  # Fixed seed for determinism
+        noise = rng.normal(0, grain * 0.05, output.shape)
+        output = np.clip(output + noise, 0.0, 1.0)
+    
+    return output
 
 
 # --------------------------
