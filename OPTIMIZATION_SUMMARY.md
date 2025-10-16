@@ -14,7 +14,7 @@ This document tracks the completion status of all requirements from the optimiza
 
 * Added an **optional** sklearn KMeans path behind the `use_sklearn` parameter / `--use-sklearn` flag.
 * Default remains the **built-in CI-friendly k-means** to minimize dependencies while ensuring determinism.
-* When sklearn is available and enabled, uses `KMeans(init="k-means++", n_init=5, random_state=seed)` for better convergence.
+* When sklearn is available and enabled, uses `KMeans(init="k-means++", n_init=10, random_state=seed)` for better convergence.
 * Backward compatibility preserved—behavior identical when `use_sklearn=False`.
 
 **Code Location:** `_kmeans(..., use_sklearn: bool)` and its call site in `enhance_aerial()` (search for `use_sklearn`).
