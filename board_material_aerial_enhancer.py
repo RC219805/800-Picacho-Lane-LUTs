@@ -432,7 +432,9 @@ def enhance_aerial(
         analysis_size = (max(1, int(w * scale)), max(1, int(h * scale)))
 
         # Use faster resampling method for analysis image
-        resampling = getattr(Image.Resampling, resample_method, Image.Resampling.BILINEAR)
+        if not hasattr(Image.Resampling, resample_method):
+            raise ValueError(f"Invalid resample_method '{resample_method}'. Valid options are: {', '.join([m for m in dir(Image.Resampling) if not m.startswith('_')])}")
+        resampling = getattr(Image.Resampling, resample_method)
         analysis_image = image.resize(analysis_size, resampling)
         logger.debug(f"Analysis image resized to {analysis_size} in {time.time() - resize_start:.3f}s")
     else:
