@@ -581,7 +581,9 @@ def apply_materials(
         base_box = base[y_min:y_max+1, x_min:x_max+1]
         result_box = result[y_min:y_max+1, x_min:x_max+1]
         # Only blend masked pixels to avoid unnecessary computation
-        blended_pixels = base_box[mask_box] * (1.0 - rule.blend) + texture_array[mask_box] * rule.blend
+        blended_pixels = np.empty_like(base_box[mask_box])
+        np.multiply(base_box[mask_box], (1.0 - rule.blend), out=blended_pixels)
+        np.add(blended_pixels, np.multiply(texture_array[mask_box], rule.blend), out=blended_pixels)
         result_box[mask_box] = blended_pixels
         result[y_min:y_max+1, x_min:x_max+1] = result_box
 
