@@ -442,8 +442,8 @@ def enhance_aerial(
     # Convert to numpy and normalize (avoid unnecessary copies)
     convert_start = time.time()
     analysis_array = np.asarray(analysis_image, dtype=np.float32)
-    # In-place division for memory efficiency
-    analysis_array /= 255.0
+    # Out-of-place division for memory safety (prevents modifying shared memory)
+    analysis_array = analysis_array / 255.0
     flat = analysis_array.reshape(-1, 3)
     logger.debug(f"Array conversion in {time.time() - convert_start:.3f}s: {flat.shape[0]} pixels")
 
