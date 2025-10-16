@@ -49,8 +49,11 @@ This document tracks the completion status of all requirements from the optimiza
 * `np.clip(..., out=array)` to avoid new allocations.
 * Reuse arrays wherever possible.
 * Downscale images before clustering to limit working-set size.
+* **Batched full-image relabel** to cap peak memory usage.
+* **Adaptive label dtype** by `k` (e.g., `uint8`/`uint16`) to avoid overflow and reduce footprint.
+* **Atomic palette saves** (write-to-temp then rename) for crash-safe updates.
 
-**Memory Savings:** ~20–30 % peak memory reduction.
+**Memory Savings:** ~20–30% peak memory reduction.
 **Tests:** `tests/test_board_material_optimizations.py::TestMemoryEfficiency`
 
 ---
@@ -138,7 +141,7 @@ INFO - Total processing time: 0.116 s
 
 * New file `tests/test_board_material_optimizations.py`
 * 15 tests across 6 classes covering validation, clustering, enhancement, palette ops, memory, and performance.
-* 100 % pass rate, CI integrated.
+* 100% pass rate, CI integrated.
 
 ---
 
@@ -172,7 +175,7 @@ INFO - Total processing time: 0.116 s
 
 ### Backward Compatibility
 
-* ✅ Legacy parameters (`analysis_max`, etc.) still supported.
+* ✅ Legacy parameters (`analysis_max`, etc.) still supported (aliases to `analysis_max_dim`).
 * ✅ All new parameters optional.
 * ✅ Default behavior unchanged.
 * ✅ No breaking API changes.
@@ -192,8 +195,9 @@ INFO - Total processing time: 0.116 s
 **Real-World Expectation:**
 
 * 2–5× speed-up with sklearn on complex aerials.
-* 20–30 % memory savings.
+* 20–30% memory savings.
 * Improved color stability via k-means++ initialization.
+* **Note:** On very small synthetic images, sklearn may be slower due to initialization overhead; speedups grow with image size and complexity.
 
 ---
 
@@ -203,7 +207,7 @@ INFO - Total processing time: 0.116 s
 | ------------------------- | ------ | -------------------------------- |
 | 1. Replace k-means        | ✅      | Optional sklearn path + fallback |
 | 2. Parallelization        | ✅      | Prepared, not executed           |
-| 3. Memory optimization    | ✅      | In-place ops                     |
+| 3. Memory optimization    | ✅      | In-place ops + batching + dtype  |
 | 4. Resampling flexibility | ✅      | Eight methods, CLI validated     |
 | 5. GPU readiness          | ✅      | CuPy flag, structure ready       |
 | 6. Logging/profiling      | ✅      | Full instrumentation             |
@@ -223,5 +227,3 @@ The enhancer is now:
 * Backward compatible and production-grade.
 
 ---
-
-*(End of updated OPTIMIZATION_SUMMARY.md)*
