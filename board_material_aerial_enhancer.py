@@ -279,7 +279,7 @@ def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10, use_sklearn: b
 
     if use_sklearn:
         # Use scikit-learn's optimized KMeans implementation
-        # n_init=1 with explicit init='k-means++' for better initialization
+        # n_init=10 with explicit init='k-means++' for better initialization
         # This is much faster than the naive implementation
         kmeans = KMeans(
             n_clusters=k,
