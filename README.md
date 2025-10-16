@@ -1,7 +1,7 @@
 ````markdown
 [![CI](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/python-app.yml/badge.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
-[![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
+  [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/build-passing-success.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs)
 
 # 800 Picacho Lane — Professional LUT Collection
