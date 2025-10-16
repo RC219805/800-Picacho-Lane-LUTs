@@ -85,8 +85,6 @@ class TestKMeansOptimization:
 
         # sklearn should generally be faster or comparable
         # (not always guaranteed for small data, but should be close)
-        print(f"sklearn time: {time_sklearn:.3f}s, basic time: {time_basic:.3f}s")
-
     def test_kmeans_deterministic(self):
         """Test that k-means produces deterministic results with same seed."""
         np.random.seed(42)
