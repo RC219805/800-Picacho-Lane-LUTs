@@ -1,4 +1,3 @@
-````markdown
 [![CI](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/python-app.yml/badge.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
 [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
@@ -14,7 +13,7 @@ Install the package and run your first TIFF enhancement:
 ```bash
 pip install picacho-lane-luts
 python luxury_tiff_batch_processor.py input_folder output_folder --preset signature
-````
+```
 
 For advanced render finishing, see [Material Response Finishing for Neural Renders](#material-response-finishing-for-neural-renders).
 
@@ -72,11 +71,7 @@ Enable with `--material-response` for physically consistent detail boosts and vo
 Example:
 
 ```bash
-python lux_render_pipeline.py \
-  --input bedroom_render.jpg \
-  --out ./enhanced_bedroom \
-  --prompt "minimalist bedroom interior..." \
-  --material-response --texture-boost 0.28
+python lux_render_pipeline.py   --input bedroom_render.jpg   --out ./enhanced_bedroom   --prompt "minimalist bedroom interior..."   --material-response --texture-boost 0.28
 ```
 
 ---
@@ -157,20 +152,17 @@ make test-full
 python board_material_aerial_enhancer.py input.jpg output.jpg
 
 # Verbose logging and custom params
-python board_material_aerial_enhancer.py input.jpg output.jpg \
-  --k 12 --analysis-max 2048 --target-width 4096 --verbose
+python board_material_aerial_enhancer.py input.jpg output.jpg   --k 12 --analysis-max 2048 --target-width 4096 --verbose
 ```
 
 ### **Performance Options**
 
 ```bash
 # Fast preview (lower quality)
-python board_material_aerial_enhancer.py input.jpg output.jpg \
-  --resample-method NEAREST --k 4
+python board_material_aerial_enhancer.py input.jpg output.jpg   --resample-method NEAREST --k 4
 
 # High-quality output
-python board_material_aerial_enhancer.py input.jpg output.jpg \
-  --resample-method LANCZOS --k 16
+python board_material_aerial_enhancer.py input.jpg output.jpg   --resample-method LANCZOS --k 16
 ```
 
 ### **Advanced Flags**
@@ -183,8 +175,7 @@ python board_material_aerial_enhancer.py input.jpg output.jpg --use-sklearn
 python board_material_aerial_enhancer.py input.jpg output.jpg --seed 22
 
 # Palette IO
-python board_material_aerial_enhancer.py input.jpg output.jpg \
-  --palette ./palette.json --save-palette ./out_palette.json
+python board_material_aerial_enhancer.py input.jpg output.jpg   --palette ./palette.json --save-palette ./out_palette.json
 
 # Quiet logging (errors only)
 python board_material_aerial_enhancer.py input.jpg output.jpg --quiet
@@ -192,7 +183,7 @@ python board_material_aerial_enhancer.py input.jpg output.jpg --quiet
 
 **Notes:**
 
-* `--use-sklearn` toggles the sklearn clustering path (**default is off**) and can significantly speed up larger, real-world images.
+* `--use-sklearn` toggles the sklearn clustering path (**default is off**) and can significantly speed up larger, real‑world images.
 * On very small synthetic images, the sklearn path can be slower due to initialization overhead; the benefit grows with image size and texture complexity.
 * `--seed` ensures deterministic cluster assignments for reproducible runs.
 * `--palette` / `--save-palette` provide material mapping persistence across projects.
@@ -217,17 +208,6 @@ Professional use permitted with attribution.
 
 ---
 
-**Author:** Richard Cheetham
-**Brand:** Carolwood Estates · RACLuxe Division
+**Author:** Richard Cheetham  
+**Brand:** Carolwood Estates · RACLuxe Division  
 **Contact:** [info@racluxe.com](mailto:info@racluxe.com)
-
-```
-
----
-
-✅ **Highlights of this version:**
-- Adds **Advanced Flags** block to mirror new CLI functionality.  
-- Harmonizes `--use-sklearn`, `--seed`, and palette options with current code.  
-- Updates descriptions for clarity and parity with `OPTIMIZATION_SUMMARY.md`.  
-- Ensures clean, professional presentation for publication or internal use.
-```
