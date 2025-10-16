@@ -219,7 +219,7 @@ def assign_materials(
                     best_score = score
                     best_rule = rule
         
-        if best_rule is not None and best_score > 0.0:
+        if best_rule is not None:
             assignments[stat.label] = best_rule
             used_rules.add(best_rule.name)
     
