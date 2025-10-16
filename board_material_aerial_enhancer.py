@@ -37,7 +37,7 @@ else:
     from typing import Callable
 
     @dataclass(frozen=True)
-    class MaterialRule:  # minimal stub with extended attributes
+    class MaterialRule:  # Material rule with texture and scoring function
         name: str
         texture: str = ""
         blend: float = 0.8
