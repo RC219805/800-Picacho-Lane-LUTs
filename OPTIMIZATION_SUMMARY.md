@@ -241,7 +241,7 @@ tests/test_board_material_optimizations.py:
 
 ### Created
 1. `tests/test_board_material_optimizations.py` (309 lines)
-2. `docs/board_material_aerial_enhancer_optimizations.md` (3087 characters)
+2. `docs/board_material_aerial_enhancer_optimizations.md` (110 lines)
 3. `examples/benchmark_board_material.py` (149 lines)
 4. `OPTIMIZATION_SUMMARY.md` (this file)
 
