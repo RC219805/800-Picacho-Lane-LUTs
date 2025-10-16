@@ -560,20 +560,35 @@ def apply_materials(
         if not mask.any():
             continue
 
-        # Load and resize texture
+        # Load and resize texture only to the bounding box of the mask
         try:
             texture_img = Image.open(rule.texture).convert("RGB")
-            texture_img = texture_img.resize((base.shape[1], base.shape[0]), Image.Resampling.BILINEAR)
-            texture_array = np.asarray(texture_img, dtype=np.float32) / 255.0
+            # Find bounding box of mask
+            ys, xs = np.where(mask)
+            if len(ys) == 0 or len(xs) == 0:
+                continue
+            y_min, y_max = ys.min(), ys.max()
+            x_min, x_max = xs.min(), xs.max()
+            box_height = y_max - y_min + 1
+            box_width = x_max - x_min + 1
+            # Resize texture to bounding box size
+            texture_resized = texture_img.resize((box_width, box_height), Image.Resampling.BILINEAR)
+            texture_array = np.asarray(texture_resized, dtype=np.float32) / 255.0
         except Exception:
             # Fallback to neutral color if texture can't be loaded
-            texture_array = np.ones_like(base) * 0.5
+            texture_array = np.ones((box_height, box_width, 3), dtype=np.float32) * 0.5
 
-        # Blend texture with base image
-        mask_3d = np.repeat(mask[:, :, None], 3, axis=2)
-        result = np.where(mask_3d,
-                          base * (1.0 - rule.blend) + texture_array * rule.blend,
-                          result)
+        # Blend texture with base image only in bounding box region
+        mask_box = mask[y_min:y_max+1, x_min:x_max+1]
+        base_box = base[y_min:y_max+1, x_min:x_max+1]
+        result_box = result[y_min:y_max+1, x_min:x_max+1]
+        mask_box_3d = np.repeat(mask_box[:, :, None], 3, axis=2)
+        blended = np.where(
+            mask_box_3d,
+            base_box * (1.0 - rule.blend) + texture_array * rule.blend,
+            result_box
+        )
+        result[y_min:y_max+1, x_min:x_max+1] = blended
 
     return result
 
