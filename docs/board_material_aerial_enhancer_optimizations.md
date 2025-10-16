@@ -11,7 +11,7 @@ This document describes the performance optimizations made to `board_material_ae
 **Change**: Replaced custom k-means implementation with `sklearn.cluster.KMeans`
 
 **Benefits**:
-- 10-100x speedup for clustering operations (depending on data size and k value)
+- 2-5x speedup for clustering operations on real-world images (higher speedups possible in synthetic or best-case scenarios)
 - More robust initialization with k-means++ algorithm
 - Better convergence with optimized Lloyd's algorithm
 - Multiple random initializations for more stable results
