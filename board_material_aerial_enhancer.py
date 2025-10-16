@@ -155,7 +155,7 @@ def _downsample_image(image: Image.Image, max_dim: int) -> Image.Image:
     if max(w, h) > max_dim:
         scale = max_dim / max(w, h)
         new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-        return image.resize(new_size, Image.Resampling.BILINEAR)
+        return image.resize(new_size, Image.Resampling.LANCZOS)
     return image.copy()
 
 
