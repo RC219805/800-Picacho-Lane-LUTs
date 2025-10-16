@@ -50,7 +50,8 @@ __all__ = [
     "save_palette_assignments",
     "relabel",
     "enhance_aerial",
-    "apply_materials",  # back-compat symbol expected by tests
+    "apply_materials",   # back-compat expected by tests
+    "assign_materials",  # additional alias expected by tests
 ]
 
 
@@ -143,7 +144,6 @@ def _deserialize_assignments(
                 raise ValueError(f"Palette key is not an int: {sk!r}")
             continue
 
-        # Ensure name maps to a known rule
         rule = by_name.get(name)
         if rule is None:
             if strict:
@@ -359,6 +359,32 @@ def apply_materials(
     Kept intentionally simple/deterministic for CI.
     """
     return enhance_aerial(
+        input_path=input_path,
+        output_path=output_path,
+        k=k,
+        analysis_max=analysis_max,
+        seed=seed,
+        target_width=target_width,
+        palette_path=palette_path,
+        save_palette=save_palette,
+        textures=textures,
+    )
+
+
+def assign_materials(
+    input_path: Path,
+    output_path: Path,
+    *,
+    k: int = 8,
+    analysis_max: int = 1280,
+    seed: int = 22,
+    target_width: int | None = 4096,
+    palette_path: Optional[Path | str] = None,
+    save_palette: Optional[Path | str] = None,
+    textures: Mapping[str, Path] | None = None,
+) -> Path:
+    """Back-compat alias expected by tests."""
+    return apply_materials(
         input_path=input_path,
         output_path=output_path,
         k=k,
