@@ -236,15 +236,15 @@ class TestMemoryEfficiency:
         """Test that processing doesn't create excessive copies."""
         # Create a larger image to test memory efficiency
         image = Image.new("RGB", (500, 500))
-        # Add some variation
-        pixels = image.load()
-        for x in range(500):
-            for y in range(500):
-                pixels[x, y] = (
-                    int(200 + 50 * np.sin(x / 50)),
-                    int(180 + 50 * np.cos(y / 50)),
-                    160
-                )
+        # Add some variation (vectorized for efficiency)
+        x = np.arange(500)
+        y = np.arange(500)
+        xx, yy = np.meshgrid(x, y, indexing='ij')
+        r = 200 + 50 * np.sin(xx / 50)
+        g = 180 + 50 * np.cos(yy / 50)
+        b = np.full_like(r, 160)
+        arr = np.stack([r, g, b], axis=-1).astype(np.uint8)
+        image = Image.fromarray(arr, "RGB")
 
         input_path = tmp_path / "input.png"
         image.save(input_path)
