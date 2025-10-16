@@ -277,7 +277,7 @@ def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10, use_sklearn: b
     """
     start_time = time.time()
 
-    if use_sklearn:
+    if use_sklearn and HAS_SKLEARN:
         # Use scikit-learn's optimized KMeans implementation
         # n_init=10 with explicit init='k-means++' for better initialization
         # This is much faster than the naive implementation
