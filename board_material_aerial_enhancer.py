@@ -390,7 +390,7 @@ def enhance_aerial(
 
     Optimizations:
     - Validates parameters upfront to prevent invalid configurations
-    - Uses scikit-learn's optimized KMeans (10-100x faster than naive implementation)
+    - Uses scikit-learn's optimized KMeans (2-5x faster than naive implementation on real-world images)
     - Minimizes memory copies by reusing arrays where possible
     - Instruments key operations with timing logs for profiling
     - Supports faster resampling methods for quality/speed tradeoff
