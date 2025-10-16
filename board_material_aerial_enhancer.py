@@ -575,7 +575,7 @@ def apply_materials(
             # Resize texture to bounding box size
             texture_resized = texture_img.resize((box_width, box_height), Image.Resampling.BILINEAR)
             texture_array = np.asarray(texture_resized, dtype=np.float32) / 255.0
-        except (OSError, IOError, ValueError):
+        except (OSError, ValueError):
             # Fallback to neutral color if texture can't be loaded
             texture_array = np.ones((box_height, box_width, 3), dtype=np.float32) * 0.5
 
