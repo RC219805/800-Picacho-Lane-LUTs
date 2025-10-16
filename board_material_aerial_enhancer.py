@@ -669,8 +669,9 @@ def enhance_aerial(
 
     alpha = (labels.astype(np.float32) % 3) / 10.0  # 0.0–0.2
     alpha = np.repeat(alpha[:, :, None], 3, axis=2)
-    # Mix in-place-ish for lower memory churn
-    enhanced = (1.0 - alpha) * enhanced + alpha * blurred_np
+    # Mix in-place for lower memory churn
+    enhanced *= (1.0 - alpha)
+    enhanced += alpha * blurred_np
     enhanced = np.clip(enhanced, 0.0, 1.0)
     LOGGER.debug("Enhancement blend in %.3fs", time.perf_counter() - t_enh)
 
