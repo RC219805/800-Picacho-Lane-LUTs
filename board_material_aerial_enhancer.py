@@ -516,7 +516,7 @@ def apply_materials(
                 
                 # Blend texture with base
                 blend = rule.blend
-                mask_3d = np.repeat(mask[:, :, None], 3, axis=2)
+                mask_3d = mask[..., None]
                 output = np.where(mask_3d, 
                                   (1 - blend) * output + blend * tiled,
                                   output)
