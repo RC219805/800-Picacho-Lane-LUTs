@@ -1,25 +1,24 @@
 ````markdown
 [![CI](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/python-app.yml/badge.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
-  [![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/build-passing-success.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs)
 
 # 800 Picacho Lane — Professional LUT Collection
 
 ## Overview
-
 A cutting-edge collection of **16 professional color grading LUTs** featuring innovative **Material Response** technology.
 
 ## Quickstart
-
 Install the package and run your first TIFF enhancement:
-
 ```bash
 pip install picacho-lane-luts
 python luxury_tiff_batch_processor.py input_folder output_folder --preset signature
 ````
 
 For advanced render finishing, see [Material Response Finishing for Neural Renders](#material-response-finishing-for-neural-renders).
+
+---
 
 ## Table of Contents
 
@@ -41,31 +40,34 @@ For advanced render finishing, see [Material Response Finishing for Neural Rende
 * [Decision Decay Dashboard](#decision-decay-dashboard)
 * [License](#license)
 
+---
+
 ## Collection Contents
 
-* **Film Emulation**: Kodak 2393, FilmConvert Nitrate
-* **Location Aesthetic**: Montecito Golden Hour, Spanish Colonial Warm
-* **Material Response**: Revolutionary physics-based surface enhancement
+* **Film Emulation** — Kodak 2393, FilmConvert Nitrate
+* **Location Aesthetic** — Montecito Golden Hour, Spanish Colonial Warm
+* **Material Response** — Revolutionary physics-based surface enhancement
 
 ---
 
 ## Innovation
 
-**Material Response LUTs** analyze and enhance how different surfaces interact with light—shifting from purely global color transforms to surface-aware rendering that respects highlights, midtones, and micro-contrast differently across materials.
+**Material Response LUTs** analyze and enhance how different surfaces interact with light—shifting from global transforms to **surface-aware** rendering that respects highlights, midtones, and micro-contrast differently across materials.
 
 ---
 
 ## Usage
 
-1. Import into DaVinci Resolve, Premiere Pro, or other color-grading software.
-2. Apply at **60–80% opacity** initially.
-3. Stack multiple LUTs for complex material interactions.
+1. Import into DaVinci Resolve, Premiere Pro, or any LUT-capable grading suite.
+2. Apply at **60–80% opacity** for best results.
+3. Stack multiple LUTs for complex surface interactions.
 
 ### Material Response Finishing for Neural Renders
 
-[`lux_render_pipeline.py`](./lux_render_pipeline.py) exposes a **Material Response** finishing layer that reinforces wood grain, textile separation, fireplace warmth, and atmospheric haze directly from the command line. Enable it with `--material-response` to activate detail boosts, contact shadowing, and volumetric tinting that better fuse interior renders with their exterior vistas.
+[`lux_render_pipeline.py`](./lux_render_pipeline.py) adds a **Material Response** finishing layer that enhances wood grain, textiles, fireplace glow, and atmospheric haze.
+Enable with `--material-response` for physically consistent detail boosts and volumetric tinting.
 
-> **Requires:** the `[ml]` extras installed (`pip install -e ".[ml]"`) and a GPU-enabled environment for optimal performance.
+> **Requires:** `[ml]` extras (`pip install -e ".[ml]"`) and a GPU-enabled environment.
 
 Example:
 
@@ -74,7 +76,7 @@ python lux_render_pipeline.py \
   --input bedroom_render.jpg \
   --out ./enhanced_bedroom \
   --prompt "minimalist bedroom interior..." \
-  --material-response --texture-boost 0.28 ...
+  --material-response --texture-boost 0.28
 ```
 
 ---
@@ -83,125 +85,128 @@ python lux_render_pipeline.py \
 
 ### Install Dependencies
 
-* Create a `.venv` (optional but recommended)
+```bash
+python -m pip install .
+# or mirror CI
+python -m pip install -r requirements.txt
+```
 
-* Install the project requirements:
+Optional extras:
 
-  ```bash
-  python -m pip install .
-  ```
-
-  or mirror CI:
-
-  ```bash
-  python -m pip install -r requirements.txt
-  ```
-
-* Add optional extras:
-
-  ```bash
-  pip install -e ".[tiff]"   # 16-bit TIFF processing
-  pip install -e ".[dev]"    # pytest, linting
-  pip install -e ".[ml]"     # ML extras for lux_render_pipeline
-  pip install -e ".[all]"    # everything
-  ```
+```bash
+pip install -e ".[tiff]"   # 16-bit TIFF processing
+pip install -e ".[dev]"    # pytest, linting
+pip install -e ".[ml]"     # ML extras for lux_render_pipeline
+pip install -e ".[all]"    # everything
+```
 
 ### Console Scripts
 
-After installation, the following command-line tools are available:
+After installation, the following CLI tools are available:
 
 * [`luxury_tiff_batch_processor.py`](./luxury_tiff_batch_processor.py) — batch process TIFFs
 * [`luxury_video_master_grader.py`](./luxury_video_master_grader.py) — video grading
 * [`lux_render_pipeline.py`](./lux_render_pipeline.py) — AI-powered render refinement
 * [`decision_decay_dashboard.py`](./decision_decay_dashboard.py) — codebase philosophy audits
 
----
-
 ### Test Shortcuts
-
-Use the bundled Makefile:
 
 ```bash
 make test-fast
 make test-full
 ```
 
-**Tip:** `make ci` runs linting (`flake8`, `pylint`) and fast tests, mirroring GitHub Actions.
+`make ci` runs linting + fast tests (mirrors GitHub Actions).
 
 ---
 
 ## Luxury TIFF Batch Processor
 
-[`luxury_tiff_batch_processor.py`](./luxury_tiff_batch_processor.py) is a high-end workflow for polishing large-format TIFF photography prior to digital launch. It preserves metadata, honors 16-bit source files (via [`tifffile`](https://pypi.org/project/tifffile/)), and layers tonal and chroma refinements tuned for luxury real-estate storytelling.
-
-*(existing TIFF section content continues unchanged)*
+[`luxury_tiff_batch_processor.py`](./luxury_tiff_batch_processor.py) handles **16-bit TIFFs** with color-accurate tonal adjustments and metadata preservation—perfect for high-end marketing imagery.
 
 ---
 
 ## Luxury Video Master Grader
 
-[`luxury_video_master_grader.py`](./luxury_video_master_grader.py) brings the same curated aesthetic to motion content using FFmpeg.
-
-*(existing video section continues unchanged)*
+[`luxury_video_master_grader.py`](./luxury_video_master_grader.py) applies the same cinematic tone and texture treatment to video content using FFmpeg.
 
 ---
 
 ## HDR Production Pipeline
 
-[`hdr_production_pipeline.sh`](./hdr_production_pipeline.sh) orchestrates a full HDR finishing pass, combining ACES tone mapping, adaptive debanding, and halation.
-
-*(existing HDR section continues unchanged)*
+[`hdr_production_pipeline.sh`](./hdr_production_pipeline.sh) orchestrates full HDR finishing, combining ACES tone mapping, adaptive debanding, and halation glow.
 
 ---
 
 ## Board Material Aerial Enhancer
 
-[`board_material_aerial_enhancer.py`](./board_material_aerial_enhancer.py) applies MBAR-approved material palettes to aerials using optimized clustering and texture blending.
+[`board_material_aerial_enhancer.py`](./board_material_aerial_enhancer.py) applies MBAR-approved material palettes to aerials via optimized clustering and texture blending.
 
-**New Performance Features:**
-- Scikit-learn KMeans integration for 2-5x speedup on real-world images
-- Parameter validation to prevent invalid configurations
-- Comprehensive timing instrumentation and logging
-- Memory optimizations with in-place operations
-- Flexible resampling methods for quality/speed tradeoff
+### **New Performance Features**
 
-**Basic Usage:**
+* Optional **scikit-learn KMeans** integration for 2–5× faster clustering (`--use-sklearn`)
+* Strict **parameter validation** to prevent invalid configurations
+* **Comprehensive logging** and timing instrumentation
+* **Memory optimization** using in-place operations
+* **Flexible resampling** for quality/speed trade-offs
+
+### **Basic Usage**
+
 ```bash
-# Quick enhancement with default settings
+# Quick enhancement with defaults
 python board_material_aerial_enhancer.py input.jpg output.jpg
 
-# Custom parameters with verbose logging
+# Verbose logging and custom params
 python board_material_aerial_enhancer.py input.jpg output.jpg \
-  --k 12 \
-  --analysis-max 2048 \
-  --target-width 4096 \
-  --verbose
+  --k 12 --analysis-max 2048 --target-width 4096 --verbose
 ```
 
-**Performance Options:**
+### **Performance Options**
+
 ```bash
-# Fast preview (lower quality, faster)
+# Fast preview (lower quality)
 python board_material_aerial_enhancer.py input.jpg output.jpg \
-  --resample-method NEAREST \
-  --k 4
+  --resample-method NEAREST --k 4
 
-# High quality output
+# High-quality output
 python board_material_aerial_enhancer.py input.jpg output.jpg \
-  --resample-method LANCZOS \
-  --k 16
+  --resample-method LANCZOS --k 16
 ```
+
+### **Advanced Flags**
+
+```bash
+# Enable the sklearn KMeans path (optional speed-up)
+python board_material_aerial_enhancer.py input.jpg output.jpg --use-sklearn
+
+# Reproducibility
+python board_material_aerial_enhancer.py input.jpg output.jpg --seed 22
+
+# Palette IO
+python board_material_aerial_enhancer.py input.jpg output.jpg \
+  --palette ./palette.json --save-palette ./out_palette.json
+
+# Quiet logging (errors only)
+python board_material_aerial_enhancer.py input.jpg output.jpg --quiet
+```
+
+**Notes:**
+
+* `--use-sklearn` toggles the sklearn clustering path for significant performance boosts on large images.
+* `--seed` ensures deterministic cluster assignments for reproducible runs.
+* `--palette` / `--save-palette` provide material mapping persistence across projects.
+* `--quiet` suppresses log output (pair with `--verbose` for full diagnostic mode).
 
 For full documentation, see:
-- [Optimization Guide](./docs/board_material_aerial_enhancer_optimizations.md)
-- [Palette Assignment Guide](./08_Documentation/Palette_Assignment_Guide.md)
+
+* [Optimization Guide](./docs/board_material_aerial_enhancer_optimizations.md)
+* [Palette Assignment Guide](./08_Documentation/Palette_Assignment_Guide.md)
 
 ---
 
 ## Decision Decay Dashboard
 
-[`decision_decay_dashboard.py`](./decision_decay_dashboard.py) surfaces temporal contracts, codebase philosophy violations, and brand color token drift in one terminal dashboard.
-
-*(existing dashboard section continues unchanged)*
+[`decision_decay_dashboard.py`](./decision_decay_dashboard.py) visualizes architectural and stylistic drift across codebases—monitoring time decay in technical decisions and brand cohesion.
 
 ---
 
@@ -219,12 +224,9 @@ Professional use permitted with attribution.
 
 ---
 
-### ✅ Summary of improvements
-- **Badges** (CI, Python, License) → instant credibility and visual hierarchy  
-- **Quickstart** → immediate “time to first success” for users  
-- **ML Prerequisite note** → prevents environment confusion  
-- **Cross-linked scripts** → improved navigation inside the repo  
-- **Author footer** → professional, portfolio-grade presentation  
-
-Once you commit this file, your GitHub README will display as a **polished, release-ready document** suitable for internal stakeholders or public viewing.
+✅ **Highlights of this version:**
+- Adds **Advanced Flags** block to mirror new CLI functionality.  
+- Harmonizes `--use-sklearn`, `--seed`, and palette options with current code.  
+- Updates descriptions for clarity and parity with `OPTIMIZATION_SUMMARY.md`.  
+- Ensures clean, professional presentation for publication or internal use.
 ```
