@@ -25,7 +25,12 @@ from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any
 # --- third-party (kept light) ---
 import numpy as np
 from PIL import Image, ImageFilter
-from sklearn.cluster import KMeans
+try:  # pragma: no cover - optional
+    from sklearn.cluster import KMeans
+    HAS_SKLEARN = True
+except Exception:  # pragma: no cover - optional
+    KMeans = None  # type: ignore
+    HAS_SKLEARN = False
 
 # Optional dependencies (keep soft so CI stays lean)
 try:  # pragma: no cover - optional
