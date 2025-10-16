@@ -476,7 +476,7 @@ def enhance_aerial(
 
     # Apply gentle enhancement (avoid extra copies)
     enhance_start = time.time()
-    enhanced = np.asarray(image, dtype=np.float32)
+    enhanced = np.asarray(image, dtype=np.float32).copy()
     enhanced /= 255.0  # In-place normalization
 
     blurred = image.filter(ImageFilter.GaussianBlur(radius=2))
