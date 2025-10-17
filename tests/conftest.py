@@ -140,12 +140,12 @@ def pytest_configure(config):
         """Apply material textures with blending."""
         output = base.copy()
         
-        for label, rule in materials.items():
-            mask = labels == label
-            if mask.any() and rule.blend > 0:
-                # Apply material blend
-                # Create texture effect (red texture for testing)
-		blend_factor = rule.blend
+for label, rule in materials.items():
+    mask = labels == label
+    if mask.any() and rule.blend > 0:
+        # Apply material blend
+        # Create texture effect (red texture for testing)
+        blend_factor = rule.blend
 
 		# Apply to masked regions (only red channel for testing)
 		if len(output.shape) > 2:
