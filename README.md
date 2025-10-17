@@ -26,10 +26,8 @@ For advanced render finishing, see [Material Response Finishing for Neural Rende
 * [Collection Contents](#collection-contents)
 * [Innovation](#innovation)
 * [Usage](#usage)
-
   * [Material Response Finishing for Neural Renders](#material-response-finishing-for-neural-renders)
 * [Developer Setup](#developer-setup)
-
   * [Install Dependencies](#install-dependencies)
   * [Test Shortcuts](#test-shortcuts)
 * [Luxury TIFF Batch Processor](#luxury-tiff-batch-processor)
@@ -71,7 +69,11 @@ Enable with `--material-response` for physically consistent detail boosts and vo
 Example:
 
 ```bash
-python lux_render_pipeline.py   --input bedroom_render.jpg   --out ./enhanced_bedroom   --prompt "minimalist bedroom interior..."   --material-response --texture-boost 0.28
+python lux_render_pipeline.py \
+  --input bedroom_render.jpg \
+  --out ./enhanced_bedroom \
+  --prompt "minimalist bedroom interior..." \
+  --material-response --texture-boost 0.28
 ```
 
 ---
@@ -137,62 +139,69 @@ make test-full
 
 [`board_material_aerial_enhancer.py`](./board_material_aerial_enhancer.py) applies MBAR-approved material palettes to aerials via optimized clustering and texture blending.
 
-### **New Performance Features**
+### **Performance Features**
 
-* Optional **scikit-learn KMeans** integration for 2–5× faster clustering (`--use-sklearn`)
-* Strict **parameter validation** to prevent invalid configurations
-* **Comprehensive logging** and timing instrumentation
-* **Memory optimization** using in-place operations
-* **Flexible resampling** for quality/speed trade-offs
+* **Built-in k-means clustering** by default (CI-friendly, no extra dependencies)
+* **Optional scikit-learn KMeans** integration for 2–5× faster clustering on complex images (`--use-sklearn`)
+* **Strict parameter validation** to prevent invalid configurations
+* **Comprehensive logging** and timing instrumentation (`--verbose`)
+* **Memory optimization** using in-place operations (20–30% reduction)
+* **Flexible resampling** methods for quality/speed trade-offs (case-insensitive)
 
 ### **Basic Usage**
 
 ```bash
-# Quick enhancement with defaults
+# Quick enhancement with defaults (built-in k-means)
 python board_material_aerial_enhancer.py input.jpg output.jpg
 
 # Verbose logging and custom params
-python board_material_aerial_enhancer.py input.jpg output.jpg   --k 12 --analysis-max 2048 --target-width 4096 --verbose
+python board_material_aerial_enhancer.py input.jpg output.jpg \
+  --k 12 --analysis-max 2048 --target-width 4096 --verbose
 ```
 
 ### **Performance Options**
 
 ```bash
 # Fast preview (lower quality)
-python board_material_aerial_enhancer.py input.jpg output.jpg   --resample-method NEAREST --k 4
+python board_material_aerial_enhancer.py input.jpg output.jpg \
+  --resample-method nearest --k 4
 
-# High-quality output
-python board_material_aerial_enhancer.py input.jpg output.jpg   --resample-method LANCZOS --k 16
+# High-quality output with sklearn acceleration
+python board_material_aerial_enhancer.py input.jpg output.jpg \
+  --resample-method lanczos --k 16 --use-sklearn
 ```
 
 ### **Advanced Flags**
 
 ```bash
-# Enable the sklearn KMeans path (optional speed-up; OFF by default)
+# Enable sklearn KMeans for better performance (requires scikit-learn)
 python board_material_aerial_enhancer.py input.jpg output.jpg --use-sklearn
 
-# Reproducibility
+# Reproducibility with fixed seed
 python board_material_aerial_enhancer.py input.jpg output.jpg --seed 22
 
-# Palette IO
-python board_material_aerial_enhancer.py input.jpg output.jpg   --palette ./palette.json --save-palette ./out_palette.json
+# Palette persistence across projects
+python board_material_aerial_enhancer.py input.jpg output.jpg \
+  --palette ./palette.json --save-palette ./out_palette.json
 
-# Quiet logging (errors only)
+# Quiet mode (errors only) or verbose diagnostics
 python board_material_aerial_enhancer.py input.jpg output.jpg --quiet
+python board_material_aerial_enhancer.py input.jpg output.jpg --verbose
 ```
 
-**Notes:**
+### **Performance Notes**
 
-* `--use-sklearn` toggles the sklearn clustering path (**default is off**) and can significantly speed up larger, real‑world images.
-* On very small synthetic images, the sklearn path can be slower due to initialization overhead; the benefit grows with image size and texture complexity.
-* `--seed` ensures deterministic cluster assignments for reproducible runs.
-* `--palette` / `--save-palette` provide material mapping persistence across projects.
-* `--quiet` suppresses log output (pair with `--verbose` for full diagnostic mode).
+* **Default (built-in k-means)**: No dependencies, deterministic, suitable for CI/CD
+* **With `--use-sklearn`**: 2–5× speedup on real aerial imagery, better clustering quality via k-means++ initialization
+* **Resampling methods**: Case-insensitive (`NEAREST`, `bilinear`, `Lanczos`, etc.)
+* **Small images**: Built-in may be faster due to sklearn's initialization overhead
+* **Large/complex images**: sklearn provides significant performance benefits
 
-For full documentation, see:
+### **Documentation**
 
 * [Optimization Guide](./docs/board_material_aerial_enhancer_optimizations.md)
 * [Palette Assignment Guide](./08_Documentation/Palette_Assignment_Guide.md)
+* [Performance Benchmarks](./benchmark_board_material.py)
 
 ---
 
