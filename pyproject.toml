@@ -50,3 +50,11 @@ disable = [
     "duplicate-code",  # Acceptable for similar processing patterns
     "fixme",  # TODOs are tracked elsewhere
 ]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 88
