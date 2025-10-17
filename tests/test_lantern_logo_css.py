@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CSS_PATH = ROOT / "09_Client_Deliverables" / "Lantern_Logo_Implementation_Kit" / "lantern_logo.css"
+CSS_PATH = (
+    ROOT
+    / "09_Client_Deliverables"
+    / "Lantern_Logo_Implementation_Kit"
+    / "lantern_logo.css"
+)
 
 from .documentation import documents, valid_until
 

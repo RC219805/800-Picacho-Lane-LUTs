@@ -1,4 +1,5 @@
 """Command-line interface wiring for the luxury TIFF batch processor."""
+
 from __future__ import annotations
 
 import argparse
@@ -15,14 +16,10 @@ try:  # pragma: no cover - optional dependency
 except ModuleNotFoundError:  # pragma: no cover - optional dependency
     yaml = None
 
-from .adjustments import AdjustmentSettings, LUXURY_PRESETS
-from .pipeline import (
-    _process_image_worker,
-    _wrap_with_progress,
-    collect_images,
-    ensure_output_path,
-    process_single_image,
-)
+from .adjustments import LUXURY_PRESETS, AdjustmentSettings
+from .pipeline import (_process_image_worker, _wrap_with_progress,
+                       collect_images, ensure_output_path,
+                       process_single_image)
 from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
@@ -38,7 +35,9 @@ def _load_config_data(path: Path) -> Mapping[str, Any]:
     try:
         if suffix in {".yaml", ".yml"}:
             if yaml is None:
-                raise RuntimeError("YAML configuration files require the optional 'pyyaml' dependency")
+                raise RuntimeError(
+                    "YAML configuration files require the optional 'pyyaml' dependency"
+                )
             data = yaml.safe_load(path.read_text())  # type: ignore[no-untyped-call]
         else:
             data = json.loads(path.read_text())
@@ -48,7 +47,9 @@ def _load_config_data(path: Path) -> Mapping[str, Any]:
     if data is None:
         return {}
     if not isinstance(data, Mapping):
-        raise ValueError(f"Configuration file {path} must contain a mapping of option names to values")
+        raise ValueError(
+            f"Configuration file {path} must contain a mapping of option names to values"
+        )
     return data
 
 
@@ -63,13 +64,17 @@ def _normalise_config_keys(raw: Mapping[str, Any]) -> dict[str, Any]:
     return normalised
 
 
-def _build_parser_aliases(parser: argparse.ArgumentParser) -> tuple[dict[str, argparse.Action], dict[str, str]]:
+def _build_parser_aliases(
+    parser: argparse.ArgumentParser,
+) -> tuple[dict[str, argparse.Action], dict[str, str]]:
     """Return lookup tables for actions and their normalised aliases."""
 
     dest_to_action: dict[str, argparse.Action] = {}
     alias_to_dest: dict[str, str] = {}
     # Use public methods to get all actions
-    actions = list(parser._get_positional_actions()) + list(parser._get_optional_actions())
+    actions = list(parser._get_positional_actions()) + list(
+        parser._get_optional_actions()
+    )
     for action in actions:
         if action.dest in {argparse.SUPPRESS, "help", "config"}:
             continue
@@ -150,7 +155,9 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default=None,
         help="Optional configuration file (JSON by default, YAML when 'pyyaml' is installed)",
     )
-    parser.add_argument("input", type=Path, help="Folder that contains source TIFF files")
+    parser.add_argument(
+        "input", type=Path, help="Folder that contains source TIFF files"
+    )
     parser.add_argument(
         "output",
         type=Path,
@@ -196,7 +203,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         default=None,
         help="Optionally resize the longest image edge to this many pixels while preserving aspect ratio",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Preview the work without writing any files")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the work without writing any files",
+    )
     parser.add_argument(
         "--no-progress",
         action="store_true",
@@ -210,7 +221,9 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     )
 
     # Fine control overrides.
-    parser.add_argument("--exposure", type=float, default=None, help="Exposure adjustment in stops")
+    parser.add_argument(
+        "--exposure", type=float, default=None, help="Exposure adjustment in stops"
+    )
     parser.add_argument(
         "--white-balance-temp",
         type=float,
@@ -225,7 +238,9 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         dest="white_balance_tint",
         help="Green-magenta tint compensation (positive skews magenta)",
     )
-    parser.add_argument("--shadow-lift", type=float, default=None, help="Shadow recovery strength (0-1)")
+    parser.add_argument(
+        "--shadow-lift", type=float, default=None, help="Shadow recovery strength (0-1)"
+    )
     parser.add_argument(
         "--highlight-recovery",
         type=float,
@@ -233,11 +248,27 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Highlight compression strength (0-1)",
     )
     parser.add_argument(
-        "--midtone-contrast", type=float, default=None, dest="midtone_contrast", help="Midtone contrast strength"
+        "--midtone-contrast",
+        type=float,
+        default=None,
+        dest="midtone_contrast",
+        help="Midtone contrast strength",
     )
-    parser.add_argument("--vibrance", type=float, default=None, help="Vibrance strength (0-1)")
-    parser.add_argument("--saturation", type=float, default=None, help="Additional saturation multiplier delta")
-    parser.add_argument("--clarity", type=float, default=None, help="Local contrast boost strength (0-1)")
+    parser.add_argument(
+        "--vibrance", type=float, default=None, help="Vibrance strength (0-1)"
+    )
+    parser.add_argument(
+        "--saturation",
+        type=float,
+        default=None,
+        help="Additional saturation multiplier delta",
+    )
+    parser.add_argument(
+        "--clarity",
+        type=float,
+        default=None,
+        help="Local contrast boost strength (0-1)",
+    )
     parser.add_argument(
         "--chroma-denoise",
         type=float,
@@ -246,7 +277,11 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         help="Chrominance denoising amount (0-1)",
     )
     parser.add_argument(
-        "--luxury-glow", type=float, default=None, dest="glow", help="Diffusion glow strength (0-1)"
+        "--luxury-glow",
+        type=float,
+        default=None,
+        dest="glow",
+        help="Diffusion glow strength (0-1)",
     )
 
     parser.add_argument(
@@ -286,7 +321,9 @@ def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
         parser.error("--workers must be a positive integer")
     if args.output is None:
         args.output = default_output_folder(args.input)
-    logging.basicConfig(level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s")
+    logging.basicConfig(
+        level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s"
+    )
     return args
 
 
@@ -310,7 +347,9 @@ def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
         return True
 
     if input_root == output_root:
-        raise SystemExit("Output folder must be different from the input folder to avoid self-overwrites.")
+        raise SystemExit(
+            "Output folder must be different from the input folder to avoid self-overwrites."
+        )
     if _contains(input_root, output_root):
         raise SystemExit(
             "Output folder cannot be located inside the input folder; choose a sibling or separate directory."
@@ -333,7 +372,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
     if not input_root.exists():
         raise FileNotFoundError(f"Input folder not found: {input_root}")
     if not input_root.is_dir():
-        raise SystemExit(f"Input folder '{input_root}' does not exist or is not a directory")
+        raise SystemExit(
+            f"Input folder '{input_root}' does not exist or is not a directory"
+        )
 
     _ensure_non_overlapping(input_root, output_root)
 
@@ -377,7 +418,9 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 create=not args.dry_run,
             )
             if destination.exists() and not args.overwrite and not args.dry_run:
-                LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
+                LOGGER.warning(
+                    "Skipping %s (exists, use --overwrite to replace)", destination
+                )
                 continue
             if args.dry_run:
                 LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
@@ -420,11 +463,15 @@ def run_pipeline(args: argparse.Namespace) -> int:
                     create=not args.dry_run,
                 )
                 if destination.exists() and not args.overwrite and not args.dry_run:
-                    LOGGER.warning("Skipping %s (exists, use --overwrite to replace)", destination)
+                    LOGGER.warning(
+                        "Skipping %s (exists, use --overwrite to replace)", destination
+                    )
                     advance_progress()
                     continue
                 if args.dry_run:
-                    LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
+                    LOGGER.info(
+                        "Dry run: would process %s -> %s", image_path, destination
+                    )
                 futures.append(
                     executor.submit(
                         _process_image_worker,

@@ -23,8 +23,8 @@ from both production scripts and unit tests without additional infrastructure.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Mapping, Optional
-
+from typing import (Any, Callable, Dict, Iterable, Iterator, List, Mapping,
+                    Optional)
 
 Observer = Callable[[Any], float]
 Transform = Callable[[Any], Any]
@@ -128,7 +128,9 @@ class HolographicNode:
         self.quantum_field = EntanglementField()
         self._transforms: List[Transform] = list(transforms or [])
         self.client_aesthetic_profile: Observer = (
-            client_aesthetic_profile if client_aesthetic_profile is not None else lambda _: 0.0
+            client_aesthetic_profile
+            if client_aesthetic_profile is not None
+            else lambda _: 0.0
         )
 
     def add_transform(self, transform: Transform) -> None:
@@ -175,4 +177,3 @@ __all__ = [
     "HolographicNode",
     "Superposition",
 ]
-

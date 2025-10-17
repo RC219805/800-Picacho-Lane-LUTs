@@ -119,7 +119,10 @@ class EmotionalJourney:
         if len(self._moments) < 2:
             return 0.0
         deltas = [
-            abs(getattr(self._moments[idx + 1], attr) - getattr(self._moments[idx], attr))
+            abs(
+                getattr(self._moments[idx + 1], attr)
+                - getattr(self._moments[idx], attr)
+            )
             for idx in range(len(self._moments) - 1)
         ]
         return fmean(deltas)
@@ -145,7 +148,10 @@ class DigitalConsciousness:
     def __init__(self, archetype: str):
         self.archetype = archetype
 
-    def traverse(self, video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney) -> EmotionalJourney:
+    def traverse(
+        self,
+        video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney,
+    ) -> EmotionalJourney:
         if isinstance(video_stream, EmotionalJourney):
             return video_stream
 
@@ -309,7 +315,8 @@ class SyntheticViewer:
         )
 
     def experience_content(
-        self, video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney
+        self,
+        video_stream: Iterable[Mapping[str, float] | JourneyMoment] | EmotionalJourney,
     ) -> ACUScore:
         """Experience a video stream and return the consensus ``ACUScore``."""
 
@@ -322,7 +329,8 @@ class SyntheticViewer:
             self.clone(archetype="futurist_tech_executive"),
         ]
 
-        perspective_scores = [viewer._score_from_journey(journey) for viewer in perspectives]
+        perspective_scores = [
+            viewer._score_from_journey(journey) for viewer in perspectives
+        ]
 
         return self.reach_aesthetic_consensus([primary_score, *perspective_scores])
-

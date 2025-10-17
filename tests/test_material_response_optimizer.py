@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from material_response_optimizer import MaterialAwareEnhancementPlanner, RenderEnhancementPlanner
+from material_response_optimizer import (MaterialAwareEnhancementPlanner,
+                                         RenderEnhancementPlanner)
 
 
 @pytest.fixture(scope="module")
@@ -17,13 +18,17 @@ def blueprint() -> dict:
 
 @pytest.fixture(scope="module")
 def material_blueprint() -> dict:
-    planner = MaterialAwareEnhancementPlanner.from_json(Path("material_response_report.json"))
+    planner = MaterialAwareEnhancementPlanner.from_json(
+        Path("material_response_report.json")
+    )
     return planner.build_blueprint()
 
 
 def test_pool_requires_targeted_luminance(blueprint: dict) -> None:
     pool_entry = next(
-        target for target in blueprint["luminance_strategy"]["targets"] if target["scene"] == "pool"
+        target
+        for target in blueprint["luminance_strategy"]["targets"]
+        if target["scene"] == "pool"
     )
     assert pytest.approx(pool_entry["current"], rel=1e-3) == 0.23
     assert pool_entry["target"] <= 0.32
@@ -32,7 +37,9 @@ def test_pool_requires_targeted_luminance(blueprint: dict) -> None:
 
 
 def test_awe_alignment_sets_explicit_targets(blueprint: dict) -> None:
-    actions = {action["scene"]: action for action in blueprint["awe_alignment"]["actions"]}
+    actions = {
+        action["scene"]: action for action in blueprint["awe_alignment"]["actions"]
+    }
     assert actions["great_room"]["target"] == 0.85
     assert actions["pool"]["target"] == 0.75
 
@@ -47,7 +54,11 @@ def test_comfort_reduction_defined_for_primary_suite(blueprint: dict) -> None:
 def test_hero_surface_texture_targets_present(blueprint: dict) -> None:
     hero_targets = blueprint["texture_dimension_strategy"]["hero_targets"]
     surfaces = {entry["surface"] for entry in hero_targets}
-    assert {"island_waterfall_edge", "stone_feature_wall", "headboard_textile_panel"} <= surfaces
+    assert {
+        "island_waterfall_edge",
+        "stone_feature_wall",
+        "headboard_textile_panel",
+    } <= surfaces
     assert all(entry["target"] == 2.25 for entry in hero_targets)
 
 
@@ -65,7 +76,9 @@ def test_scene_specific_targets_raise_luxury_indices(blueprint: dict) -> None:
     assert any("coastline" in move for move in aerial_plan["moves"])
 
 
-def test_material_integration_targets_material_specifics(material_blueprint: dict) -> None:
+def test_material_integration_targets_material_specifics(
+    material_blueprint: dict,
+) -> None:
     wood_strategy = material_blueprint["material_integration"]["great_room"]
     assert wood_strategy["material"] == "herringbone_oak"
     assert wood_strategy["target_texture_dimension"] == pytest.approx(2.25)
@@ -74,14 +87,20 @@ def test_material_integration_targets_material_specifics(material_blueprint: dic
 
 
 def test_exposure_zones_follow_luminance(material_blueprint: dict) -> None:
-    zones = {zone["scene"]: zone for zone in material_blueprint["exposure_zones"]["zones"]}
+    zones = {
+        zone["scene"]: zone for zone in material_blueprint["exposure_zones"]["zones"]
+    }
     pool_zone = zones["pool"]
     assert pool_zone["ev_adjustment"] == pytest.approx(0.43, abs=1e-2)
     assert any(adj["area"] == "water_surface" for adj in pool_zone["local_adjustments"])
-    assert material_blueprint["exposure_zones"]["global_reference"] == pytest.approx(0.31)
+    assert material_blueprint["exposure_zones"]["global_reference"] == pytest.approx(
+        0.31
+    )
 
 
 def test_shader_settings_include_procedural_variation(material_blueprint: dict) -> None:
-    stone_settings = material_blueprint["shader_settings"]["stone"]["procedural_variation"]
+    stone_settings = material_blueprint["shader_settings"]["stone"][
+        "procedural_variation"
+    ]
     assert stone_settings["count"] == 12
     assert stone_settings["mortar_depth"] == pytest.approx(3.0)

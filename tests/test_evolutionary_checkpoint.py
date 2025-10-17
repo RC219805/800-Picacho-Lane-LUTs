@@ -26,10 +26,7 @@ def test_evolution_not_required_message_when_within_horizon() -> None:
 
     message = checkpoint.evolve_or_alert(today=date(2024, 1, 5))
 
-    assert (
-        message
-        == "STABLE: Current form viable until 2024-01-10"
-    )
+    assert message == "STABLE: Current form viable until 2024-01-10"
 
 
 class _FrozenDate(date):

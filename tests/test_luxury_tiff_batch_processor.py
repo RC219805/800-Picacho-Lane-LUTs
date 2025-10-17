@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, Dict
 
 import pytest
@@ -18,8 +18,8 @@ from PIL import Image, TiffImagePlugin
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import luxury_tiff_batch_processor as ltiff
-import luxury_tiff_batch_processor.pipeline as pipeline
 import luxury_tiff_batch_processor.io_utils as io_utils
+import luxury_tiff_batch_processor.pipeline as pipeline
 
 
 def test_run_pipeline_exposed_in_dunder_all():
@@ -113,6 +113,7 @@ def test_process_single_image_handles_resize_and_metadata(tmp_path: Path):
     arr = np.linspace(0, 255, 4 * 4 * 3, dtype=np.uint8).reshape((4, 4, 3))
     # Suppress deprecated mode parameter warning for cleaner test output
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(arr, mode="RGB")
@@ -166,7 +167,9 @@ def test_process_single_image_profile_overrides_dtype_and_compression(
 
     def spy_save_image(destination, arr_int, dtype, metadata, icc_profile, compression):
         captured_compressions.append(compression)
-        return original_save_image(destination, arr_int, dtype, metadata, icc_profile, compression)
+        return original_save_image(
+            destination, arr_int, dtype, metadata, icc_profile, compression
+        )
 
     monkeypatch.setattr(pipeline, "save_image", spy_save_image)
 
@@ -185,7 +188,9 @@ def test_process_single_image_profile_overrides_dtype_and_compression(
     assert captured_compressions == ["tiff_lzw", "tiff_lzw", "tiff_jpeg"]
 
 
-def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_process_single_image_cleanup_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     source_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     source_dir.mkdir()
@@ -228,7 +233,9 @@ def test_process_single_image_cleanup_on_failure(tmp_path: Path, monkeypatch: py
     assert temp_artifacts == []
 
 
-def test_save_image_round_trip_la_mode_pillow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_save_image_round_trip_la_mode_pillow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(io_utils, "tifffile", None)
 
     luminance = np.arange(16, dtype=np.uint8).reshape((4, 4))
@@ -236,7 +243,14 @@ def test_save_image_round_trip_la_mode_pillow(tmp_path: Path, monkeypatch: pytes
     arr = np.stack([luminance, alpha], axis=2)
 
     destination = tmp_path / "la.tif"
-    ltiff.save_image(destination, arr, arr.dtype, metadata=None, icc_profile=None, compression="tiff_lzw")
+    ltiff.save_image(
+        destination,
+        arr,
+        arr.dtype,
+        metadata=None,
+        icc_profile=None,
+        compression="tiff_lzw",
+    )
 
     with Image.open(destination) as image:
         assert image.mode == "LA"
@@ -283,12 +297,14 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
     for index in range(3):
         _create_sample_image(input_dir / f"frame_{index}.tif")
 
-    args = ltiff.parse_args([
-        str(input_dir),
-        str(output_dir),
-        "--workers",
-        "2",
-    ])
+    args = ltiff.parse_args(
+        [
+            str(input_dir),
+            str(output_dir),
+            "--workers",
+            "2",
+        ]
+    )
 
     processed = ltiff.run_pipeline(args)
 
@@ -335,7 +351,9 @@ def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
 
     _create_sample_image(input_dir / "frame.tif")
 
-    args = ltiff.parse_args([str(input_dir), str(output_dir), "--dry-run", "--no-progress"])
+    args = ltiff.parse_args(
+        [str(input_dir), str(output_dir), "--dry-run", "--no-progress"]
+    )
 
     calls = {"called": False}
 
@@ -350,7 +368,9 @@ def test_run_pipeline_no_progress_flag(tmp_path: Path, monkeypatch):
     assert calls["called"] is False
 
 
-def test_run_pipeline_supports_legacy_resize_target(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_run_pipeline_supports_legacy_resize_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     input_dir.mkdir()
@@ -388,13 +408,19 @@ def test_collect_images_handles_recursive(tmp_path):
     (nested / "inner.tiff").write_bytes(b"inner")
     (nested / "ignore.jpg").write_bytes(b"jpg")
 
-    non_recursive = sorted(p.relative_to(input_root) for p in ltiff.collect_images(input_root, recursive=False))
+    non_recursive = sorted(
+        p.relative_to(input_root)
+        for p in ltiff.collect_images(input_root, recursive=False)
+    )
     assert non_recursive == [
         Path("top.tif"),
         Path("upper.TIFF"),
     ]
 
-    recursive = sorted(p.relative_to(input_root) for p in ltiff.collect_images(input_root, recursive=True))
+    recursive = sorted(
+        p.relative_to(input_root)
+        for p in ltiff.collect_images(input_root, recursive=True)
+    )
     assert recursive == [
         Path("nested/inner.tiff"),
         Path("top.tif"),
@@ -432,7 +458,9 @@ def test_run_pipeline_rejects_nested_output(tmp_path: Path):
     with pytest.raises(SystemExit) as excinfo:
         ltiff.run_pipeline(args)
 
-    assert "Output folder cannot be located inside the input folder" in str(excinfo.value)
+    assert "Output folder cannot be located inside the input folder" in str(
+        excinfo.value
+    )
 
 
 def test_run_pipeline_rejects_input_nested_in_output(tmp_path: Path):
@@ -445,7 +473,9 @@ def test_run_pipeline_rejects_input_nested_in_output(tmp_path: Path):
     with pytest.raises(SystemExit) as excinfo:
         ltiff.run_pipeline(args)
 
-    assert "Input folder cannot be located inside the output folder" in str(excinfo.value)
+    assert "Input folder cannot be located inside the output folder" in str(
+        excinfo.value
+    )
 
 
 @documents("User overrides cascade atop curated presets without drift")
@@ -525,7 +555,9 @@ def test_build_adjustments_rejects_invalid_override(tmp_path):
         ltiff.build_adjustments(args)
 
 
-@documents("Golden Hour Courtyard preset translates coastal warm scene guidance into defaults")
+@documents(
+    "Golden Hour Courtyard preset translates coastal warm scene guidance into defaults"
+)
 def test_golden_hour_courtyard_preset_matches_material_response_brief():
     preset = ltiff.LUXURY_PRESETS["golden_hour_courtyard"]
 
@@ -552,6 +584,7 @@ def test_image_roundtrip_uint16_with_alpha():
     # This is the expected behavior, not a bug
     # We need to specify mode="RGBA" for uint16 data, though it's deprecated
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         image = Image.fromarray(data, mode="RGBA")
