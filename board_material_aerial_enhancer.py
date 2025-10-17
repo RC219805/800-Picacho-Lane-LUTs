@@ -329,7 +329,7 @@ def _deserialize_assignments(
                 raise ValueError(f"Palette key is not an int: {sk!r}")
             continue
 
-        #   rule lookup
+        # Rule lookup.
         rule = by_name.get(name)
         if rule is None:
             if strict:
