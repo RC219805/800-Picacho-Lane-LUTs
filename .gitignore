@@ -31,8 +31,10 @@ test_env/
 *.swo
 
 # OS
+**/.DS_Store
 .DS_Store
 Thumbs.db
+.bash_history
 
 # Project specific
 *.tiff

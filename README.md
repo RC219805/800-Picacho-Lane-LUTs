@@ -174,7 +174,7 @@ For full documentation, see [Palette Assignment Guide](./08_Documentation/Palett
 
 ## License
 
-Professional use permitted with attribution.
+Distributed under the [MIT License](./LICENSE). Commercial and private use are permitted in accordance with the license terms.
 
 ---
 
