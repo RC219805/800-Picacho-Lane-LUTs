@@ -1,4 +1,5 @@
 """Generate a visualization showing MBAR material assignments for the aerial."""
+
 from pathlib import Path
 import sys
 import numpy as np
@@ -17,7 +18,9 @@ from board_material_aerial_enhancer import (
 )
 
 # Load the input image
-input_path = Path("/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tiff")
+input_path = Path(
+    "/workspaces/800-Picacho-Lane-LUTs/input_images/RC-office750Picacho_Aerial.tiff"
+)
 image = Image.open(input_path).convert("RGB")
 base_array = np.asarray(image, dtype=np.float32) / 255.0
 
@@ -92,7 +95,9 @@ viz_img = Image.fromarray(viz_array)
 
 # Add legend
 legend_height = 400
-legend_img = Image.new("RGB", (viz_img.width, viz_img.height + legend_height), (255, 255, 255))
+legend_img = Image.new(
+    "RGB", (viz_img.width, viz_img.height + legend_height), (255, 255, 255)
+)
 legend_img.paste(viz_img, (0, 0))
 
 draw = ImageDraw.Draw(legend_img)
@@ -112,7 +117,7 @@ for label, rule in assignments.items():
         fill=colors[label],
         outline=(0, 0, 0),
     )
-    
+
     # Draw material name
     text = f"{rule.name.upper()} (Cluster {label})"
     draw.text((x_offset + box_size + 15, y_offset + 5), text, fill=(0, 0, 0))
@@ -134,7 +139,9 @@ if unassigned:
         y_offset += 45
 
 # Save visualization
-output_path = Path("/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Material_Assignment_Map.jpg")
+output_path = Path(
+    "/workspaces/800-Picacho-Lane-LUTs/processed_images/750_Picacho_Material_Assignment_Map.jpg"
+)
 legend_img.save(output_path, quality=95)
 
 print(f"✅ Material assignment map saved to: {output_path}")

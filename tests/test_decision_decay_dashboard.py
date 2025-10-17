@@ -5,10 +5,12 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from codebase_philosophy_auditor import Violation
-from decision_decay_dashboard import (collect_color_token_report,
-                                      collect_outdated_valid_until_records,
-                                      collect_philosophy_violations,
-                                      collect_valid_until_records)
+from decision_decay_dashboard import (
+    collect_color_token_report,
+    collect_outdated_valid_until_records,
+    collect_philosophy_violations,
+    collect_valid_until_records,
+)
 
 
 def test_collect_valid_until_records_sorted(tmp_path):

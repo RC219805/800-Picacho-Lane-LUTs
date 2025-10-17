@@ -34,6 +34,7 @@ except Exception:  # pragma: no cover - optional
 if TYPE_CHECKING:  # pragma: no cover
     from material_response import MaterialRule  # type: ignore
 else:
+
     @dataclass(frozen=True)
     class MaterialRule:  # minimal stub
         name: str
@@ -50,7 +51,7 @@ __all__ = [
     "save_palette_assignments",
     "relabel",
     "enhance_aerial",
-    "apply_materials",   # back-compat expected by tests
+    "apply_materials",  # back-compat expected by tests
     "assign_materials",  # additional alias expected by tests
 ]
 
@@ -59,9 +60,11 @@ __all__ = [
 # Cluster statistics (exported for tests)
 # --------------------------
 
+
 @dataclass(frozen=True)
 class ClusterStats:
     """Statistics for a single color cluster in the aerial image."""
+
     label: int
     count: int
     centroid: tuple[float, float, float]  # (r,g,b) in [0,1]
@@ -196,7 +199,9 @@ def _atomic_write_text(path: Path, text: str) -> None:
     tmp.replace(path)
 
 
-def save_palette_assignments(assignments: Mapping[int, "MaterialRule"], path: str | Path) -> None:
+def save_palette_assignments(
+    assignments: Mapping[int, "MaterialRule"], path: str | Path
+) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     payload = _serialize_assignments(assignments)
@@ -208,7 +213,10 @@ def save_palette_assignments(assignments: Mapping[int, "MaterialRule"], path: st
 # Texture & image helpers
 # --------------------------
 
-def _validate_texture(path: str | Path, size_hint: tuple[int, int] | None = None) -> Image.Image:
+
+def _validate_texture(
+    path: str | Path, size_hint: tuple[int, int] | None = None
+) -> Image.Image:
     """
     Open a texture (RGBA) or return a deterministic neutral fallback if missing.
     """
@@ -227,6 +235,7 @@ def _validate_texture(path: str | Path, size_hint: tuple[int, int] | None = None
 # --------------------------
 # Lightweight k-means
 # --------------------------
+
 
 def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
     """
@@ -250,7 +259,10 @@ def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
 # Public utilities
 # --------------------------
 
-def relabel(assignments: Mapping[int, "MaterialRule"], labels: np.ndarray) -> np.ndarray:
+
+def relabel(
+    assignments: Mapping[int, "MaterialRule"], labels: np.ndarray
+) -> np.ndarray:
     """
     Optionally remap labels to a stable order based on material names.
     If no mapping needed, returns labels unchanged.
@@ -301,7 +313,9 @@ def enhance_aerial(
     flat = analysis_array.reshape(-1, 3)
 
     labels_small = _kmeans(flat, k=k, seed=seed).astype(np.uint8)
-    labels_small = labels_small.reshape(analysis_image.size[1], analysis_image.size[0])  # (H,W)
+    labels_small = labels_small.reshape(
+        analysis_image.size[1], analysis_image.size[0]
+    )  # (H,W)
 
     labels_small_img = Image.fromarray(labels_small, mode="L")
     labels_full = labels_small_img.resize(image.size, Image.Resampling.NEAREST)
@@ -325,7 +339,9 @@ def enhance_aerial(
     alpha = np.repeat(alpha[:, :, None], 3, axis=2)
     enhanced = (1.0 - alpha) * enhanced + alpha * blurred_np
 
-    out_img = Image.fromarray((np.clip(enhanced, 0.0, 1.0) * 255.0 + 0.5).astype("uint8"), mode="RGB")
+    out_img = Image.fromarray(
+        (np.clip(enhanced, 0.0, 1.0) * 255.0 + 0.5).astype("uint8"), mode="RGB"
+    )
     if target_width and out_img.width != target_width:
         tw = int(target_width)
         th = int(round(out_img.height * (tw / out_img.width)))
@@ -401,16 +417,38 @@ def assign_materials(
 # CLI
 # --------------------------
 
+
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path, help="Path to the base aerial image")
     parser.add_argument("output", type=Path, help="Destination image path")
-    parser.add_argument("--analysis-max", type=int, default=1280, help="Max dimension for clustering image (default: 1280)")
-    parser.add_argument("--k", type=int, default=8, help="Number of clusters (default: 8)")
-    parser.add_argument("--seed", type=int, default=22, help="Random seed (default: 22)")
-    parser.add_argument("--target-width", type=int, default=4096, help="Output width (default: 4096)")
-    parser.add_argument("--palette", type=Path, default=None, help="Load cluster→material assignments from JSON")
-    parser.add_argument("--save-palette", type=Path, default=None, help="Write JSON palette to this path after processing")
+    parser.add_argument(
+        "--analysis-max",
+        type=int,
+        default=1280,
+        help="Max dimension for clustering image (default: 1280)",
+    )
+    parser.add_argument(
+        "--k", type=int, default=8, help="Number of clusters (default: 8)"
+    )
+    parser.add_argument(
+        "--seed", type=int, default=22, help="Random seed (default: 22)"
+    )
+    parser.add_argument(
+        "--target-width", type=int, default=4096, help="Output width (default: 4096)"
+    )
+    parser.add_argument(
+        "--palette",
+        type=Path,
+        default=None,
+        help="Load cluster→material assignments from JSON",
+    )
+    parser.add_argument(
+        "--save-palette",
+        type=Path,
+        default=None,
+        help="Write JSON palette to this path after processing",
+    )
     return parser.parse_args(argv)
 
 

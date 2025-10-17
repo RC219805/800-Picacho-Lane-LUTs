@@ -4,8 +4,12 @@ import math
 
 import pytest
 
-from holographic_node import (EntanglementField, GlobalSystemState,
-                              HolographicNode, Superposition)
+from holographic_node import (
+    EntanglementField,
+    GlobalSystemState,
+    HolographicNode,
+    Superposition,
+)
 
 
 def test_global_state_notifies_subscribers():

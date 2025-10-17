@@ -2,8 +2,7 @@ import pytest
 
 pytest.importorskip("numpy")
 
-from luxury_tiff_batch_processor import (LuxuryGradeException,
-                                         ProcessingCapabilities)
+from luxury_tiff_batch_processor import LuxuryGradeException, ProcessingCapabilities
 
 
 class _StubTiffFile:

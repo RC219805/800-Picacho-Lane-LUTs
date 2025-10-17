@@ -17,12 +17,14 @@ from __future__ import annotations
 try:  # keep tests importable without typer
     import typer  # type: ignore
 except Exception:  # pragma: no cover
+
     class _TyperShim:
         def __getattr__(self, _):
             raise RuntimeError(
                 "CLI features require the optional dependency 'typer'. "
                 "Library functions can be imported without it."
             )
+
     typer = _TyperShim()  # type: ignore
 # -------------------------------------------------------------------------------------
 
@@ -62,11 +64,11 @@ def _from_numpy_rgb(arr: np.ndarray, mode: str = "RGB") -> Image.Image:
 def apply_material_response_finishing(
     image: Union[Image.Image, np.ndarray, str, Path],
     *,
-    exposure: float = 0.0,         # stops; + means brighter
-    contrast: float = 1.0,         # 1.0 no change
-    saturation: float = 1.0,       # 1.0 no change
-    clamp_low: float = 0.0,        # 0..1
-    clamp_high: float = 1.0,       # 0..1
+    exposure: float = 0.0,  # stops; + means brighter
+    contrast: float = 1.0,  # 1.0 no change
+    saturation: float = 1.0,  # 1.0 no change
+    clamp_low: float = 0.0,  # 0..1
+    clamp_high: float = 1.0,  # 0..1
     out_mode: str = "RGB",
 ) -> Image.Image:
     """
@@ -85,7 +87,7 @@ def apply_material_response_finishing(
 
     # Exposure (approximate linear multiply)
     arr = _to_numpy_rgb(pil)
-    mul = float(2.0 ** exposure)
+    mul = float(2.0**exposure)
     arr = np.clip(arr * mul, 0.0, 1.0)
 
     # Clamp (in normalized space)
@@ -109,6 +111,7 @@ def apply_material_response_finishing(
 # --------------------------
 # CLI (only built when executed as a script)
 # --------------------------
+
 
 def _build_cli_app():
     # Local import ensures `typer` is only required when using the CLI

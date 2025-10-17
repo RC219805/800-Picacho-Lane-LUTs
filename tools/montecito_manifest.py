@@ -59,17 +59,13 @@ def build_parser() -> argparse.ArgumentParser:
             "Generate a CSV manifest (filename, bytes, md5) for an output directory."
         )
     )
-    parser.add_argument(
-        "root",
-        type=Path,
-        help="Root directory to scan for files."
-    )
+    parser.add_argument("root", type=Path, help="Root directory to scan for files.")
     parser.add_argument(
         "destination",
         nargs="?",
         type=Path,
         default=Path("manifest.csv"),
-        help="Where to write the manifest (defaults to ./manifest.csv)."
+        help="Where to write the manifest (defaults to ./manifest.csv).",
     )
     return parser
 

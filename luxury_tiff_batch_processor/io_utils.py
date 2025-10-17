@@ -414,7 +414,9 @@ def sanitize_tiff_metadata(raw_metadata: Optional[Any]) -> Optional[Dict[int, An
     return safe or None
 
 
-def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int, Any, bool]]:
+def _metadata_to_extratag(
+    tag: int, value: Any
+) -> Optional[tuple[int, str, int, Any, bool]]:
     """Convert a metadata entry to a tifffile extratag tuple when possible."""
 
     try:
@@ -450,7 +452,9 @@ def _metadata_to_extratag(tag: int, value: Any) -> Optional[tuple[int, str, int,
     if isinstance(value, float):
         return (tag_int, "d", 1, value, False)
 
-    LOGGER.debug("Unsupported TIFF metadata value type for tag %r: %s", tag, type(value).__name__)
+    LOGGER.debug(
+        "Unsupported TIFF metadata value type for tag %r: %s", tag, type(value).__name__
+    )
     return None
 
 
@@ -471,9 +475,13 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
     writer_compression = compression_for_tifffile(compression)
     lzw_requires_codec = writer_compression in {"lzw", "jpeg"} and imagecodecs is None
 
-    use_tifffile = tifffile is not None and not lzw_requires_codec and (
-        (dtype_info is not None and dtype_info.bits >= 16)
-        or np.issubdtype(np_dtype, np.floating)
+    use_tifffile = (
+        tifffile is not None
+        and not lzw_requires_codec
+        and (
+            (dtype_info is not None and dtype_info.bits >= 16)
+            or np.issubdtype(np_dtype, np.floating)
+        )
     )
 
     array_to_write = arr_int

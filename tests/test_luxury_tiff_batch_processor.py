@@ -317,7 +317,9 @@ def test_run_pipeline_parallel_execution(tmp_path: Path):
     assert outputs == [f"frame_{i}_lux.tif" for i in range(3)]
 
 
-def test_run_pipeline_invokes_progress_wrapper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_run_pipeline_invokes_progress_wrapper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
     input_dir.mkdir()
@@ -538,7 +540,9 @@ def test_adjustment_settings_validation_accepts_reasonable_ranges():
         {"white_balance_temp": 40000},
     ],
 )
-def test_adjustment_settings_validation_rejects_invalid_ranges(kwargs: Dict[str, float] | Dict[str, int]):
+def test_adjustment_settings_validation_rejects_invalid_ranges(
+    kwargs: Dict[str, float] | Dict[str, int],
+):
     with pytest.raises(ValueError):
         ltiff.AdjustmentSettings(**kwargs)
 
