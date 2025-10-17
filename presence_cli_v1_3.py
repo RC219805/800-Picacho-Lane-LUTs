@@ -38,7 +38,7 @@ def _sha256_file(path):
     return h.digest()
 
 
-def measure_image(path: str, aspect: str = "4:5") -> Dict[str, float]:
+def measure_image(path: str, aspect: str="4:5") -> Dict[str,float]:
     """Heuristic measurement for eye-line and side gutters (no face model required).
     - Eye-line: finds strongest horizontal gradient row in the central band in a plausible range,
       then blends with the target prior (0.27 for 4:5; 0.36 for 2:3) for robustness.
@@ -126,14 +126,9 @@ def measure_image(path: str, aspect: str = "4:5") -> Dict[str, float]:
     }
 
 
-def verify_manifest(
-    manifest_path: str,
-    hero: str = None,
-    web: str = None,
-    public_key: str = None,
-    signature_path: str = None,
-    require_signature: bool = False,
-) -> Tuple[bool, str]:
+def verify_manifest(manifest_path: str, hero: str=None, web: str=None,
+                    public_key: str=None, signature_path: str=None,
+                    require_signature: bool=False) -> Tuple[bool, str]:
     """Consent gating + optional signature verification.
     PASS only if: consent.status == 'granted' AND 'detect' in consent.scope.
     If require_signature, also verifies Ed25519 signature over JSON payload of sha256 files.
@@ -218,6 +213,7 @@ def main():
         else:
             print("FAIL:", msg)
             sys.exit(2)
+
 
 
 if __name__ == "__main__":
