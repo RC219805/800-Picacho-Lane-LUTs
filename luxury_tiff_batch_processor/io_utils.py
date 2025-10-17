@@ -1,4 +1,5 @@
 """I/O primitives and capability helpers for the luxury TIFF pipeline."""
+
 from __future__ import annotations
 
 import contextlib
@@ -166,7 +167,9 @@ class FloatDynamicRange:
             return None
 
         scale_recip = np.where(scales == 0.0, 1.0, 1.0 / scales).astype(np.float32)
-        return cls(offset=offsets, scale=scales.astype(np.float32), scale_recip=scale_recip)
+        return cls(
+            offset=offsets, scale=scales.astype(np.float32), scale_recip=scale_recip
+        )
 
     @staticmethod
     def _prepare(arr: np.ndarray) -> Tuple[np.ndarray, bool]:
@@ -260,7 +263,11 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
             color_data = arr[:, :, :base_channels]
 
     color_float = color_data.astype(np.float32, copy=False)
-    alpha_float = alpha_channel.astype(np.float32, copy=False) if alpha_channel is not None else None
+    alpha_float = (
+        alpha_channel.astype(np.float32, copy=False)
+        if alpha_channel is not None
+        else None
+    )
 
     float_norm: Optional[FloatDynamicRange] = None
     if np.issubdtype(color_data.dtype, np.integer):
@@ -297,7 +304,11 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
     result = ImageToFloatResult(
         array=np.ascontiguousarray(working, dtype=np.float32),
         dtype=np.dtype(color_data.dtype),
-        alpha=None if alpha_float is None else np.ascontiguousarray(alpha_float, dtype=np.float32),
+        alpha=(
+            None
+            if alpha_float is None
+            else np.ascontiguousarray(alpha_float, dtype=np.float32)
+        ),
         base_channels=base_channels,
         float_normalisation=float_norm,
     )
@@ -518,7 +529,12 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
             alpha8 = converted[..., 3]
             converted = np.concatenate([rgb8, alpha8[:, :, None]], axis=2)
         array_to_write = converted
-    elif dtype_info and dtype_info.bits < 16 and array_to_write.ndim == 3 and array_to_write.shape[2] > 3:
+    elif (
+        dtype_info
+        and dtype_info.bits < 16
+        and array_to_write.ndim == 3
+        and array_to_write.shape[2] > 3
+    ):
         array_to_write = array_to_write.astype(np.uint8)
 
     if array_to_write.ndim == 3 and array_to_write.shape[2] == 4:

@@ -1,54 +1,45 @@
 # Python
+*.pyc
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyo
+*.pyd
 .Python
-build/
-dist/
-.eggs/
+*.so
+*.egg
 *.egg-info/
-MANIFEST
+dist/
+build/
 
-# Environments
-.env
-.venv
-env/
+# Testing
+.coverage
+coverage.xml
+*.cover
+.pytest_cache/
+.tox/
+
+# Virtual environments
 venv/
 ENV/
-env.bak/
-venv.bak/
+env/
+.venv/
+test_env/
 
-# Jupyter
-.ipynb_checkpoints/
-
-# IDEs
-.idea/
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# macOS
+# OS
 .DS_Store
-*/.DS_Store
-.AppleDouble
-.LSOverride
-Icon?
-._*
-.Trashes
+Thumbs.db
 
-# Testing / coverage
-.tox/
-.nox/
-.cache
-pytestdebug.log
-htmlcov/
-
-# Logs
+# Project specific
+*.tiff
+*.tif
 *.log
-*.out
+.cache/
 
-# Temp / outputs
-tmp/
-temp/
-logs/
-output/
-artifacts/
+# Temporary files
+*.tmp
+*~

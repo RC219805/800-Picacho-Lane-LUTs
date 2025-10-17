@@ -1,4 +1,5 @@
 """Core processing helpers shared between the CLI and integrations."""
+
 from __future__ import annotations
 
 import contextlib
@@ -10,13 +11,10 @@ import numpy as np
 from PIL import Image
 
 from .adjustments import AdjustmentSettings, apply_adjustments
-from .io_utils import (
-    ProcessingContext,
-    float_to_dtype_array,
-    image_to_float,
-    save_image,
-)
-from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES, ProcessingProfile
+from .io_utils import (ProcessingContext, float_to_dtype_array, image_to_float,
+                       save_image)
+from .profiles import (DEFAULT_PROFILE_NAME, PROCESSING_PROFILES,
+                       ProcessingProfile)
 
 
 def _ensure_profile(profile: ProcessingProfile | None) -> ProcessingProfile:
@@ -219,7 +217,9 @@ def _process_image_worker(
             WORKER_LOGGER.info("Dry run enabled, skipping save for %s", destination)
             return False
         with ProcessingContext(destination) as staged_path:
-            save_image(staged_path, arr_int, target_dtype, metadata, icc_profile, compression)
+            save_image(
+                staged_path, arr_int, target_dtype, metadata, icc_profile, compression
+            )
     return True
 
 

@@ -34,7 +34,6 @@ from typing import Any, Mapping, Optional, Sequence, Union
 import numpy as np
 from PIL import Image, ImageEnhance
 
-
 __all__ = [
     "apply_material_response_finishing",
 ]

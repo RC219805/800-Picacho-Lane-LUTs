@@ -112,27 +112,31 @@ def _compute_metrics(original: Image.Image, candidate: Image.Image) -> ImageMetr
     )
 
 
-def _save_diff(original: Image.Image, candidate: Image.Image, destination: Path) -> None:
+def _save_diff(
+    original: Image.Image, candidate: Image.Image, destination: Path
+) -> None:
     diff = ImageChops.difference(original, candidate)
     destination.parent.mkdir(parents=True, exist_ok=True)
     diff.save(destination)
 
 
-def _validate_thresholds(metrics: ImageMetrics, args: argparse.Namespace) -> Iterable[str]:
+def _validate_thresholds(
+    metrics: ImageMetrics, args: argparse.Namespace
+) -> Iterable[str]:
     if args.max_pixel_change is not None and metrics.max_delta > args.max_pixel_change:
         yield (
             f"Maximum pixel delta {metrics.max_delta} exceeds"
             f" --max-pixel-change {args.max_pixel_change}"
         )
-    if args.max_color_count is not None and metrics.candidate_colors > args.max_color_count:
+    if (
+        args.max_color_count is not None
+        and metrics.candidate_colors > args.max_color_count
+    ):
         yield (
             f"Candidate color count {metrics.candidate_colors} exceeds"
             f" --max-color-count {args.max_color_count}"
         )
-    if (
-        args.max_color_delta is not None
-        and metrics.color_delta > args.max_color_delta
-    ):
+    if args.max_color_delta is not None and metrics.color_delta > args.max_color_delta:
         yield (
             f"Color count delta {metrics.color_delta} exceeds"
             f" --max-color-delta {args.max_color_delta}"
@@ -172,7 +176,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional path to write a channel-difference visualization",
     )
     parser.add_argument(
-        "--json", type=Path, default=None, help="Optional path to export metrics as JSON"
+        "--json",
+        type=Path,
+        default=None,
+        help="Optional path to export metrics as JSON",
     )
     parser.add_argument(
         "--max-pixel-change",

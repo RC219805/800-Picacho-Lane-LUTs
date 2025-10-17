@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date
 from functools import wraps
-from collections.abc import Iterable
 from typing import Callable, TypeVar, cast
 
 F = TypeVar("F", bound=Callable[..., object])
@@ -80,9 +80,7 @@ def valid_until(iso_date: str, *, reason: str) -> Callable[[F], F]:
                 )
             return func(*args, **kwargs)
 
-        wrapper.__doc__ = (
-            note if func.__doc__ is None else f"{note}\n{func.__doc__}"
-        )
+        wrapper.__doc__ = note if func.__doc__ is None else f"{note}\n{func.__doc__}"
         return cast(F, wrapper)
 
     return decorator

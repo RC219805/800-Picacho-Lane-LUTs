@@ -109,7 +109,9 @@ class TemporalEvolutionRoadmap:
                 raise TypeError("Discipline names must not be empty")
 
             normalized = _normalise_directives(name, directives)
-            disciplines.append(EvolutionDiscipline(name=name, directives=tuple(normalized)))
+            disciplines.append(
+                EvolutionDiscipline(name=name, directives=tuple(normalized))
+            )
 
         return cls(disciplines=tuple(disciplines))
 
@@ -121,7 +123,9 @@ class TemporalEvolutionRoadmap:
     def serialise(self) -> dict[str, list[str | dict[str, str]]]:
         """Return a serialisable representation of the roadmap."""
 
-        return {discipline.name: discipline.serialise() for discipline in self.disciplines}
+        return {
+            discipline.name: discipline.serialise() for discipline in self.disciplines
+        }
 
 
 def _normalise_directives(name: str, directives: object) -> List[EvolutionDirective]:

@@ -1,4 +1,5 @@
 """Processing profile definitions for balancing fidelity and throughput."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

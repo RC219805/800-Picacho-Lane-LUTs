@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import argparse
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,11 @@ def test_process_courtyard_scene_invokes_pipeline(monkeypatch, tmp_path):
     def fake_parse_args(argv: list[str]) -> argparse.Namespace:
         captured["argv"] = list(argv)
         namespace.input = Path(argv[0])
-        namespace.output = Path(argv[1]) if len(argv) > 1 and not argv[1].startswith("--") else Path("out")
+        namespace.output = (
+            Path(argv[1])
+            if len(argv) > 1 and not argv[1].startswith("--")
+            else Path("out")
+        )
         namespace.preset = "golden_hour_courtyard"
         namespace.recursive = False
         namespace.suffix = "_lux"

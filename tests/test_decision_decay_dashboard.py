@@ -4,14 +4,11 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-
-from decision_decay_dashboard import (
-    collect_color_token_report,
-    collect_outdated_valid_until_records,
-    collect_philosophy_violations,
-    collect_valid_until_records,
-)
 from codebase_philosophy_auditor import Violation
+from decision_decay_dashboard import (collect_color_token_report,
+                                      collect_outdated_valid_until_records,
+                                      collect_philosophy_violations,
+                                      collect_valid_until_records)
 
 
 def test_collect_valid_until_records_sorted(tmp_path):
@@ -22,9 +19,9 @@ def test_collect_valid_until_records_sorted(tmp_path):
     deadline_b = (date.today() + timedelta(days=5)).isoformat()
     module.write_text(
         "from tests.documentation import valid_until\n\n"
-        f"@valid_until(\"{deadline_a}\", reason=\"Longer horizon\")\n"
+        f'@valid_until("{deadline_a}", reason="Longer horizon")\n'
         "def test_future_a():\n    pass\n\n"
-        f"@valid_until(\"{deadline_b}\", reason=\"Soon\")\n"
+        f'@valid_until("{deadline_b}", reason="Soon")\n'
         "def test_future_b():\n    pass\n"
     )
 
@@ -42,9 +39,9 @@ def test_collect_outdated_valid_until_records(tmp_path):
     upcoming = (date.today() + timedelta(days=3)).isoformat()
     module.write_text(
         "from tests.documentation import valid_until\n\n"
-        f"@valid_until(\"{expired}\", reason=\"Expired contract\")\n"
+        f'@valid_until("{expired}", reason="Expired contract")\n'
         "def test_outdated():\n    pass\n\n"
-        f"@valid_until(\"{upcoming}\", reason=\"Still valid\")\n"
+        f'@valid_until("{upcoming}", reason="Still valid")\n'
         "def test_current():\n    pass\n"
     )
 
@@ -80,7 +77,9 @@ def test_collect_philosophy_violations_aggregates(tmp_path):
 
     assert auditor.audited == [module]
     assert summaries["module_docstring"].count == 2
-    assert any("module.py" in example for example in summaries["module_docstring"].examples)
+    assert any(
+        "module.py" in example for example in summaries["module_docstring"].examples
+    )
     assert summaries["public_api_documentation"].count == 1
 
 

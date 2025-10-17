@@ -1,5 +1,4 @@
 from __future__ import annotations
-from __future__ import annotations
 
 import json
 import subprocess
@@ -16,7 +15,7 @@ const result = lineage.trace('{gradient}');
 process.stdout.write(JSON.stringify(result));
 """
     completed = subprocess.run(
-        ['node', '-e', script],
+        ["node", "-e", script],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -26,20 +25,22 @@ process.stdout.write(JSON.stringify(result));
 
 
 def test_brand_primary_lineage() -> None:
-    data = _trace_lineage('gradient.brand.primary')
+    data = _trace_lineage("gradient.brand.primary")
 
-    assert data['gradient'] == 'gradient.brand.primary'
-    assert data['css'] == (
-        'linear-gradient(160deg, var(--brand-azure) 0%, var(--brand-cyan) 100%)'
+    assert data["gradient"] == "gradient.brand.primary"
+    assert data["css"] == (
+        "linear-gradient(160deg, var(--brand-azure) 0%, var(--brand-cyan) 100%)"
     )
 
-    primitives = {entry['token'] for entry in data['primitives']}
-    assert primitives == {'color.brand.azure', 'color.brand.cyan'}
+    primitives = {entry["token"] for entry in data["primitives"]}
+    assert primitives == {"color.brand.azure", "color.brand.cyan"}
 
-    compositions = {(entry['type'], entry['identifier']) for entry in data['compositions']}
-    assert ('token', 'gradient.brand.primary') in compositions
-    assert ('css-custom-property', '--brand-gradient') in compositions
-    assert ('svg-gradient', '#lantern-gradient') in compositions
+    compositions = {
+        (entry["type"], entry["identifier"]) for entry in data["compositions"]
+    }
+    assert ("token", "gradient.brand.primary") in compositions
+    assert ("css-custom-property", "--brand-gradient") in compositions
+    assert ("svg-gradient", "#lantern-gradient") in compositions
 
-    usage = {(entry['type'], entry['identifier']) for entry in data['usage']}
-    assert ('css-url', '#lantern-gradient') in usage
+    usage = {(entry["type"], entry["identifier"]) for entry in data["usage"]}
+    assert ("css-url", "#lantern-gradient") in usage

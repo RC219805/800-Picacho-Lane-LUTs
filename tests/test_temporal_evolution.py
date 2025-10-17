@@ -9,7 +9,9 @@ def _sample_payload() -> dict[str, object]:
     return {
         "temporal_evolution": {
             "predictive_refactoring": [
-                {"Monitor": "Industry trend APIs, competitor repositories, academic papers"},
+                {
+                    "Monitor": "Industry trend APIs, competitor repositories, academic papers"
+                },
                 {"Predict": "Future architectural needs using transformer models"},
                 {"Pre-adapt": "Generate compatibility layers before standards emerge"},
             ],
@@ -82,4 +84,3 @@ def test_from_mapping_validates_discipline_names(invalid_name) -> None:
 
     with pytest.raises(TypeError):
         TemporalEvolutionRoadmap.from_mapping(payload)
-

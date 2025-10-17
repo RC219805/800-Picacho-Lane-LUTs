@@ -65,7 +65,9 @@ def collect_valid_until_records(tests_root: Path) -> List[ValidUntilRecord]:
             continue
 
         for node in ast.walk(tree):
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if not isinstance(
+                node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+            ):
                 continue
             for decorator in node.decorator_list:
                 record = _valid_until_from_decorator(decorator, path)
@@ -182,7 +184,11 @@ def _iter_python_files(paths: Iterable[Path]) -> Iterable[Path]:
 
 
 def _format_violation_location(module_path: Path, violation: Violation) -> str:
-    location = f"{module_path}" if violation.line is None else f"{module_path}:{violation.line}"
+    location = (
+        f"{module_path}"
+        if violation.line is None
+        else f"{module_path}:{violation.line}"
+    )
     return f"{location} – {violation.message}"
 
 
@@ -190,11 +196,7 @@ def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:  # pylint
     """Return usage information for brand color tokens defined in *tokens_path*."""
 
     tokens_data = json.loads(tokens_path.read_text())
-    brand_tokens = (
-        tokens_data.get("tokens", {})
-        .get("color", {})
-        .get("brand", {})
-    )
+    brand_tokens = tokens_data.get("tokens", {}).get("color", {}).get("brand", {})
 
     directory = tokens_path.parent
     deliverables = [
@@ -217,11 +219,7 @@ def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:  # pylint
         used_in: List[str] = []
         for deliverable in deliverables:
             text = deliverable.read_text().lower()
-            if (
-                normalized_hex in text
-                or token_ref in text
-                or css_var in text
-            ):
+            if normalized_hex in text or token_ref in text or css_var in text:
                 used_in.append(deliverable.name)
 
         usage = ColorTokenUsage(
@@ -436,7 +434,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.tokens is not None:
         tokens_path = args.tokens.resolve()
     else:
-        tokens_path = root / "09_Client_Deliverables" / "Lantern_Logo_Implementation_Kit" / "lantern_tokens.json"
+        tokens_path = (
+            root
+            / "09_Client_Deliverables"
+            / "Lantern_Logo_Implementation_Kit"
+            / "lantern_tokens.json"
+        )
 
     valid_until_records = collect_valid_until_records(tests_root)
     principle_summaries = collect_philosophy_violations([root])

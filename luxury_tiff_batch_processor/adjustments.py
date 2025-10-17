@@ -1,4 +1,5 @@
 """Color adjustments, presets, and supporting image math."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -34,9 +35,13 @@ class AdjustmentSettings:
         self._validate()
 
     def _validate(self) -> None:
-        def ensure_range(name: str, value: float, minimum: float, maximum: float) -> None:
+        def ensure_range(
+            name: str, value: float, minimum: float, maximum: float
+        ) -> None:
             if not (minimum <= value <= maximum):
-                raise ValueError(f"{name} must be between {minimum} and {maximum}, got {value}")
+                raise ValueError(
+                    f"{name} must be between {minimum} and {maximum}, got {value}"
+                )
 
         ensure_range("exposure", self.exposure, -5.0, 5.0)
 
@@ -117,8 +122,16 @@ def kelvin_to_rgb(temperature: float) -> np.ndarray:
 
     if temp <= 66:
         red = 1.0
-        green = np.clip(0.39008157876901960784 * math.log(temp) - 0.63184144378862745098, 0, 1)
-        blue = 0 if temp <= 19 else np.clip(0.54320678911019607843 * math.log(temp - 10) - 1.19625408914, 0, 1)
+        green = np.clip(
+            0.39008157876901960784 * math.log(temp) - 0.63184144378862745098, 0, 1
+        )
+        blue = (
+            0
+            if temp <= 19
+            else np.clip(
+                0.54320678911019607843 * math.log(temp - 10) - 1.19625408914, 0, 1
+            )
+        )
     else:
         red = np.clip(1.29293618606274509804 * (temp - 60) ** -0.1332047592, 0, 1)
         green = np.clip(1.12989086089529411765 * (temp - 60) ** -0.0755148492, 0, 1)
@@ -129,12 +142,14 @@ def kelvin_to_rgb(temperature: float) -> np.ndarray:
 def apply_exposure(arr: np.ndarray, stops: float) -> np.ndarray:
     if stops == 0:
         return arr
-    factor = float(2.0 ** stops)
+    factor = float(2.0**stops)
     LOGGER.debug("Applying exposure: %s stops (factor %.3f)", stops, factor)
     return arr * factor
 
 
-def apply_white_balance(arr: np.ndarray, temperature: Optional[float], tint: float) -> np.ndarray:
+def apply_white_balance(
+    arr: np.ndarray, temperature: Optional[float], tint: float
+) -> np.ndarray:
     result = arr
     if temperature is not None:
         ref = kelvin_to_rgb(6500.0)
@@ -143,7 +158,9 @@ def apply_white_balance(arr: np.ndarray, temperature: Optional[float], tint: flo
         LOGGER.debug("Applying temperature: %sK scale=%s", temperature, scale)
         result = result * scale.reshape((1, 1, 3))
     if tint:
-        tint_scale = np.array([1.0 + tint * 0.0015, 1.0, 1.0 - tint * 0.0015], dtype=np.float32)
+        tint_scale = np.array(
+            [1.0 + tint * 0.0015, 1.0, 1.0 - tint * 0.0015], dtype=np.float32
+        )
         LOGGER.debug("Applying tint scale=%s", tint_scale)
         result = result * tint_scale.reshape((1, 1, 3))
     return result
@@ -256,7 +273,8 @@ def apply_vibrance(arr: np.ndarray, amount: float) -> np.ndarray:
     hsv = rgb_to_hsv(arr)
     saturation = hsv[..., 1]
     hsv[..., 1] = np.clip(
-        saturation + amount * (1.0 - saturation) * np.sqrt(np.clip(saturation, 0.0, 1.0)),
+        saturation
+        + amount * (1.0 - saturation) * np.sqrt(np.clip(saturation, 0.0, 1.0)),
         0.0,
         1.0,
     )
@@ -279,7 +297,7 @@ def _gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.nd
         return np.array([1.0], dtype=np.float32)
     sigma = sigma or max(radius / 3.0, 1e-6)
     ax = np.arange(-radius, radius + 1, dtype=np.float32)
-    kernel = np.exp(-(ax ** 2) / (2.0 * sigma ** 2))
+    kernel = np.exp(-(ax**2) / (2.0 * sigma**2))
     kernel /= np.sum(kernel)
     cached = kernel.astype(np.float32)
     cached.setflags(write=False)
@@ -318,7 +336,9 @@ def separable_convolve(arr: np.ndarray, kernel: np.ndarray, axis: int) -> np.nda
     return convolved.astype(np.float32)
 
 
-def gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
+def gaussian_blur(
+    arr: np.ndarray, radius: int, sigma: Optional[float] = None
+) -> np.ndarray:
     kernel = gaussian_kernel_cached(radius, sigma)
     blurred = separable_convolve(arr, kernel, axis=0)
     blurred = separable_convolve(blurred, kernel, axis=1)
@@ -387,9 +407,14 @@ def apply_glow(arr: np.ndarray, amount: float) -> np.ndarray:
 
 
 def apply_adjustments(
-    arr: np.ndarray, adjustments: AdjustmentSettings, *, profile: ProcessingProfile | None = None
+    arr: np.ndarray,
+    adjustments: AdjustmentSettings,
+    *,
+    profile: ProcessingProfile | None = None,
 ) -> np.ndarray:
-    arr = apply_white_balance(arr, adjustments.white_balance_temp, adjustments.white_balance_tint)
+    arr = apply_white_balance(
+        arr, adjustments.white_balance_temp, adjustments.white_balance_tint
+    )
     arr = apply_exposure(arr, adjustments.exposure)
     arr = apply_shadow_lift(arr, adjustments.shadow_lift)
     arr = apply_highlight_recovery(arr, adjustments.highlight_recovery)

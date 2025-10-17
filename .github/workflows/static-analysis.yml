@@ -1,0 +1,78 @@
+name: Static Analysis & Testing
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Run Black
+      run: black --check .
+
+    - name: Run isort
+      run: isort --check-only .
+
+    - name: Run Flake8
+      run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    - name: Run Pylint
+      run: |
+        find . -name "*.py" -not -path "./01_Film_Emulation/*" \
+               -not -path "./02_Location_Aesthetic/*" \
+               -not -path "./03_Material_Response/*" \
+               -not -path "./venv/*" | xargs pylint --exit-zero
+
+    - name: Run MyPy
+      run: mypy . --ignore-missing-imports --exclude '(01_Film_Emulation|02_Location_Aesthetic|03_Material_Response)/'
+
+    - name: Run Bandit Security Scan
+      run: bandit -r . -x tests/,01_Film_Emulation/,02_Location_Aesthetic/,03_Material_Response/ -f json -o bandit-report.json
+      continue-on-error: true
+
+    - name: Run Tests with Coverage
+      run: |
+        pytest -v --cov=. --cov-report=xml --cov-report=term-missing || true
+
+    - name: Upload Coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Check Code Complexity
+      run: |
+        find . -name "*.py" -not -path "./01_Film_Emulation/*" \
+               -not -path "./02_Location_Aesthetic/*" \
+               -not -path "./03_Material_Response/*" \
+               -not -path "./venv/*" | xargs radon cc -s -nb
+      continue-on-error: true

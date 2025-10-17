@@ -1,5 +1,5 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -15,21 +15,16 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import luxury_tiff_batch_processor as ltiff
-from luxury_tiff_batch_processor.adjustments import (
-    gaussian_blur,
-    gaussian_kernel,
-    gaussian_kernel_cached,
-)
-from luxury_tiff_batch_processor.io_utils import (
-    float_to_dtype_array,
-    image_to_float,
-    save_image,
-)
+from luxury_tiff_batch_processor.adjustments import (gaussian_blur,
+                                                     gaussian_kernel,
+                                                     gaussian_kernel_cached)
+from luxury_tiff_batch_processor.io_utils import (float_to_dtype_array,
+                                                  image_to_float, save_image)
 
 
 def test_float_to_dtype_array_preserves_float_values():
     gradient = np.linspace(0.0, 1.0, 25, dtype=np.float32).reshape(5, 5)
-    rgb = np.stack([gradient, gradient ** 2, np.sqrt(gradient)], axis=-1)
+    rgb = np.stack([gradient, gradient**2, np.sqrt(gradient)], axis=-1)
     result = float_to_dtype_array(rgb, np.float32, None)
     assert result.dtype == np.float32
     assert np.allclose(result, rgb)
@@ -40,11 +35,20 @@ def test_save_image_retains_float_tonal_range(tmp_path):
     x = np.linspace(0.0, 1.0, width, dtype=np.float32)
     y = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
     gradient = (x + y) / 2.0
-    rgb = np.stack([gradient, gradient ** 1.5, np.clip(gradient * 1.2, 0.0, 1.0)], axis=-1)
+    rgb = np.stack(
+        [gradient, gradient**1.5, np.clip(gradient * 1.2, 0.0, 1.0)], axis=-1
+    )
 
     float_data = float_to_dtype_array(rgb, np.float32, None)
     output_path = tmp_path / "float_image.tiff"
-    save_image(output_path, float_data, np.dtype(np.float32), metadata=None, icc_profile=None, compression="deflate")
+    save_image(
+        output_path,
+        float_data,
+        np.dtype(np.float32),
+        metadata=None,
+        icc_profile=None,
+        compression="deflate",
+    )
 
     if tifffile is not None:
         saved_array = tifffile.imread(output_path)
@@ -87,7 +91,9 @@ def test_image_to_float_float_dynamic_range_restored():
     base_channels = result.base_channels
     float_norm = result.float_normalisation
 
-    rgb_only, dtype_only, alpha_only = ltiff.image_to_float(image, return_format="tuple3")
+    rgb_only, dtype_only, alpha_only = ltiff.image_to_float(
+        image, return_format="tuple3"
+    )
     np.testing.assert_allclose(rgb_only, arr)
     assert dtype_only == dtype
     if alpha is None:
@@ -112,7 +118,9 @@ def test_image_to_float_float_dynamic_range_restored():
     assert np.allclose(restored, data, atol=1e-6)
 
 
-def _reference_gaussian_blur(arr: np.ndarray, radius: int, sigma: Optional[float] = None) -> np.ndarray:
+def _reference_gaussian_blur(
+    arr: np.ndarray, radius: int, sigma: Optional[float] = None
+) -> np.ndarray:
     kernel = gaussian_kernel_cached(radius, sigma)
 
     working = arr
