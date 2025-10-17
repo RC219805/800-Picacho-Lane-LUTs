@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 
-from .adjustments import (LUXURY_PRESETS, AdjustmentSettings,
+from .adjustments import (AdjustmentSettings, LUXURY_PRESETS,
                           apply_adjustments, gaussian_blur, gaussian_kernel,
                           gaussian_kernel_cached)
 from .cli import (build_adjustments, default_output_folder, main, parse_args,
