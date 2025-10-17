@@ -13,7 +13,9 @@ def _bytes_from_ids(manifest_hash_hex: str, session_id: str):
     return mh + sid  # 32 bytes payload
 
 
-def embed_lsb_rgb(img: Image.Image, manifest_hash_hex: str, session_id: str) -> Image.Image:
+def embed_lsb_rgb(
+    img: Image.Image, manifest_hash_hex: str, session_id: str
+) -> Image.Image:
     arr = np.array(img.convert("RGB"))
     payload = _bytes_from_ids(manifest_hash_hex, session_id)
     bits = np.unpackbits(np.frombuffer(payload, dtype=np.uint8))
@@ -63,7 +65,9 @@ def _idct2(block):
     return np.apply_along_axis(_idct_1d, 0, np.apply_along_axis(_idct_1d, 1, block))
 
 
-def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, strength=2.0) -> Image.Image:
+def embed_dct_luma(
+    img: Image.Image, manifest_hash_hex: str, session_id: str, strength=2.0
+) -> Image.Image:
     X = np.array(img.convert("YCbCr"), dtype=np.float32)
     Y = X[:, :, 0]
     payload = _bytes_from_ids(manifest_hash_hex, session_id)
