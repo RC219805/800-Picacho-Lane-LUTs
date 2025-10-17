@@ -426,7 +426,7 @@ def _kmeans(
     K-means clustering over RGB data in [0,1].
 
     If use_sklearn=True and scikit-learn is available, uses KMeans(init="k-means++",
-    n_init=5, random_state=seed); otherwise falls back to a tiny deterministic
+    n_init=10, random_state=seed); otherwise falls back to a tiny deterministic
     implementation suitable for CI.
 
     Returns labels of shape (N,).
