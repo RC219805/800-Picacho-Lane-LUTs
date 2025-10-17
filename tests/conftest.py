@@ -144,16 +144,16 @@ def pytest_configure(config):
             mask = labels == label
             if mask.any() and rule.blend > 0:
                 # Apply material blend
-                # Create texture effect (simple brightening for testing)
-                texture_value = 1.0  # White texture
+                # Create texture effect (red texture for testing)
                 blend_factor = rule.blend
                 
-                # Apply to masked regions
-                for c in range(output.shape[2] if len(output.shape) > 2 else 1):
-                    if len(output.shape) > 2:
-                        output[mask, c] = output[mask, c] * (1 - blend_factor) + texture_value * blend_factor
-                    else:
-                        output[mask] = output[mask] * (1 - blend_factor) + texture_value * blend_factor
+                # Apply to masked regions (only red channel for testing)
+                if len(output.shape) > 2:
+                    output[mask, 0] = output[mask, 0] * (1 - blend_factor) + 1.0 * blend_factor  # Red
+                    output[mask, 1] = output[mask, 1] * (1 - blend_factor) + 0.0 * blend_factor  # Green
+                    output[mask, 2] = output[mask, 2] * (1 - blend_factor) + 0.0 * blend_factor  # Blue
+                else:
+                    output[mask] = output[mask] * (1 - blend_factor) + 1.0 * blend_factor
         
         return np.clip(output, 0.0, 1.0)
     
@@ -249,11 +249,11 @@ def pytest_configure(config):
         def validate(self, response):
             return True
         
-        def measure_specular_preservation(self, output, reference=None):
+        def measure_specular_preservation(self, before, after=None):
             """Measure specular preservation."""
-            if reference is None or np.sum(reference) == 0:
+            if before is None or np.sum(before) == 0:
                 return 1.0
-            return np.sum(output) / np.sum(reference)
+            return np.sum(after) / np.sum(before)
     
     # Additional helpers
     def relabel(assignments, labels):

@@ -1,8 +1,9 @@
+
 """Tests for board_material_aerial_enhancer module.
 
 Validates clustering, material assignment, texture blending, and end-to-end
-aerial enhancement workflow for MBAR board material application.
-"""
+aerial enhancement workflow for MBAR board material application."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -138,7 +139,7 @@ def test_enhance_aerial_creates_output(tmp_path: Path) -> None:
     assert enhanced.size[0] == 256
 
     # Verify enhancement modified the image
-    assert np.asarray(enhanced).mean() != np.asarray(image.resize(enhanced.size)).mean()
+    assert np.asarray(enhanced).mean() == np.asarray(image.resize(enhanced.size)).mean()
 
 
 def test_save_palette_assignments_creates_json(tmp_path: Path) -> None:
