@@ -56,3 +56,6 @@ artifacts/
 .coverage
 coverage.xml
 .DS_Store
+*.tiff
+*.DS_Store
+.coverage
