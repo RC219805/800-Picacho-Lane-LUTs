@@ -145,17 +145,15 @@ def pytest_configure(config):
             if mask.any() and rule.blend > 0:
                 # Apply material blend
                 # Create texture effect (red texture for testing)
-blend_factor = rule.blend
+		blend_factor = rule.blend
 
-# Apply to masked regions (only red channel for testing)
-if len(output.shape) > 2:
-    output[mask, 0] = output[mask, 0] * (1 - blend_factor) + 1.0 * blend_factor  # Red
-    output[mask, 1] = output[mask, 1] * (1 - blend_factor) + 0.0 * blend_factor  # Green
-    output[mask, 2] = output[mask, 2] * (1 - blend_factor) + 0.0 * blend_factor  # Blue
-else:
-    output[mask] = output[mask] * (1 - blend_factor) + 1.0 * blend_factor
-                    else:
-                        output[mask] = output[mask] * (1 - blend_factor) + texture_value * blend_factor
+		# Apply to masked regions (only red channel for testing)
+		if len(output.shape) > 2:
+    		    output[mask, 0] = output[mask, 0] * (1 - blend_factor) + 1.0 * blend_factor  # Red
+   	            output[mask, 1] = output[mask, 1] * (1 - blend_factor) + 0.0 * blend_factor  # Green
+       		    output[mask, 2] = output[mask, 2] * (1 - blend_factor) + 0.0 * blend_factor  # Blue
+		else
+    		    output[mask] = output[mask] * (1 - blend_factor) + 1.0 * blend_factor
         
         return np.clip(output, 0.0, 1.0)
     

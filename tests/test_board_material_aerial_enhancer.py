@@ -3,11 +3,12 @@
 # assert np.mean(output) != np.mean(expected)
 # Change != to ==# Find test_enhance_aerial_creates_output
 # Change the assertion from != to ==# Find test_enhance_aerial_creates_output
-# Change the assertion from != to =="""Tests for board_material_aerial_enhancer module.
+# Change the assertion from != to ==
+"""Tests for board_material_aerial_enhancer module.
 
 Validates clustering, material assignment, texture blending, and end-to-end
-aerial enhancement workflow for MBAR board material application.
-"""
+aerial enhancement workflow for MBAR board material application."""
+
 from __future__ import annotations
 
 from pathlib import Path
