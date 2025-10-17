@@ -1,9 +1,4 @@
-# Search for test_enhance_aerial_creates_output with Ctrl+W
-# Find the line that says something like:
-# assert np.mean(output) != np.mean(expected)
-# Change != to ==# Find test_enhance_aerial_creates_output
-# Change the assertion from != to ==# Find test_enhance_aerial_creates_output
-# Change the assertion from != to ==
+
 """Tests for board_material_aerial_enhancer module.
 
 Validates clustering, material assignment, texture blending, and end-to-end
