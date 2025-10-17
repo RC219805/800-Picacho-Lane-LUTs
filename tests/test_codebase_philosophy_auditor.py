@@ -17,17 +17,19 @@ def _write_module(tmp_path: Path, content: str) -> Path:
     return module_path
 
 
-def test_audit_module_detects_missing_docstring(tmp_path: Path, auditor: CodebasePhilosophyAuditor) -> None:
+def test_audit_module_detects_missing_docstring(
+    tmp_path: Path, auditor: CodebasePhilosophyAuditor
+) -> None:
     module_path = _write_module(
         tmp_path,
         dedent(
-            '''
+            """
             from math import sqrt
 
 
             def area(radius):
                 return 3.14 * radius * radius
-            '''
+            """
         ).strip(),
     )
 
@@ -36,7 +38,9 @@ def test_audit_module_detects_missing_docstring(tmp_path: Path, auditor: Codebas
     assert any(v.principle == "module_docstring" for v in violations)
 
 
-def test_audit_module_detects_undocumented_public_api(tmp_path: Path, auditor: CodebasePhilosophyAuditor) -> None:
+def test_audit_module_detects_undocumented_public_api(
+    tmp_path: Path, auditor: CodebasePhilosophyAuditor
+) -> None:
     module_path = _write_module(
         tmp_path,
         dedent(
@@ -63,7 +67,9 @@ def test_audit_module_detects_undocumented_public_api(tmp_path: Path, auditor: C
     }
 
 
-def test_audit_module_respects_documented_decisions(tmp_path: Path, auditor: CodebasePhilosophyAuditor) -> None:
+def test_audit_module_respects_documented_decisions(
+    tmp_path: Path, auditor: CodebasePhilosophyAuditor
+) -> None:
     module_path = _write_module(
         tmp_path,
         dedent(

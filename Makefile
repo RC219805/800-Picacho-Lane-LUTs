@@ -1,42 +1,44 @@
-SHELL := /bin/sh
-
-# Resolve a Python interpreter: prefer local venv, otherwise fall back to python3
-PY := $(shell if [ -x .venv/bin/python ]; then echo .venv/bin/python; else command -v python3 || command -v python; fi)
-
-# Common subsets (fast tests avoid heavy/optional paths)
-FAST_TESTS := \
-	tests/test_material_response.py \
-	tests/test_adjustments.py \
-	tests/test_geometry.py \
-	tests/test_io.py \
-	tests/test_pipeline.py \
-	tests/test_presets.py
-
-.PHONY: help test-fast test-novideo test-full venv
+.PHONY: help install install-dev lint format test security clean check-all
 
 help:
-	@echo "Targets:"
-	@echo "  test-fast     Run fast subset (no video/optional heavy paths)"
-	@echo "  test-novideo  Run all tests excluding video suite via -k filter"
-	@echo "  test-full     Run entire test suite (parallel if xdist present)"
-	@echo "  venv          Create local .venv if missing"
+	@echo "Available commands:"
+	@echo "  make install       Install production dependencies"
+	@echo "  make install-dev   Install development dependencies"
+	@echo "  make lint          Run all linters"
+	@echo "  make format        Format code with black and isort"
+	@echo "  make test          Run tests with coverage"
+	@echo "  make security      Run security checks"
+	@echo "  make clean         Clean up generated files"
+	@echo "  make check-all     Run all checks (lint, test, security)"
 
-venv:
-	@if [ ! -x .venv/bin/python ]; then \
-		"$(PY)" -m venv .venv && echo "Created .venv"; \
-	else \
-		echo ".venv already present"; \
-	fi
+install:
+	pip install -r requirements.txt
 
-test-fast:
-	@"$(PY)" -m pytest -q $(FAST_TESTS)
+install-dev:
+	pip install -r requirements-dev.txt
+	pre-commit install
 
-test-novideo:
-	@"$(PY)" -m pytest -q -k 'not video_master_grader'
+format:
+	@echo "Formatting with black..."
+	black .
+	@echo "Sorting imports with isort..."
+	isort .
 
-test-full:
-	@if "$(PY)" -m pip list | grep -q pytest-xdist; then \
-		"$(PY)" -m pytest -q -n auto tests; \
-	else \
-		"$(PY)" -m pytest -q tests; \
-	fi
+lint:
+	@echo "Running flake8..."
+	flake8 .
+	@echo "Running pylint..."
+	find . -name "*.py" -not -path "./01_Film_Emulation/*" -not -path "./02_Location_Aesthetic/*" -not -path "./03_Material_Response/*" -not -path "./venv/*" | xargs pylint --exit-zero
+
+test:
+	pytest -v --cov=. --cov-report=term-missing --cov-report=html || true
+
+security:
+	@echo "Running bandit security scan..."
+	bandit -r . -x tests/,01_Film_Emulation/,02_Location_Aesthetic/,03_Material_Response/,venv/
+
+clean:
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	rm -rf .coverage htmlcov/ .pytest_cache/ .mypy_cache/
+

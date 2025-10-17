@@ -10,7 +10,6 @@ import pytest
 pytest.importorskip("PIL.Image")
 from PIL import Image
 
-
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = (
     ROOT

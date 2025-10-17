@@ -11,8 +11,12 @@ from .documentation import documents
 
 
 def load_module() -> ModuleType:
-    module_path = Path(__file__).resolve().parent.parent / "luxury_video_master_grader.py"
-    spec = importlib.util.spec_from_file_location("luxury_video_master_grader", module_path)
+    module_path = (
+        Path(__file__).resolve().parent.parent / "luxury_video_master_grader.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "luxury_video_master_grader", module_path
+    )
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader  # for mypy
     sys.modules[spec.name] = module
@@ -142,14 +146,18 @@ def test_build_filter_graph_includes_optional_nodes(tmp_path):
     assert output_label == "vout"
     assert f"lut3d=file={lut_path}:interp=tetrahedral" in graph
     assert "hqdn3d=luma_spatial=2.8" in graph
-    assert "eq=contrast=1.0500:saturation=1.0200:gamma=0.9800:brightness=0.0100" in graph
+    assert (
+        "eq=contrast=1.0500:saturation=1.0200:gamma=0.9800:brightness=0.0100" in graph
+    )
     assert "colorbalance=rm=0.5000:gm=0.0000:bm=-0.5000" in graph
     assert "blend=all_expr='A*(1-0.6000)+B*0.6000'" in graph
     assert "unsharp=luma_msize_x=7" in graph
     assert "noise=alls=3.50:allf=t+u" in graph
     assert "zscale=transfer=linear:npl=1200.0000" in graph
     assert "tonemap=hable:peak=1200.0000:desat=0.2500" in graph
-    assert graph.count("zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=tv") == 1
+    assert (
+        graph.count("zscale=primaries=bt709:transfer=bt709:matrix=bt709:range=tv") == 1
+    )
     assert "tonemap_desat=" not in graph
     assert "tonemap_param=" not in graph
     assert "gradfun=strength=0.70:radius=16" in graph
@@ -215,7 +223,9 @@ def test_build_filter_graph_blends_post_eq_when_lut_strength_lt_one(tmp_path):
 
     color_node = next((node for node in nodes if "colorbalance=" in node), None)
     if color_node:
-        color_match = re.search(r"^\[(v\d+)\]colorbalance=[^\[]+\[(v\d+)\]$", color_node)
+        color_match = re.search(
+            r"^\[(v\d+)\]colorbalance=[^\[]+\[(v\d+)\]$", color_node
+        )
         assert color_match, "Failed to parse color balance node"
         assert color_match.group(1) == post_eq_label
         post_grade_label = color_match.group(2)
@@ -487,7 +497,10 @@ def test_parse_arguments_requires_input_and_output(capsys):
 
     assert exc.value.code == 2
     captured = capsys.readouterr()
-    assert "the following arguments are required: input_video, output_video" in captured.err
+    assert (
+        "the following arguments are required: input_video, output_video"
+        in captured.err
+    )
 
 
 @documents("Preset catalog can be listed without invoking processing")

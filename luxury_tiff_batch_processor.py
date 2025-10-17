@@ -6,10 +6,10 @@ root. The real implementation now lives in the package under
 ``luxury_tiff_batch_processor.cli``; importing the wrapper keeps those
 entry points working without duplicating logic.
 """
+
 from __future__ import annotations
 
 from luxury_tiff_batch_processor.cli import main
-
 
 if __name__ == "__main__":  # pragma: no cover - exercised via integration test
     raise SystemExit(main())

@@ -1,3 +1,33 @@
-numpy>=1.24,<3
-pytest>=7.4
-pytest-xdist>=3.3
+# Static Analysis & Linting
+flake8==7.1.1
+pylint==3.3.1
+black==24.10.0
+isort==5.13.2
+mypy==1.11.2
+
+# Security Analysis
+bandit[toml]==1.7.10
+safety==3.2.8
+
+# Code Complexity
+radon==6.0.1
+xenon==0.9.1
+
+# Documentation
+pydocstyle==6.3.0
+darglint==1.8.1
+
+# Testing & Coverage
+pytest==8.3.3
+pytest-cov==5.0.0
+pytest-xdist==3.6.1
+pytest-mock==3.14.0
+coverage[toml]==7.6.1
+
+# Type Stubs for Common Libraries
+types-Pillow
+types-requests
+types-setuptools
+
+# Pre-commit hooks
+pre-commit==3.8.0
