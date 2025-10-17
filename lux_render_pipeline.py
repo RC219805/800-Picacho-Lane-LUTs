@@ -34,16 +34,6 @@ from typing import Any, Mapping, Optional, Sequence, Union
 import numpy as np
 from PIL import Image, ImageEnhance
 
-    texture = base
-    if not math.isclose(scale, 1.0):
-        new_h = max(1, int(round(texture.shape[0] * scale)))
-        new_w = max(1, int(round(texture.shape[1] * scale)))
-        pil_tex = Image.fromarray(
-            (np.clip(texture, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
-        )
-        pil_tex = pil_tex.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        texture = np.asarray(pil_tex, dtype=np.float32) / 255.0
-
 __all__ = [
     "apply_material_response_finishing",
 ]
