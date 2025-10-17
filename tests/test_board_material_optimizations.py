@@ -29,33 +29,89 @@ class TestParameterValidation:
 
     def test_valid_parameters_accepted(self):
         """Test that valid parameters are accepted."""
-        # Should not raise
-        _validate_parameters(k=8, analysis_max=1280, seed=22, target_width=4096)
-        _validate_parameters(k=2, analysis_max=32, seed=0, target_width=32)
-        _validate_parameters(k=256, analysis_max=4096, seed=999, target_width=None)
+        # Should not raise - using correct keyword-only arguments
+        _validate_parameters(
+            k=8, 
+            analysis_max_dim=None,  # Will use analysis_max alias
+            analysis_max=1280, 
+            seed=22, 
+            target_width=4096,
+            resample_method="bilinear"
+        )
+        _validate_parameters(
+            k=2, 
+            analysis_max_dim=None,
+            analysis_max=32, 
+            seed=0, 
+            target_width=32,
+            resample_method="nearest"
+        )
+        _validate_parameters(
+            k=256, 
+            analysis_max_dim=None,
+            analysis_max=4096, 
+            seed=999, 
+            target_width=None,
+            resample_method="lanczos"
+        )
 
     def test_invalid_k_rejected(self):
         """Test that invalid k values are rejected."""
         with pytest.raises(ValueError, match="k must be at least 2"):
-            _validate_parameters(k=1, analysis_max=1280, seed=22, target_width=4096)
+            _validate_parameters(
+                k=1, 
+                analysis_max_dim=None,
+                analysis_max=1280, 
+                seed=22, 
+                target_width=4096,
+                resample_method="bilinear"
+            )
 
         with pytest.raises(ValueError, match="k must be <= 256"):
-            _validate_parameters(k=257, analysis_max=1280, seed=22, target_width=4096)
+            _validate_parameters(
+                k=257, 
+                analysis_max_dim=None,
+                analysis_max=1280, 
+                seed=22, 
+                target_width=4096,
+                resample_method="bilinear"
+            )
 
     def test_invalid_analysis_max_rejected(self):
         """Test that invalid analysis_max values are rejected."""
         with pytest.raises(ValueError, match="analysis_max must be at least 32"):
-            _validate_parameters(k=8, analysis_max=31, seed=22, target_width=4096)
+            _validate_parameters(
+                k=8, 
+                analysis_max_dim=None,
+                analysis_max=31, 
+                seed=22, 
+                target_width=4096,
+                resample_method="bilinear"
+            )
 
     def test_invalid_seed_rejected(self):
         """Test that negative seed is rejected."""
         with pytest.raises(ValueError, match="seed must be non-negative"):
-            _validate_parameters(k=8, analysis_max=1280, seed=-1, target_width=4096)
+            _validate_parameters(
+                k=8, 
+                analysis_max_dim=None,
+                analysis_max=1280, 
+                seed=-1, 
+                target_width=4096,
+                resample_method="bilinear"
+            )
 
     def test_invalid_target_width_rejected(self):
         """Test that invalid target_width is rejected."""
         with pytest.raises(ValueError, match="target_width must be at least 32"):
-            _validate_parameters(k=8, analysis_max=1280, seed=22, target_width=31)
+            _validate_parameters(
+                k=8, 
+                analysis_max_dim=None,
+                analysis_max=1280, 
+                seed=22, 
+                target_width=31,
+                resample_method="bilinear"
+            )
 
 
 class TestKMeansOptimization:
