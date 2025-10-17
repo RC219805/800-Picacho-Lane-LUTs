@@ -106,7 +106,6 @@ def apply_material_response_finishing(
     return pil.convert(out_mode)
 
 
-
 # --------------------------
 # CLI (only built when executed as a script)
 # --------------------------
