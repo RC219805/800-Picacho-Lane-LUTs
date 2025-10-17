@@ -10,8 +10,8 @@ import json
 
 from PIL import Image
 
-from presence_security_v1_2.watermarking import embed_dct_luma, embed_lsb_rgb
 from presence_security_v1_2.presence_params import PresenceParameters
+from presence_security_v1_2.watermarking import embed_dct_luma, embed_lsb_rgb
 
 
 def sha256_file(path):
@@ -77,7 +77,9 @@ def main():
     a.add_argument("--out", default="anchor_payload.json")
     a.set_defaults(func=cmd_anchor)
 
-    w = sub.add_parser("watermark", help="Embed watermark (lsb|dct) from manifest/session")
+    w = sub.add_parser(
+        "watermark", help="Embed watermark (lsb|dct) from manifest/session"
+    )
     w.add_argument("--image", required=True)
     w.add_argument("--manifest", required=True)
     w.add_argument("--session", required=True)
