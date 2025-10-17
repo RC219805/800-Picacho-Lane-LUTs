@@ -46,15 +46,18 @@ class ImageMetrics:
 
     @property
     def color_delta(self) -> int:
+        """Return the difference in color count."""
         return self.candidate_colors - self.original_colors
 
     @property
     def changed_ratio(self) -> float:
+        """Return the ratio of changed pixels to total pixels."""
         if self.total_pixels == 0:
             return 0.0
         return self.changed_pixels / self.total_pixels
 
     def to_dict(self) -> dict[str, float]:
+        """Return the metrics as a dictionary."""
         return {
             "original_colors": self.original_colors,
             "candidate_colors": self.candidate_colors,
@@ -158,6 +161,7 @@ def _export_json(path: Path, metrics: ImageMetrics) -> None:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("original", type=Path, help="Reference PNG asset")
     parser.add_argument("candidate", type=Path, help="Updated PNG asset")
@@ -192,6 +196,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Main entry point for the script."""
     args = parse_args(argv)
 
     original = _load_image(args.original)
