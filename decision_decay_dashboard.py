@@ -39,6 +39,8 @@ class PrincipleSummary:
 
 @dataclass
 class ColorTokenUsage:
+    """Records how a color token is used across the codebase."""
+
     token: str
     hex_value: str
     used_in: List[str]
@@ -46,6 +48,8 @@ class ColorTokenUsage:
 
 @dataclass
 class ColorTokenReport:
+    """Summary of all color tokens and their usage status."""
+
     tokens: List[ColorTokenUsage]
     orphans: List[ColorTokenUsage]
 
@@ -92,9 +96,10 @@ def collect_outdated_valid_until_records(tests_root: Path) -> List[ValidUntilRec
     ]
 
 
-def _valid_until_from_decorator(
+def _valid_until_from_decorator(  # pylint: disable=too-many-branches
     decorator: ast.AST, path: Path
 ) -> Optional[tuple[date, str]]:
+    """Extract deadline and reason from a valid_until decorator AST node."""
     if not isinstance(decorator, ast.Call):
         return None
 
@@ -187,7 +192,7 @@ def _format_violation_location(module_path: Path, violation: Violation) -> str:
     return f"{location} – {violation.message}"
 
 
-def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:
+def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:  # pylint: disable=too-many-locals
     """Return usage information for brand color tokens defined in *tokens_path*."""
 
     tokens_data = json.loads(tokens_path.read_text())
@@ -203,7 +208,7 @@ def collect_color_token_report(tokens_path: Path) -> ColorTokenReport:
     usages: List[ColorTokenUsage] = []
     orphans: List[ColorTokenUsage] = []
 
-    for token_name, descriptor in sorted(brand_tokens.items()):
+    for token_name, descriptor in sorted(brand_tokens.items(), key=lambda x: str(x[0])):
         value = descriptor.get("value")
         if not isinstance(value, str):
             continue
@@ -237,9 +242,9 @@ def render_dashboard(
     """Render a textual dashboard summarising the collected insights."""
 
     try:
-        from rich.console import Console
-        from rich.table import Table
-    except Exception:  # pragma: no cover - fallback when Rich unavailable
+        from rich.console import Console  # pylint: disable=import-outside-toplevel
+        from rich.table import Table  # pylint: disable=import-outside-toplevel
+    except (ImportError, ModuleNotFoundError):  # pragma: no cover - fallback when Rich unavailable
         _render_plain_dashboard(valid_until_records, principle_summaries, color_report)
         return
 
@@ -357,6 +362,7 @@ def export_json(
     principle_summaries: Dict[str, PrincipleSummary],
     color_report: ColorTokenReport,
 ) -> None:
+    """Export dashboard data to a JSON file at the specified destination."""
     payload = {
         "valid_until": [
             {
@@ -390,6 +396,7 @@ def export_json(
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+    """Parse command-line arguments for the dashboard CLI."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root",
@@ -419,6 +426,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
+    """Main entry point for decision decay dashboard CLI."""
     args = parse_args(argv)
     root = args.root.resolve()
     tests_root = (args.tests or (root / "tests")).resolve()
