@@ -6,13 +6,17 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from board_material_aerial_enhancer import (DEFAULT_TEXTURES,
-                                            _assign_full_image, _cluster_stats,
-                                            _downsample_image, _kmeans,
-                                            assign_materials,
-                                            build_material_rules,
-                                            load_palette_assignments,
-                                            save_palette_assignments)
+from board_material_aerial_enhancer import (
+    DEFAULT_TEXTURES,
+    _assign_full_image,
+    _cluster_stats,
+    _downsample_image,
+    _kmeans,
+    assign_materials,
+    build_material_rules,
+    load_palette_assignments,
+    save_palette_assignments,
+)
 
 # Load the input image
 input_path = Path(

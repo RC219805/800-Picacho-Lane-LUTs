@@ -244,8 +244,7 @@ def render_dashboard(
     """Render a textual dashboard summarising the collected insights."""
 
     try:
-        from rich.console import \
-            Console  # pylint: disable=import-outside-toplevel
+        from rich.console import Console  # pylint: disable=import-outside-toplevel
         from rich.table import Table  # pylint: disable=import-outside-toplevel
     except (
         ImportError,

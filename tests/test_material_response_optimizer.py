@@ -6,8 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from material_response_optimizer import (MaterialAwareEnhancementPlanner,
-                                         RenderEnhancementPlanner)
+from material_response_optimizer import (
+    MaterialAwareEnhancementPlanner,
+    RenderEnhancementPlanner,
+)
 
 
 @pytest.fixture(scope="module")

@@ -10,12 +10,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from board_material_aerial_enhancer import (ClusterStats, MaterialRule,
-                                            apply_materials, assign_materials,
-                                            build_material_rules,
-                                            enhance_aerial,
-                                            load_palette_assignments,
-                                            save_palette_assignments)
+from board_material_aerial_enhancer import (
+    ClusterStats,
+    MaterialRule,
+    apply_materials,
+    assign_materials,
+    build_material_rules,
+    enhance_aerial,
+    load_palette_assignments,
+    save_palette_assignments,
+)
 
 
 def _dummy_rule(name: str, texture_path: Path) -> MaterialRule:
