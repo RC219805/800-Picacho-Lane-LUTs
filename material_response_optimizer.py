@@ -232,13 +232,17 @@ class RenderEnhancementPlanner:
                                 else "architectural_whites"
                             ),
                         ],
-                        "approach": "sculpted masks and dodge layers to avoid uniform brightening",
+                        "approach": (
+                            "sculpted masks and dodge layers to avoid uniform brightening"
+                        ),
                     }
                 )
 
         return {
             "reference_luminance": 0.31,
-            "notes": "0.30-0.32 scores correlate with top luxury perception. Maintain hierarchy.",
+            "notes": (
+                "0.30-0.32 scores correlate with top luxury perception. Maintain hierarchy."
+            ),
             "targets": hierarchy_targets,
         }
 
@@ -323,7 +327,9 @@ class RenderEnhancementPlanner:
         return {
             "baseline": 1.9,
             "hero_targets": hero_targets,
-            "guardrails": "Maintain supporting surfaces at 1.9 to avoid noise accumulation.",
+            "guardrails": (
+                "Maintain supporting surfaces at 1.9 to avoid noise accumulation."
+            ),
         }
 
     def _derive_future_alignment_strategy(self) -> Dict[str, Any]:
@@ -345,7 +351,9 @@ class RenderEnhancementPlanner:
                 )
 
         return {
-            "summary": "Current readings imply contemporary comfort. Layer visionary cues to exceed 0.70.",
+            "summary": (
+                "Current readings imply contemporary comfort. Layer visionary cues to exceed 0.70."
+            ),
             "adjustments": adjustments,
         }
 
@@ -377,8 +385,8 @@ class RenderEnhancementPlanner:
     def _derive_scene_specific_upgrades(self) -> Dict[str, Any]:
         return {
             "aerial": {
-                "current_luxury": self.report.scenes["aerial"].metric(
-                    "regular", "luxury_index"
+                "current_luxury": (
+                    self.report.scenes["aerial"].metric("regular", "luxury_index")
                 ),
                 "target": 0.7,
                 "moves": [
@@ -388,8 +396,8 @@ class RenderEnhancementPlanner:
                 ],
             },
             "pool": {
-                "current_luxury": self.report.scenes["pool"].metric(
-                    "regular", "luxury_index"
+                "current_luxury": (
+                    self.report.scenes["pool"].metric("regular", "luxury_index")
                 ),
                 "target": 0.72,
                 "moves": [
@@ -399,8 +407,8 @@ class RenderEnhancementPlanner:
                 ],
             },
             "great_room": {
-                "current_luxury": self.report.scenes["great_room"].metric(
-                    "regular", "luxury_index"
+                "current_luxury": (
+                    self.report.scenes["great_room"].metric("regular", "luxury_index")
                 ),
                 "target": 0.75,
                 "moves": [

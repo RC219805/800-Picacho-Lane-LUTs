@@ -156,9 +156,15 @@ HQDN3D_PRESETS = {
 }
 
 UNSHARP_PRESETS = {
-    "soft": "unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=1.0:chroma_msize_x=5:chroma_msize_y=5:chroma_amount=0.4",
-    "medium": "unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=1.35:chroma_msize_x=5:chroma_msize_y=5:chroma_amount=0.65",
-    "strong": "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.6:chroma_msize_x=3:chroma_msize_y=3:chroma_amount=0.8",
+    "soft": (
+        "unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=1.0:chroma_msize_x=5:chroma_msize_y=5:chroma_amount=0.4"
+    ),
+    "medium": (
+        "unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=1.35:chroma_msize_x=5:chroma_msize_y=5:chroma_amount=0.65"
+    ),
+    "strong": (
+        "unsharp=luma_msize_x=5:luma_msize_y=5:luma_amount=1.6:chroma_msize_x=3:chroma_msize_y=3:chroma_amount=0.8"
+    ),
 }
 
 DEBAND_PRESETS = {

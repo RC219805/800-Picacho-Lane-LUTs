@@ -75,7 +75,7 @@ def test_assign_materials_prefers_high_scores(tmp_path: Path) -> None:
         "bronze",
         "shade",
     )
-    textures = {name: (tmp_path / f"{name}.png") for name in material_names}
+    textures = {name: tmp_path / f"{name}.png" for name in material_names}
     for tex in textures.values():
         Image.new("RGB", (8, 8), (255, 255, 255)).save(tex)
 
@@ -140,7 +140,7 @@ def test_enhance_aerial_creates_output(tmp_path: Path) -> None:
         "bronze",
         "shade",
     )
-    textures = {name: (tmp_path / f"{name}.png") for name in material_names}
+    textures = {name: tmp_path / f"{name}.png" for name in material_names}
     colors = {
         "plaster": (240, 230, 215),
         "stone": (210, 190, 170),
@@ -304,7 +304,7 @@ def test_enhance_aerial_with_palette_uses_predefined_mappings(tmp_path: Path) ->
         "bronze",
         "shade",
     )
-    textures = {name: (tmp_path / f"{name}.png") for name in material_names}
+    textures = {name: tmp_path / f"{name}.png" for name in material_names}
     colors = {
         "plaster": (240, 230, 215),
         "stone": (210, 190, 170),
@@ -366,7 +366,7 @@ def test_enhance_aerial_can_save_computed_palette(tmp_path: Path) -> None:
         "bronze",
         "shade",
     )
-    textures = {name: (tmp_path / f"{name}.png") for name in material_names}
+    textures = {name: tmp_path / f"{name}.png" for name in material_names}
     for name, tex_path in textures.items():
         Image.new("RGB", (16, 16), (255, 255, 255)).save(tex_path)
 
