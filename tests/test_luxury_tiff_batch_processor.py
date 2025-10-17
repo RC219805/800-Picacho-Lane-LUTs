@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, Dict
 
 import pytest
@@ -22,8 +22,8 @@ pytest.importorskip("PIL.TiffImagePlugin")
 from PIL import Image, TiffImagePlugin  # noqa: E402
 
 import luxury_tiff_batch_processor as ltiff  # noqa: E402
-import luxury_tiff_batch_processor.pipeline as pipeline  # noqa: E402
 import luxury_tiff_batch_processor.io_utils as io_utils  # noqa: E402
+import luxury_tiff_batch_processor.pipeline as pipeline  # noqa: E402
 
 
 def test_run_pipeline_exposed_in_dunder_all():

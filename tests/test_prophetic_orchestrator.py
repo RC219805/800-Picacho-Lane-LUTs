@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from prophetic_orchestrator import (
-    CausalityEngine,
-    PropheticOrchestrator,
-    TemporalAntibody,
-    WeakPoint,
-)
+from prophetic_orchestrator import (CausalityEngine, PropheticOrchestrator,
+                                    TemporalAntibody, WeakPoint)
 
 
 def test_causality_engine_normalizes_inputs() -> None:

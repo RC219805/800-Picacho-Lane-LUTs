@@ -17,7 +17,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Sequence
 
 # --- third-party (kept light) ---
 import numpy as np

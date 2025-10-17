@@ -10,16 +10,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from board_material_aerial_enhancer import (
-    ClusterStats,
-    MaterialRule,
-    apply_materials,
-    assign_materials,
-    build_material_rules,
-    enhance_aerial,
-    load_palette_assignments,
-    save_palette_assignments,
-)
+from board_material_aerial_enhancer import (ClusterStats, MaterialRule,
+                                            apply_materials, assign_materials,
+                                            build_material_rules,
+                                            enhance_aerial,
+                                            load_palette_assignments,
+                                            save_palette_assignments)
 
 
 def _dummy_rule(name: str, texture_path: Path) -> MaterialRule:
@@ -251,6 +247,7 @@ def test_load_palette_assignments_restores_mappings(tmp_path: Path) -> None:
 def test_load_palette_assignments_rejects_unknown_materials(tmp_path: Path) -> None:
     """Test that loading palette with unknown material names raises ValueError."""
     import json
+
     import pytest
 
     # Create palette with unknown material

@@ -23,7 +23,8 @@ from both production scripts and unit tests without additional infrastructure.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Mapping, Optional
+from typing import (Any, Callable, Dict, Iterable, Iterator, List, Mapping,
+                    Optional)
 
 Observer = Callable[[Any], float]
 Transform = Callable[[Any], Any]

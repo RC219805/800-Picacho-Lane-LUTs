@@ -1,19 +1,16 @@
 """Enhance the 750 Picacho pool aerial with MBAR board materials."""
 
 from pathlib import Path
+
 import numpy as np
 from PIL import Image, ImageDraw
 
-from board_material_aerial_enhancer import (
-    enhance_aerial,
-    _downsample_image,
-    _kmeans,
-    _assign_full_image,
-    _cluster_stats,
-    build_material_rules,
-    assign_materials,
-    DEFAULT_TEXTURES,
-)
+from board_material_aerial_enhancer import (DEFAULT_TEXTURES,
+                                            _assign_full_image, _cluster_stats,
+                                            _downsample_image, _kmeans,
+                                            assign_materials,
+                                            build_material_rules,
+                                            enhance_aerial)
 
 # Input and output paths
 input_path = Path("input_images/RC_002RC-office750Picacho_Pool 2.tiff")

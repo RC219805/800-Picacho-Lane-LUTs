@@ -1,21 +1,18 @@
 """Generate a visualization showing MBAR material assignments for the aerial."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
+
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from board_material_aerial_enhancer import (
-    _downsample_image,
-    _kmeans,
-    _assign_full_image,
-    _cluster_stats,
-    build_material_rules,
-    assign_materials,
-    load_palette_assignments,
-    save_palette_assignments,
-    DEFAULT_TEXTURES,
-)
+from board_material_aerial_enhancer import (DEFAULT_TEXTURES,
+                                            _assign_full_image, _cluster_stats,
+                                            _downsample_image, _kmeans,
+                                            assign_materials,
+                                            build_material_rules,
+                                            load_palette_assignments,
+                                            save_palette_assignments)
 
 # Load the input image
 input_path = Path(
