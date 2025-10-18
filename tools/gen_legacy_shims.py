@@ -25,12 +25,14 @@ SKIP_NAMES = {
     "os", "sys", "math", "re", "io", "importlib",
 }
 
+
 def _iter_py(paths: Iterable[Path]) -> Iterable[Path]:
     for p in paths:
         if p.is_dir():
             yield from (q for q in p.rglob("*.py") if q.is_file())
         elif p.is_file() and p.suffix == ".py":
             yield p
+
 
 def _collect_test_imports(test_root: Path) -> Set[str]:
     mods: Set[str] = set()
@@ -54,12 +56,14 @@ def _collect_test_imports(test_root: Path) -> Set[str]:
                     mods.add(base)
     return mods
 
+
 def _importable(mod: str) -> bool:
     try:
         importlib.import_module(mod)
         return True
     except Exception:
         return False
+
 
 def _shim_code(mod: str) -> str:
     return f'''"""Auto-generated legacy shim for `{mod}`. Re-exports from `src.{mod}`."""
@@ -75,16 +79,21 @@ globals().update({{k: getattr(_mod, k) for k in dir(_mod) if not k.startswith("_
 __all__ = [k for k in globals() if not k.startswith("_")]
 '''
 
+
 def _write_shim(mod: str, root: Path) -> Path:
     target = root / f"{mod}.py"
     target.write_text(_shim_code(mod), encoding="utf-8")
     return target
 
-def main(argv: list[str] | None = None) -> int:
+
+def main(argv: List[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Repository root (default: .)")
-    ap.add_argument("--fail-on-create", action="store_true",
-                    help="Exit non-zero if any new shim would be created (do not write).")
+    ap.add_argument(
+        "--fail-on-create",
+        action="store_true",
+        help="Exit non-zero if any new shim would be created (do not write).",
+    )
     args = ap.parse_args(argv)
 
     repo = Path(args.root).resolve()
@@ -108,9 +117,8 @@ def main(argv: list[str] | None = None) -> int:
             if not target.exists():
                 to_create.append(name)
             else:
-                # Refresh existing shim to current template (idempotent).
-                existing = target.read_text(encoding="utf-8")
                 desired = _shim_code(name)
+                existing = target.read_text(encoding="utf-8")
                 if existing != desired and not args.fail_on_create:
                     target.write_text(desired, encoding="utf-8")
                     updated.append(target)
@@ -120,9 +128,8 @@ def main(argv: list[str] | None = None) -> int:
         for mod in to_create:
             print(f" - {mod}.py (re-exports from src.{mod})")
         if args.fail_on_create:
-            print("❌ New shims would be created. Commit shims to the repo or add modules under src/.")
+            print("❌ New shims would be created. Commit shims or add modules under src/.")
             return 1
-        # Otherwise, create them now.
         for mod in to_create:
             _write_shim(mod, repo)
         print(f"Created {len(to_create)} shims.")
@@ -135,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     if not to_create and not updated:
         print("No shims needed.")
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
