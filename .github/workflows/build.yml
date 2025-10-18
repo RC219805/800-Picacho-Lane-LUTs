@@ -76,10 +76,8 @@ jobs:
         if: ${{ runner.debug == '1' }}
         run: pip list
 
-      - name: Generate legacy shims from tests
-        run: python tools/gen_legacy_shims.py
-
-      # (Removed duplicate install step)
+      - name: Generate legacy shims from tests (fail if new shims are needed)
+        run: python tools/gen_legacy_shims.py --fail-on-create
 
       - name: Restore mypy cache
         uses: actions/cache/restore@v4
