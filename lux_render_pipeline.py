@@ -28,7 +28,7 @@ except Exception:  # pragma: no cover
 
 # --- stdlib ---
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Union
 
 # --- third-party (kept lean) ---
 import numpy as np
