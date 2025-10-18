@@ -1,3 +1,12 @@
+TL;DR: Cleaned and normalized your README: fixed code fences, headings, TOC, anchors, and added the v1.3 “measure” docs with a proper JSON fields table.
+
+Plan
+	•	Normalize badges and headings; remove odd separators.
+	•	Close/open code fences correctly; turn lists into Markdown bullets.
+	•	Add TOC with valid anchors.
+	•	Add a short “Requirements” block.
+	•	Insert the v1.3 section (command, fields table, example, notes).
+
 # path: README.md
 [![CI](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/ci.yml/badge.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
@@ -11,7 +20,12 @@ A cutting-edge collection of **16 professional color grading LUTs** featuring in
 
 ## Quickstart
 
-Install and run your first TIFF enhancement:
+### Requirements
+- Python **3.10+**
+- TIFF pipeline: [`tifffile`](https://pypi.org/project/tifffile/) (optional but recommended), `imagecodecs` for LZW/JPEG where available
+- FFmpeg (for video tools)
+
+### Install and run your first TIFF enhancement
 
 ```bash
 # Option A: local install (recommended for this repo)
@@ -46,6 +60,7 @@ Table of Contents
 	•	HDR Production Pipeline
 	•	Board Material Aerial Enhancer
 	•	Decision Decay Dashboard
+	•	v1.3 additions
 	•	License
 
 Collection Contents
@@ -93,15 +108,12 @@ python -m pip install .
 # or mirror CI:
 python -m pip install -r requirements.txt
 
-
 	•	Add optional extras:
 
 pip install -e ".[tiff]"   # 16-bit TIFF processing
 pip install -e ".[dev]"    # pytest, linting
 pip install -e ".[ml]"     # ML extras for lux_render_pipeline
 pip install -e ".[all]"    # everything
-
-
 
 Console Scripts
 
@@ -155,6 +167,57 @@ decision_decay_dashboard.py surfaces temporal contracts, codebase philosophy vio
 
 ⸻
 
+v1.3 additions
+
+Auto-measure eye-line & gutters
+
+python presence_cli_v1_3.py measure \
+  --image In-Command_In-Conversation_2400x3000.jpg \
+  --aspect 4:5
+# -> JSON report printed to stdout
+
+JSON fields
+
+field	type	description
+image	string	Path to the analyzed image (as provided).
+width	int	Image width in pixels.
+height	int	Image height in pixels.
+aspect_input	string	Target aspect ratio in W:H form (e.g., 4:5, 1.91:1).
+eye_line_pct	number	Estimated eye-line position as percent of image height (0–100, top→bottom).
+gutters	object	Suggested letterboxing to reach the target aspect. Integer pixel values per side.
+├ left_px	int	Left gutter pixels.
+├ right_px	int	Right gutter pixels.
+├ top_px	int	Top gutter pixels.
+└ bottom_px	int	Bottom gutter pixels.
+confidence	number	Heuristic confidence 0.0–1.0. Higher with face detection; reduced for tiny/flat images.
+method	string	"face" when OpenCV face is found, otherwise "fallback" (edge-based estimate).
+
+Example output
+
+{
+  "image": "In-Command_In-Conversation_2400x3000.jpg",
+  "width": 2400,
+  "height": 3000,
+  "aspect_input": "4:5",
+  "eye_line_pct": 41.87,
+  "gutters": { "left_px": 0, "right_px": 0, "top_px": 0, "bottom_px": 0 },
+  "confidence": 0.88,
+  "method": "face"
+}
+
+Accuracy notes
+	•	Face method (OpenCV Haar cascade) anchors the eye line ~42% from face top—robust for portraits.
+	•	Fallback (edge energy, upper field) works without OpenCV; confidence slightly lower.
+	•	Very small or low-contrast images reduce confidence.
+
+Optional dependency: Installing OpenCV improves detection:
+
+pip install opencv-python
+
+
+
+⸻
+
 License
 
 Professional use permitted with attribution.
@@ -165,5 +228,5 @@ Author: Richard Cheetham
 Brand: Carolwood Estates · RACLuxe Division
 Contact: info@racluxe.com
 
-**a.** Want me to align the CI badge to a different workflow filename if yours isn’t `ci.yml`?  
-**b.** Add a small “Requirements” block (Python, FFmpeg, tifffile/imagecodecs) right under Quickstart?
+**a.** Want me to add small sample images/gifs to the v1.3 section with `--visualize` overlays?  
+**b.** Add a “Requirements” badge row (FFmpeg / tifffile) under the main badges?
