@@ -1,13 +1,3 @@
-TL;DR: I rewrote your Actions README to fix outdated bits (badges, caching, Codecov, set-output), clarified triggers, added minimal permissions + concurrency snippets, and replaced the non-existent AI action with a working OpenAI example that uses $GITHUB_OUTPUT. Citations back up each change.  ￼
-
-Plan
-	•	Normalize workflow names + badges → file-based badge URLs.
-	•	Update caching → actions/setup-python@v5 built-in cache: pip.
-	•	Add Codecov v5 OIDC notes → permissions: id-token: write.
-	•	Replace deprecated ::set-output in Python snippet → write to $GITHUB_OUTPUT.
-	•	Modernize OpenAI sample → from openai import OpenAI client usage.
-	•	Add quick “Permissions / Concurrency / Pin actions” guidance.
-
 # GitHub Actions Workflows
 
 This directory contains GitHub Actions workflow definitions for the 800 Picacho Lane LUTs repository.
