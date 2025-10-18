@@ -1,70 +1,76 @@
+# file: prophetic_orchestrator.py
 """Futuristic failure prevention utilities for the LUT automation suite.
 
-This module introduces a playful-yet-practical :class:`PropheticOrchestrator`
-that mirrors the repository's taste for evocative metaphors.  The orchestrator
-wraps two lightweight collaborators:
-
-``CausalityEngine``
-    Extracts a normalized list of weak points from a predicted failure
-    description.  The class accepts flexible input structures so the helper can
-    plug into dashboards or bespoke forecasting code without ceremony.
-
-``QuantumProbabilityField``
-    Tracks how assertively the codebase has reinforced each weak point.  The
-    implementation is intentionally deterministic—the "quantum" naming is
-    purely aesthetic—yet it provides ergonomic helpers for tests and
-    instrumentation.
-
-The orchestrator pulls the two utilities together to proactively generate
-"temporal antibodies" (countermeasures) that neutralize the predicted failure
-before it can manifest.  While whimsical, the helpers are fully typed and keep
-state that downstream tooling can inspect.
+Playful but practical orchestrator with a small CLI:
+  - trace:   normalize predicted failure into weak points
+  - prevent: reinforce & generate temporal antibodies
+  - snapshot:show probability ledger for provided weak points
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, List, Mapping, MutableMapping, Optional, Sequence
+import argparse
+import json
+import sys
+from dataclasses import dataclass, field
+from typing import Iterable, List, Mapping, MutableMapping, Optional, Sequence, Dict, Any
 
 
-@dataclass(frozen=True)
+# ------------------------------ core datatypes ------------------------------
+
+@dataclass(frozen=True, eq=False)
 class WeakPoint:
     """Represents a vulnerable component within the causal chain."""
-
     component: str
     failure_mode: str
     severity: Optional[str] = None
     metadata: Optional[Mapping[str, object]] = None
 
     def signature(self) -> str:
-        """Return a stable identifier for reporting and debugging."""
-
+        """Stable identifier for reporting and hashing."""
         if self.severity:
             return f"{self.component}:{self.failure_mode}:{self.severity}"
         return f"{self.component}:{self.failure_mode}"
+
+    # why: default dataclass hash would include `metadata` (often unhashable).
+    def __hash__(self) -> int:  # pragma: no cover - trivial
+        return hash(self.signature())
+
+    def __eq__(self, other: object) -> bool:  # pragma: no cover - trivial
+        return isinstance(other, WeakPoint) and self.signature() == other.signature()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "component": self.component,
+            "failure_mode": self.failure_mode,
+            "severity": self.severity,
+            "metadata": dict(self.metadata) if self.metadata else None,
+            "signature": self.signature(),
+        }
 
 
 @dataclass(frozen=True)
 class TemporalAntibody:
     """Represents a preventative measure aimed at a specific weak point."""
-
     target: WeakPoint
     countermeasure: str
     confidence: float
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "target": self.target.to_dict(),
+            "countermeasure": self.countermeasure,
+            "confidence": self.confidence,
+        }
+
+
+# ------------------------------ core engines --------------------------------
 
 class CausalityEngine:
-    """Trace the underlying causes of a predicted failure.
-
-    The engine accepts flexible input (strings, mappings, dataclasses, or raw
-    sequences) and always returns a list of :class:`WeakPoint` instances.  This
-    keeps higher level orchestration code agnostic to the exact forecasting
-    format.
-    """
+    """Trace the underlying causes of a predicted failure."""
 
     def trace_failure_origins(self, predicted_failure: object) -> List[WeakPoint]:
         """Normalize *predicted_failure* into a list of weak points."""
-
         weak_entries: Iterable[object]
 
         if isinstance(predicted_failure, Mapping):
@@ -80,14 +86,13 @@ class CausalityEngine:
         else:
             weak_entries = [predicted_failure]
 
-        normalized: List[WeakPoint] = []
-        for entry in weak_entries:
-            normalized.append(self._normalize_entry(entry))
+        normalized: List[WeakPoint] = [self._normalize_entry(entry) for entry in weak_entries]
         return normalized
 
     def _normalize_entry(self, entry: object) -> WeakPoint:
         if isinstance(entry, WeakPoint):
             return entry
+
         if isinstance(entry, Mapping):
             component = str(
                 entry.get("component")
@@ -106,36 +111,26 @@ class CausalityEngine:
             ).strip()
             severity = entry.get("severity") or entry.get("criticality")
             metadata_keys = {
-                "component",
-                "system",
-                "target",
-                "name",
-                "failure_mode",
-                "issue",
-                "mode",
-                "description",
-                "reason",
-                "severity",
-                "criticality",
+                "component", "system", "target", "name",
+                "failure_mode", "issue", "mode", "description", "reason",
+                "severity", "criticality",
             }
-            metadata: MutableMapping[str, object] = {
-                str(key): value
-                for key, value in entry.items()
-                if key not in metadata_keys
+            metadata: Dict[str, object] = {
+                str(k): v for k, v in entry.items() if k not in metadata_keys
             }
             return WeakPoint(
                 component=component or "unknown",
                 failure_mode=failure_mode or "unspecified",
                 severity=str(severity) if severity is not None else None,
-                metadata=dict(metadata) or None,
+                metadata=metadata or None,
             )
+
         if isinstance(entry, str):
             component, _, failure_mode = entry.partition(":")
             component = component.strip() or "unknown"
             failure_mode = failure_mode.strip() or "unspecified"
-            if not failure_mode:
-                failure_mode = "unspecified"
             return WeakPoint(component=component, failure_mode=failure_mode)
+
         return WeakPoint(component="unknown", failure_mode=str(entry))
 
 
@@ -148,32 +143,23 @@ class QuantumProbabilityField:
     def strengthen_reality_branch(
         self, weak_point: WeakPoint, *, success_probability: float
     ) -> float:
-        """Record a high-confidence outcome for *weak_point*.
-
-        Parameters
-        ----------
-        weak_point:
-            The vulnerability that is being mitigated.
-        success_probability:
-            A value between 0 and 1 indicating how robust the mitigation is.
-        """
-
+        """Record a high-confidence outcome for *weak_point*."""
         if not 0.0 <= success_probability <= 1.0:
             raise ValueError("success_probability must be between 0 and 1")
         current = self._branch_probabilities.get(weak_point, 0.0)
-        updated = max(current, success_probability)
+        updated = max(current, float(success_probability))
         self._branch_probabilities[weak_point] = updated
         return updated
 
     def probability_of(self, weak_point: WeakPoint) -> float:
-        """Return the recorded success probability for *weak_point*."""
-
         return self._branch_probabilities.get(weak_point, 0.0)
 
     def snapshot(self) -> Mapping[WeakPoint, float]:
-        """Return a shallow copy of the probability ledger."""
-
         return dict(self._branch_probabilities)
+
+    def snapshot_serializable(self) -> Dict[str, float]:
+        """Signature→probability mapping for JSON."""
+        return {wp.signature(): p for wp, p in self._branch_probabilities.items()}
 
 
 class PropheticOrchestrator:
@@ -191,20 +177,7 @@ class PropheticOrchestrator:
     def prevent_future_failure(
         self, predicted_failure: object
     ) -> List[TemporalAntibody]:
-        """Neutralize *predicted_failure* before it manifests.
-
-        The method performs three steps:
-
-        1. Use :class:`CausalityEngine` to derive the causal chain.
-        2. Reinforce each weak point by setting its success probability to 0.9999.
-        3. Generate and deploy temporal antibodies describing the preventative work.
-
-        Returns
-        -------
-        list[TemporalAntibody]
-            The countermeasures that were deployed.
-        """
-
+        """Neutralize *predicted_failure* before it manifests."""
         causal_chain = self.timeline_analyzer.trace_failure_origins(predicted_failure)
         for weak_point in causal_chain:
             self.probability_weaver.strengthen_reality_branch(
@@ -220,11 +193,8 @@ class PropheticOrchestrator:
         causal_chain: Optional[Sequence[WeakPoint]] = None,
     ) -> List[TemporalAntibody]:
         """Create actionable countermeasures for each weak point."""
-
         if causal_chain is None:
-            causal_chain = self.timeline_analyzer.trace_failure_origins(
-                predicted_failure
-            )
+            causal_chain = self.timeline_analyzer.trace_failure_origins(predicted_failure)
 
         antibodies: List[TemporalAntibody] = []
         for weak_point in causal_chain:
@@ -252,12 +222,93 @@ class PropheticOrchestrator:
     def deploy_temporal_antibodies(
         self, antibodies: Iterable[TemporalAntibody]
     ) -> None:
-        """Record the deployed antibodies for future inspection."""
-
         self._deployed_antibodies.extend(antibodies)
 
     @property
     def deployed_antibodies(self) -> List[TemporalAntibody]:
-        """Return a copy of the deployed antibodies list."""
-
         return list(self._deployed_antibodies)
+
+
+__all__ = [
+    "WeakPoint",
+    "TemporalAntibody",
+    "CausalityEngine",
+    "QuantumProbabilityField",
+    "PropheticOrchestrator",
+]
+
+
+# ---------------------------------- CLI ------------------------------------
+
+def _read_json_arg(path: str | None) -> Any:
+    if not path:
+        return None
+    if path == "-":
+        return json.load(sys.stdin)
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _cli_trace(obj: Any) -> int:
+    eng = CausalityEngine()
+    wps = eng.trace_failure_origins(obj)
+    out = {"ok": True, "count": len(wps), "weak_points": [wp.to_dict() for wp in wps]}
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def _cli_prevent(obj: Any) -> int:
+    orch = PropheticOrchestrator()
+    antibodies = orch.prevent_future_failure(obj)
+    out = {
+        "ok": True,
+        "deployed": len(antibodies),
+        "antibodies": [a.to_dict() for a in antibodies],
+        "probabilities": orch.probability_weaver.snapshot_serializable(),
+    }
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+def _cli_snapshot(obj: Any) -> int:
+    """Accepts the same structures as `trace` (or a list of WeakPoint-like dicts)."""
+    eng = CausalityEngine()
+    field = QuantumProbabilityField()
+    for wp in eng.trace_failure_origins(obj):
+        field.strengthen_reality_branch(wp, success_probability=field.probability_of(wp))
+    print(json.dumps({"ok": True, "probabilities": field.snapshot_serializable()}, indent=2))
+    return 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    p = argparse.ArgumentParser(prog="prophetic", description="Prophetic Orchestrator CLI")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    def add_common(sp: argparse.ArgumentParser) -> None:
+        g = sp.add_mutually_exclusive_group(required=True)
+        g.add_argument("--json", help="Path to JSON input or '-' for stdin.")
+        g.add_argument("--string", help="Quick string input like 'db:timeout' or plain text.")
+
+    sp_trace = sub.add_parser("trace", help="Normalize predicted failure → weak points.")
+    add_common(sp_trace)
+
+    sp_prev = sub.add_parser("prevent", help="Reinforce & emit antibodies.")
+    add_common(sp_prev)
+
+    sp_snap = sub.add_parser("snapshot", help="Emit a probability ledger for provided weak points.")
+    add_common(sp_snap)
+
+    args = p.parse_args(argv)
+    obj: Any = _read_json_arg(args.json) if args.json is not None else (args.string or "")
+
+    if args.cmd == "trace":
+        return _cli_trace(obj)
+    if args.cmd == "prevent":
+        return _cli_prevent(obj)
+    if args.cmd == "snapshot":
+        return _cli_snapshot(obj)
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
