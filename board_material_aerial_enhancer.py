@@ -1,4 +1,4 @@
-# board_material_aerial_enhancer.py
+# path: board_material_aerial_enhancer.py
 """
 Apply MBAR board material textures to an aerial photograph using a lightweight,
 CI-friendly pipeline focused on deterministic behavior for tests.
@@ -12,36 +12,26 @@ Key pieces:
 
 from __future__ import annotations
 
-# --- stdlib ---
 import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any
 
-# --- third-party (kept light) ---
 import numpy as np
 from PIL import Image, ImageFilter
 
-# Optional dependency (keep soft so CI stays lean)
 try:  # pragma: no cover - optional
     import tifffile  # type: ignore
 except Exception:  # pragma: no cover - optional
     tifffile = None  # type: ignore
 
-# If the real class is available elsewhere, use it only for typing;
-# otherwise provide a tiny stub that satisfies runtime & tests.
 if TYPE_CHECKING:  # pragma: no cover
     from material_response import MaterialRule  # type: ignore
 else:
     @dataclass(frozen=True)
     class MaterialRule:  # minimal stub
         name: str
-
-
-# --------------------------
-# Public API
-# --------------------------
 
 __all__ = [
     "ClusterStats",
@@ -50,32 +40,22 @@ __all__ = [
     "save_palette_assignments",
     "relabel",
     "enhance_aerial",
-    "apply_materials",   # back-compat expected by tests
-    "assign_materials",  # additional alias expected by tests
+    "apply_materials",
+    "assign_materials",
 ]
 
-
 # --------------------------
-# Cluster statistics (exported for tests)
+# Cluster statistics
 # --------------------------
 
 @dataclass(frozen=True)
 class ClusterStats:
-    """Statistics for a single color cluster in the aerial image."""
     label: int
     count: int
     centroid: tuple[float, float, float]  # (r,g,b) in [0,1]
 
 
 def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterStats]:
-    """
-    Compute simple stats per label:
-      - pixel count
-      - centroid color (mean RGB in [0,1])
-
-    labels: (H, W) uint dtype
-    rgb:    (H, W, 3) uint8 or float in [0,1]
-    """
     if rgb.dtype.kind in ("u", "i"):
         rgb_f = rgb.astype(np.float32) / 255.0
     else:
@@ -96,7 +76,6 @@ def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterSt
         out.append(ClusterStats(label=int(lab), count=cnt, centroid=centroid))
     return out
 
-
 # --------------------------
 # Palette (de)serialization
 # --------------------------
@@ -105,14 +84,6 @@ PALETTE_SCHEMA_VERSION = 1
 
 
 def _serialize_assignments(assignments: Mapping[int, "MaterialRule"]) -> Dict[str, Any]:
-    """
-    Stable, compact JSON payload:
-
-    {
-      "version": 1,
-      "assignments": { "0": "plaster", "1": "stone", ... }
-    }
-    """
     payload = {str(k): v.name for k, v in assignments.items()}
     return {"version": PALETTE_SCHEMA_VERSION, "assignments": payload}
 
@@ -123,11 +94,6 @@ def _deserialize_assignments(
     *,
     strict: bool = True,
 ) -> Dict[int, "MaterialRule"]:
-    """
-    Accepts legacy flat map or v1+ wrapped payload.
-    - strict=True → raises on unknown names or bad keys.
-    - strict=False → skips unknowns/bad keys.
-    """
     if "assignments" in data:
         raw_map = data.get("assignments", {})
     else:
@@ -163,7 +129,7 @@ def load_palette_assignments(
 ) -> dict[int, "MaterialRule"]:
     """
     Load cluster→material mapping. If file missing or unreadable, return {}.
-    If rules is None we cannot reconstruct MaterialRule instances → return {}.
+    If rules is provided, names must match; otherwise {}.
     """
     p = Path(path)
     if not p.exists():
@@ -190,6 +156,30 @@ def load_palette_assignments(
     return _deserialize_assignments(data, rule_seq, strict=strict)
 
 
+def _load_palette_assignments_loose(path: str | Path) -> dict[int, "MaterialRule"]:
+    """
+    Loose loader: build MaterialRule stubs from JSON names when rule set isn't provided.
+    Why: allow `--palette` to work in CLI without a textures dict.
+    """
+    p = Path(path)
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        raw_map = data["assignments"] if isinstance(data, dict) and "assignments" in data else data
+        if not isinstance(raw_map, dict):
+            return {}
+    except Exception:
+        return {}
+
+    out: Dict[int, "MaterialRule"] = {}
+    for sk, name in raw_map.items():
+        try:
+            k = int(sk)
+        except Exception:
+            continue
+        out[k] = MaterialRule(name=str(name))
+    return out
+
+
 def _atomic_write_text(path: Path, text: str) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8")
@@ -203,35 +193,25 @@ def save_palette_assignments(assignments: Mapping[int, "MaterialRule"], path: st
     text = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
     _atomic_write_text(p, text)
 
-
 # --------------------------
 # Texture & image helpers
 # --------------------------
 
 def _validate_texture(path: str | Path, size_hint: tuple[int, int] | None = None) -> Image.Image:
-    """
-    Open a texture (RGBA) or return a deterministic neutral fallback if missing.
-    """
-    p = Path(path)
     try:
-        img = Image.open(p).convert("RGBA")
+        img = Image.open(Path(path)).convert("RGBA")
     except Exception:
         w, h = size_hint or (64, 64)
         return Image.new("RGBA", (w, h), (200, 200, 200, 255))
-
     if size_hint and img.size != size_hint:
         img = img.resize(size_hint, resample=Image.BILINEAR)
     return img
-
 
 # --------------------------
 # Lightweight k-means
 # --------------------------
 
 def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
-    """
-    Tiny k-means for CI: data is (N, 3) in [0,1]. Returns labels (N,).
-    """
     rng = np.random.default_rng(seed)
     centroids = data[rng.choice(data.shape[0], size=k, replace=False)]
     for _ in range(max(1, iters)):
@@ -245,19 +225,13 @@ def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
                 centroids[i] = data[rng.integers(0, data.shape[0])]
     return labels
 
-
 # --------------------------
 # Public utilities
 # --------------------------
 
 def relabel(assignments: Mapping[int, "MaterialRule"], labels: np.ndarray) -> np.ndarray:
-    """
-    Optionally remap labels to a stable order based on material names.
-    If no mapping needed, returns labels unchanged.
-    """
     if not assignments:
         return labels
-
     pairs = sorted((cid, rule.name) for cid, rule in assignments.items())
     remap = {cid: new_id for new_id, (cid, _) in enumerate(pairs)}
     out = labels.copy()
@@ -277,13 +251,14 @@ def enhance_aerial(
     palette_path: Optional[Path | str] = None,
     save_palette: Optional[Path | str] = None,
     textures: Mapping[str, Path] | None = None,
+    save_labels: Optional[Path | str] = None,
 ) -> Path:
     """
-    Minimal enhancement to keep CI deterministic:
-    - run k-means on a downscaled analysis image
-    - relabel using palette if provided
-    - apply a gentle, label-aware blur to hint at "material regions"
-    - save an RGB result (no HDR / 16-bit path to avoid heavy deps)
+    Deterministic CI enhancement:
+    - k-means on downscaled analysis image
+    - optional palette relabel
+    - gentle label-aware blur mix
+    - RGB output; optional label export
     """
     input_path = Path(input_path)
     output_path = Path(output_path)
@@ -313,7 +288,9 @@ def enhance_aerial(
         if textures:
             for name in textures.keys():
                 rule_candidates.append(MaterialRule(name=name))
-        assignments = load_palette_assignments(palette_path, rule_candidates)
+            assignments = load_palette_assignments(palette_path, rule_candidates)
+        if not assignments:  # loose fallback (no textures/rules)
+            assignments = _load_palette_assignments_loose(palette_path)
         if assignments:
             labels = relabel(assignments, labels)
 
@@ -334,6 +311,11 @@ def enhance_aerial(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     out_img.save(output_path)
 
+    if save_labels:
+        lp = Path(save_labels)
+        lp.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(labels, mode="L").save(lp)
+
     if save_palette:
         if not assignments:
             assignments = {i: MaterialRule(name=f"cluster{i}") for i in range(k)}
@@ -353,11 +335,8 @@ def apply_materials(
     palette_path: Optional[Path | str] = None,
     save_palette: Optional[Path | str] = None,
     textures: Mapping[str, Path] | None = None,
+    save_labels: Optional[Path | str] = None,
 ) -> Path:
-    """
-    Back-compat wrapper expected by tests. Delegates to `enhance_aerial`.
-    Kept intentionally simple/deterministic for CI.
-    """
     return enhance_aerial(
         input_path=input_path,
         output_path=output_path,
@@ -368,6 +347,7 @@ def apply_materials(
         palette_path=palette_path,
         save_palette=save_palette,
         textures=textures,
+        save_labels=save_labels,
     )
 
 
@@ -382,8 +362,8 @@ def assign_materials(
     palette_path: Optional[Path | str] = None,
     save_palette: Optional[Path | str] = None,
     textures: Mapping[str, Path] | None = None,
+    save_labels: Optional[Path | str] = None,
 ) -> Path:
-    """Back-compat alias expected by tests."""
     return apply_materials(
         input_path=input_path,
         output_path=output_path,
@@ -394,8 +374,8 @@ def assign_materials(
         palette_path=palette_path,
         save_palette=save_palette,
         textures=textures,
+        save_labels=save_labels,
     )
-
 
 # --------------------------
 # CLI
@@ -411,6 +391,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-width", type=int, default=4096, help="Output width (default: 4096)")
     parser.add_argument("--palette", type=Path, default=None, help="Load cluster→material assignments from JSON")
     parser.add_argument("--save-palette", type=Path, default=None, help="Write JSON palette to this path after processing")
+    parser.add_argument("--save-labels", type=Path, default=None, help="Write 8-bit label map image (for tests/QA)")
     return parser.parse_args(argv)
 
 
@@ -426,6 +407,7 @@ def main(argv: Sequence[str] | None = None) -> Path:
         palette_path=ns.palette,
         save_palette=ns.save_palette,
         textures=None,
+        save_labels=ns.save_labels,
     )
     print(str(out))
     return out
