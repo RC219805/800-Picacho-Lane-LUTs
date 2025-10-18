@@ -1,20 +1,211 @@
-{
-  "name": "Presence Overlay Guides",
-  "id": "com.carolwood.presence.overlay",
-  "api": "1.0.0",
-  "main": "code.ts",
-  "editorType": [
-    "figma",
-    "figjam"
-  ],
-  "relaunchButtons": [
-    {
-      "command": "add-guides-4x5",
-      "name": "Add Presence Guides (4\u00d75)"
-    },
-    {
-      "command": "add-guides-2x3",
-      "name": "Add Presence Guides (2\u00d73)"
+// file: code.ts
+// Presence Overlay Guides — add centered 4:5 or 2:3 page guides.
+// Requires manifest relaunchButtons with commands: add-guides-4x5, add-guides-2x3
+
+type Num = number;
+type Rect = { x: Num; y: Num; width: Num; height: Num };
+
+const PLUGIN_NS = 'com.carolwood.presence.overlay';
+const STORE_KEY = 'presence-overlay-guides';
+const EPS = 0.5; // why: fuzzy match to delete last-run guides without touching user guides
+
+const CMD_TO_ASPECT: Record<string, { name: string; ratio: number }> = {
+  'add-guides-4x5': { name: '4×5', ratio: 4 / 5 },
+  'add-guides-2x3': { name: '2×3', ratio: 2 / 3 },
+};
+
+run().catch((err) => {
+  // Surface unexpected failures; avoid silent exits.
+  console.error(err);
+  figma.closePlugin('Presence Overlay Guides: unexpected error (see console).');
+});
+
+async function run(): Promise<void> {
+  // Hard guard: only works in Figma Design normal mode.
+  if (figma.editorType !== 'figma' || figma.mode !== 'default') {
+    figma.closePlugin('Presence Overlay Guides: run in Figma Design (not FigJam/Dev Mode).');
+    return;
+  }
+
+  // Determine command (default to 4×5 if launched directly).
+  const command = figma.command && CMD_TO_ASPECT[figma.command] ? figma.command : 'add-guides-4x5';
+  const { name: label, ratio } = CMD_TO_ASPECT[command];
+
+  // Prepare quick relaunch on current selection.
+  setRelaunchOnSelection();
+
+  // Resolve container bounds.
+  const container = getContainerBounds();
+  if (!container) {
+    figma.closePlugin('Presence Overlay Guides: nothing visible to align (select something or zoom to canvas).');
+    return;
+  }
+
+  const crop = fitCentered(container, ratio);
+  const newGuides = rectToGuides(crop);
+
+  const page = figma.currentPage;
+  const prev = readPreviousOffsets(page);
+  const retained = filterOutPrevious(page.guides, prev);
+
+  page.guides = retained.concat(newGuides); // PageNode-guides requires full-array assignment
+  writePreviousOffsets(page, newGuides);
+
+  figma.notify(`Added Presence Guides ${label} at ${fmtRect(crop)}.`);
+  figma.closePlugin();
+}
+
+/* -------------------------- selection & viewport -------------------------- */
+
+function getContainerBounds(): Rect | null {
+  const sel = figma.currentPage.selection.filter((n) => n.visible);
+  if (sel.length >= 1) {
+    return unionBounds(sel);
+  }
+  // Fallback: viewport
+  const v = figma.viewport.bounds;
+  if (v.width > 1 && v.height > 1) return { x: v.x, y: v.y, width: v.width, height: v.height };
+  return null;
+}
+
+function unionBounds(nodes: readonly SceneNode[]): Rect | null {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const node of nodes) {
+    const b = node.absoluteRenderBounds ?? approxBounds(node);
+    if (!b) continue;
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.width);
+    maxY = Math.max(maxY, b.y + b.height);
+  }
+  if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return null;
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+// Fallback when absoluteRenderBounds is null (invisible, exotic nodes)
+function approxBounds(node: SceneNode): Rect | null {
+  // Transform local (0,0) and (w,h) by absoluteTransform; ignores rotation of children, ok here.
+  const w = ('width' in node ? (node as any).width : null) as number | null;
+  const h = ('height' in node ? (node as any).height : null) as number | null;
+  if (w == null || h == null) return null;
+
+  const m = node.absoluteTransform; // [ [m00, m01, m02], [m10, m11, m12] ]
+  const p0 = applyMat(m, 0, 0);
+  const p1 = applyMat(m, w, 0);
+  const p2 = applyMat(m, 0, h);
+  const p3 = applyMat(m, w, h);
+  const xs = [p0.x, p1.x, p2.x, p3.x];
+  const ys = [p0.y, p1.y, p2.y, p3.y];
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...xs), maxY = Math.max(...ys);
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function applyMat(m: Transform, x: number, y: number): { x: number; y: number } {
+  return { x: m[0][0] * x + m[0][1] * y + m[0][2], y: m[1][0] * x + m[1][1] * y + m[1][2] };
+}
+
+/* ----------------------------- crop computation ----------------------------- */
+
+function fitCentered(container: Rect, aspectWoverH: number): Rect {
+  const r = aspectWoverH;
+  const cw = container.width;
+  const ch = container.height;
+  const cX = container.x;
+  const cY = container.y;
+
+  const cAspect = cw / ch;
+  let w: number, h: number;
+  if (cAspect >= r) {
+    // container wider → clamp width, keep height
+    h = ch;
+    w = ch * r;
+  } else {
+    // container taller → clamp height, keep width
+    w = cw;
+    h = cw / r;
+  }
+  const x = cX + (cw - w) / 2;
+  const y = cY + (ch - h) / 2;
+  return { x, y, width: w, height: h };
+}
+
+function rectToGuides(r: Rect): Guide[] {
+  const left = r.x;
+  const right = r.x + r.width;
+  const top = r.y;
+  const bottom = r.y + r.height;
+  return [
+    { axis: 'X', offset: left },
+    { axis: 'X', offset: right },
+    { axis: 'Y', offset: top },
+    { axis: 'Y', offset: bottom },
+  ];
+}
+
+/* -------------------------- replace-previous strategy -------------------------- */
+
+type Stored = { x: number[]; y: number[] };
+
+function readPreviousOffsets(page: PageNode): Stored | null {
+  try {
+    const raw = page.getPluginData(STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Stored;
+    if (!parsed || !Array.isArray(parsed.x) || !Array.isArray(parsed.y)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writePreviousOffsets(page: PageNode, guides: Guide[]): void {
+  const xs = guides.filter((g) => g.axis === 'X').map((g) => round(g.offset));
+  const ys = guides.filter((g) => g.axis === 'Y').map((g) => round(g.offset));
+  page.setPluginData(STORE_KEY, JSON.stringify({ x: xs, y: ys }));
+}
+
+function filterOutPrevious(existing: readonly Guide[], prev: Stored | null): Guide[] {
+  if (!prev) return existing.slice();
+  const keep = (g: Guide): boolean => {
+    if (g.axis === 'X') return !prev.x.some((o) => close(o, g.offset));
+    return !prev.y.some((o) => close(o, g.offset));
+  };
+  return existing.filter(keep);
+}
+
+function round(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+function close(a: number, b: number): boolean {
+  return Math.abs(a - b) <= EPS;
+}
+
+/* ----------------------------- relaunch buttons ----------------------------- */
+
+function setRelaunchOnSelection(): void {
+  const sel = figma.currentPage.selection;
+  if (sel.length === 0) return;
+  for (const node of sel) {
+    try {
+      node.setRelaunchData({
+        'add-guides-4x5': 'Add Presence Guides (4×5)',
+        'add-guides-2x3': 'Add Presence Guides (2×3)',
+      });
+    } catch {
+      // Some nodes may not support relaunch data; ignore safely.
     }
-  ]
+  }
+}
+
+/* -------------------------------- utilities -------------------------------- */
+
+function fmtRect(r: Rect): string {
+  const n = (v: number) => Math.round(v);
+  return `${n(r.width)}×${n(r.height)} @ (${n(r.x)}, ${n(r.y)})`;
 }
