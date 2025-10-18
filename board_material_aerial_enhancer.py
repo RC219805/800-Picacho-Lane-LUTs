@@ -312,7 +312,7 @@ def _print_header(inp: Path, out: Path, k: int, pal_len: int) -> None:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
-        import typer  # lazy import for optional dep
+        import typer  # pylint: disable=import-outside-toplevel
     except Exception:
         print("This CLI requires 'typer'. Install with: pip install typer", flush=True)
         return 2
@@ -320,7 +320,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     app = typer.Typer(add_completion=False, no_args_is_help=True, help="MBAR aerial enhancer")
 
     @app.command("enhance")
-    def _enhance(
+    def _enhance(  # pylint: disable=too-many-arguments
         input_path: Path = typer.Option(..., "--input", "-i", exists=True, readable=True, dir_okay=False, file_okay=True),
         output_path: Path = typer.Option(..., "--output", "-o"),
         analysis_max_dim: int = typer.Option(1280, help="Max dimension for clustering preview."),
@@ -332,7 +332,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         jpeg_subsampling: int = typer.Option(1, min=0, max=2, help="JPEG chroma subsampling: 0=4:4:4, 1=4:2:2, 2=4:2:0"),
         progress: bool = typer.Option(True, "--progress/--no-progress", help="Show progress bar."),
         respect_icc: bool = typer.Option(True, "--respect-icc/--ignore-icc", help="Honor embedded ICC by converting to sRGB."),
-        verbose_header: bool = typer.Option(False, "--verbose-header/--no-verbose-header", help="Print extra header details (e.g., ICC handling). Off by default to preserve legacy output."),
+        verbose_header: bool = typer.Option(False, "--verbose-header/--no-verbose-header", help="Print extra header details (e.g., ICC handling)."),
         palette: List[str] = typer.Option(None, "--palette", "-p", help="Override palette with HEX colors. Repeatable."),
     ) -> None:
         pal = palette if palette else None
