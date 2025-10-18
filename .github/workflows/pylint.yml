@@ -1,4 +1,4 @@
-# .github/workflows/pylint.yml
+# file: .github/workflows/pylint.yml
 name: pylint
 
 on:
@@ -30,39 +30,33 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
-            requirements-ci.txt
-            requirements.txt
             pyproject.toml
+            requirements.txt
+            requirements-ci.txt
 
       - name: Cache Pylint cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/pylint
-          key: ${{ runner.os }}-pylint-${{ hashFiles('.pylintrc', 'pyproject.toml') }}-${{ matrix.python-version || '3.12' }}
+          key: ${{ runner.os }}-pylint-${{ hashFiles('.pylintrc', 'pyproject.toml') }}-3.12
           restore-keys: |
             ${{ runner.os }}-pylint-
 
-      - name: Install dependencies (lean)
+      - name: Install dev-lean extras (ensures imports resolve) + pylint
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_PROGRESS_BAR: "off"
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements-ci.txt ]; then
-            pip install -r requirements-ci.txt
-          else
-            pip install pylint
-          fi
+          pip install -e ".[dev-lean]" pylint
 
       - name: Run Pylint
         shell: bash
         run: |
           set -euo pipefail
-          # Collect tracked Python files (robust to spaces/newlines)
           git ls-files -z '*.py' > pyfiles.z || true
           if [ ! -s pyfiles.z ]; then
             echo "No Python files to lint."
             exit 0
           fi
-          # Lint with parallel workers; fail if score < 8.0 (tune as needed)
-          xargs -0 pylint -j 0 --fail-under=8.0 < pyfiles.z
+          pylint -j 0 --fail-under=8.0 $(tr '\0' ' ' < pyfiles.z)
