@@ -1,4 +1,4 @@
-# path: luxury_tiff_batch_processor/lux_batch_cli.py
+# path: luxury_tiff_batch_processor/cli.py
 """Typer-based batch CLI for luxury TIFF processing.
 
 Install an entrypoint like:
@@ -78,11 +78,16 @@ def _ensure_parent(path: Path) -> None:
 
 
 def _extract_array(image_result) -> NDArray[np.float32]:
-     # Why: tolerate minor IO result-shape variations without breaking.
-     import numpy as np  # lazy import
-     for attr in ("array", "arr", "data"):
-         if hasattr(image_result, attr):
-             return getattr(image_result, attr).astype("float32", copy=False)    
+    # Why: tolerate minor IO result-shape variations without breaking.
+    import numpy as np  # lazy import
+    for attr in ("array", "arr", "data"):
+        if hasattr(image_result, attr):
+            return getattr(image_result, attr).astype("float32", copy=False)
+    if isinstance(image_result, tuple) and image_result:
+        return image_result[0].astype("float32", copy=False)
+    if isinstance(image_result, dict) and "array" in image_result:
+        return image_result["array"].astype("float32", copy=False)
+    raise RuntimeError("Unsupported ImageToFloatResult; expected an '.array' field.")
 
 
 def _safe_save(path: Path, array, reference) -> None:
