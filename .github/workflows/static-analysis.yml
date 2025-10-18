@@ -1,3 +1,4 @@
+# .github/workflows/static-analysis-and-tests.yml
 name: Static Analysis & Testing
 
 on:
@@ -6,73 +7,132 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   static-analysis:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write   # Required for Codecov OIDC (no secret token needed).
     strategy:
+      fail-fast: false
       matrix:
         python-version: ['3.10', '3.11', '3.12']
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'                       # Built-in pip caching.
+          cache-dependency-path: |
+            **/requirements*.txt
 
-    - name: Cache pip packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements-dev.txt
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements-dev.txt
+      - name: Cache MyPy cache
+        uses: actions/cache@v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-mypy-${{ matrix.python-version }}-${{ hashFiles('mypy.ini', 'pyproject.toml', 'requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-mypy-${{ matrix.python-version }}-
+            ${{ runner.os }}-mypy-
 
-    - name: Run Black
-      run: black --check .
+      # ---- Style / Lint (run once on 3.12 to avoid duplicate work across matrix) ----
+      - name: Run Black
+        if: matrix.python-version == '3.12'   # Avoids triple-running version-agnostic checks.
+        run: black --check .
 
-    - name: Run isort
-      run: isort --check-only .
+      - name: Run isort
+        if: matrix.python-version == '3.12'
+        run: isort --check-only .
 
-    - name: Run Flake8
-      run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Run Flake8 (errors-only)
+        if: matrix.python-version == '3.12'
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-    - name: Run Pylint
-      run: |
-        find . -name "*.py" -not -path "./01_Film_Emulation/*" \
-               -not -path "./02_Location_Aesthetic/*" \
-               -not -path "./03_Material_Response/*" \
-               -not -path "./venv/*" | xargs pylint --exit-zero
+      - name: Run Pylint
+        if: matrix.python-version == '3.12'
+        run: |
+          # Why: use git-tracked files to avoid arg list limits; exclude heavy/ignored dirs.
+          git ls-files '*.py' \
+            | grep -Ev '^(01_Film_Emulation/|02_Location_Aesthetic/|03_Material_Response/|venv/)' \
+            | xargs pylint --exit-zero
 
-    - name: Run MyPy
-      run: mypy . --ignore-missing-imports --exclude '(01_Film_Emulation|02_Location_Aesthetic|03_Material_Response)/'
+      - name: Run MyPy
+        if: matrix.python-version == '3.12'
+        run: |
+          mypy . \
+            --ignore-missing-imports \
+            --exclude '(01_Film_Emulation|02_Location_Aesthetic|03_Material_Response|venv)/'
 
-    - name: Run Bandit Security Scan
-      run: bandit -r . -x tests/,01_Film_Emulation/,02_Location_Aesthetic/,03_Material_Response/ -f json -o bandit-report.json
-      continue-on-error: true
+      - name: Run Bandit Security Scan
+        if: matrix.python-version == '3.12'
+        continue-on-error: true
+        run: |
+          bandit -r . \
+            -x tests/,01_Film_Emulation/,02_Location_Aesthetic/,03_Material_Response/ \
+            -f json -o bandit-report.json
 
-    - name: Run Tests with Coverage
-      run: |
-        pytest -v --cov=. --cov-report=xml --cov-report=term-missing || true
+      - name: Upload Bandit report
+        if: always() && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          if-no-files-found: ignore
+          retention-days: 7
 
-    - name: Upload Coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: false
+      # ---- Tests (run on every Python) ----
+      - name: Run Tests with Coverage
+        run: |
+          pytest -v --cov=. --cov-report=xml --cov-report=term-missing
+        # Why: let test failures fail the job; we still upload coverage via 'if: always()'.
 
-    - name: Check Code Complexity
-      run: |
-        find . -name "*.py" -not -path "./01_Film_Emulation/*" \
-               -not -path "./02_Location_Aesthetic/*" \
-               -not -path "./03_Material_Response/*" \
-               -not -path "./venv/*" | xargs radon cc -s -nb
-      continue-on-error: true
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # ---- Codecov (upload once) ----
+      - name: Upload Coverage to Codecov (OIDC)
+        if: always() && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true            # Requires id-token: write permission.
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false   # Why: don't block CI if Codecov is flaky.
+
+      # ---- Complexity (non-fatal, once) ----
+      - name: Check Code Complexity (radon)
+        if: matrix.python-version == '3.12'
+        continue-on-error: true
+        run: |
+          git ls-files '*.py' \
+            | grep -Ev '^(01_Film_Emulation/|02_Location_Aesthetic/|03_Material_Response/|venv/)' \
+            | xargs radon cc -s -nb | tee radon.txt
+
+      - name: Upload radon report
+        if: always() && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: radon-report
+          path: radon.txt
+          if-no-files-found: ignore
+          retention-days: 7
