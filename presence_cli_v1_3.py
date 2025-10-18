@@ -1,219 +1,191 @@
-#!/usr/bin/env python3
-"""
-presence_cli_v1_3.py - governance + measurement + consent gating (v1.3)
+# path: presence_cli_v1_3.py
+from __future__ import annotations
 
-New in v1.3:
-  • measure        - auto-estimate eye-line and side gutters from an image
-  • verify-manifest- enforce consent gating (and optionally signature) before detection
-
-Requires: Pillow, numpy, (optional) PyNaCl for signature verification
-"""
-import argparse
-import base64
-import hashlib
 import json
 import math
-import os
+import re
 import sys
-from typing import Dict, Tuple
+from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Optional, Tuple
 
 import numpy as np
+import typer
 from PIL import Image
 
-# Optional Ed25519 verify
+app = typer.Typer(add_completion=False, no_args_is_help=True, help="Presence v1.3 CLI utilities.")
+
+# Optional OpenCV; we degrade gracefully when not present.
 try:
-    from nacl.exceptions import BadSignatureError
-    from nacl.signing import VerifyKey
-
-    NACL_OK = True
-except ImportError:
-    NACL_OK = False
-
-
-def _sha256_file(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.digest()
+    import cv2  # type: ignore
+    _CV_OK = True
+except Exception:
+    cv2 = None  # type: ignore
+    _CV_OK = False
 
 
-def measure_image(path: str, aspect: str="4:5") -> Dict[str,float]:
-    """Heuristic measurement for eye-line and side gutters (no face model required).
-    - Eye-line: finds strongest horizontal gradient row in the central band in a plausible range,
-      then blends with the target prior (0.27 for 4:5; 0.36 for 2:3) for robustness.
-    - Gutters: inspects a lower row (0.72H for 4:5; 0.78H for 2:3), detects left/right edges.
+@dataclass
+class MeasureResult:
+    image: str
+    width: int
+    height: int
+    aspect_input: str
+    eye_line_pct: float
+    gutters: dict
+    confidence: float
+    method: str
+
+
+def _parse_aspect(aspect: str) -> Tuple[float, float]:
+    m = re.match(r"^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$", aspect)
+    if not m:
+        raise typer.BadParameter("Aspect must be like '4:5' or '1.91:1'")
+    a_w = float(m.group(1))
+    a_h = float(m.group(2))
+    if a_w <= 0 or a_h <= 0:
+        raise typer.BadParameter("Aspect components must be positive.")
+    return a_w, a_h
+
+
+def _pil_to_gray_np(im: Image.Image) -> np.ndarray:
+    arr = np.array(im.convert("L"), dtype=np.uint8)
+    return arr
+
+
+def _detect_face_eyeline(gray: np.ndarray) -> Optional[Tuple[float, float]]:
+    """Return (eye_y_px, confidence) if OpenCV Haar cascade can find a face.
+
+    Eye line approximated ~42% down from face top.
     """
-    im = Image.open(path).convert("L")
-    w, h = im.size
-    arr = np.array(im, dtype=np.float32) / 255.0
-
-    # Eye-line search window and prior
-    if aspect == "4:5":
-        y0, y1, prior = int(0.22 * h), int(0.52 * h), 0.27
-        chest_row = int(0.72 * h)
-    else:  # 2:3
-        y0, y1, prior = int(0.25 * h), int(0.55 * h), 0.36
-        chest_row = int(0.78 * h)
-
-    # Vertical gradient magnitude (row energy) in central 40% width
-    cw = int(0.40 * w)
-    x0 = (w - cw) // 2
-    x1 = x0 + cw
-    dy = np.abs(np.diff(arr, axis=0))
-    row_energy = dy[y0:y1, x0:x1].sum(axis=1)
-    idx = int(np.argmax(row_energy)) + y0
-    eye_pct_raw = idx / h
-    # blend with prior to stabilize: weighted toward measured when confident
-    # confidence proxy = prominence over median
-    # Small epsilon to avoid division by zero in normalization
-    EPSILON = 1e-6
-    # Minimum and maximum blend weights for measured value
-    ALPHA_MIN = 0.3  # Lower bound for confidence weight
-    ALPHA_MAX = 0.85  # Upper bound for confidence weight
-    ALPHA_BASE = 0.45  # Base confidence weight
-    ALPHA_PROM_SCALE = 0.08  # Scale factor for prominence influence
-    prom = (row_energy.max() - np.median(row_energy)) / (np.std(row_energy) + EPSILON)
-    alpha = max(
-        ALPHA_MIN, min(ALPHA_MAX, ALPHA_BASE + ALPHA_PROM_SCALE * prom)
-    )  # Blend weight for measured vs prior
-    eye_pct = alpha * eye_pct_raw + (1 - alpha) * prior
-
-    # Gutters via horizontal gradient at chest row
-    row = arr[chest_row, :]
-    dx = np.abs(np.diff(row))
-    thr = dx.mean() + 1.2 * dx.std()
-    # left edge from left→center
-    left_edge = None
-    for x in range(5, w // 2):
-        if dx[x] > thr:
-            left_edge = x
-            break
-    # right edge from right→center
-    right_edge = None
-    for x in range(w - 6, w // 2, -1):
-        if dx[x] > thr:
-            right_edge = x
-            break
-    # Fallbacks if not found
-    if left_edge is None:
-        left_edge = int(0.14 * w)
-    if right_edge is None:
-        right_edge = int(0.86 * w)
-
-    left_gutter_pct = left_edge / w
-    right_gutter_pct = (w - right_edge) / w
-
-    # Confidence heuristic
-    conf_eye = max(0.0, min(1.0, prom / 6.0))
-    conf_gut = (
-        1.0
-        if (0.05 < left_gutter_pct < 0.35 and 0.05 < right_gutter_pct < 0.35)
-        else 0.6
-    )
-
-    return {
-        "width": w,
-        "height": h,
-        "aspect": aspect,
-        "eye_line_pct": round(float(eye_pct), 4),
-        "eye_line_pct_raw": round(float(eye_pct_raw), 4),
-        "eye_confidence": round(float(conf_eye), 3),
-        "left_gutter_pct": round(float(left_gutter_pct), 4),
-        "right_gutter_pct": round(float(right_gutter_pct), 4),
-        "gutters_confidence": round(float(conf_gut), 3),
-        "chest_row_px": chest_row,
-    }
+    if not _CV_OK:
+        return None
+    try:
+        cascade_path = getattr(cv2.data, "haarcascades", "") + "haarcascade_frontalface_default.xml"
+        face_cascade = cv2.CascadeClassifier(cascade_path)
+        if face_cascade.empty():
+            return None
+        eq = cv2.equalizeHist(gray)
+        faces = face_cascade.detectMultiScale(eq, scaleFactor=1.1, minNeighbors=5, flags=cv2.CASCADE_SCALE_IMAGE)
+        if len(faces) == 0:
+            return None
+        # Largest face by area
+        x, y, w, h = max(faces, key=lambda r: r[2] * r[3])
+        eye_y = float(y) + 0.42 * float(h)  # typical eyes ~0.4–0.45 of face height
+        conf = 0.9
+        return eye_y, conf
+    except Exception:
+        return None
 
 
-def verify_manifest(manifest_path: str, hero: str=None, web: str=None,
-                    public_key: str=None, signature_path: str=None,
-                    require_signature: bool=False) -> Tuple[bool, str]:
-    """Consent gating + optional signature verification.
-    PASS only if: consent.status == 'granted' AND 'detect' in consent.scope.
-    If require_signature, also verifies Ed25519 signature over JSON payload of sha256 files.
+def _edge_fallback_eyeline(gray: np.ndarray) -> Tuple[float, float]:
+    """Edge-energy fallback for eye-line without OpenCV.
+
+    Focus on upper 65%; pick row with max edge magnitude.
     """
-    with open(manifest_path, "r") as f:
-        m = json.load(f)
-    consent = m.get("consent", {})
-    if consent.get("status") != "granted":
-        return False, "Consent not granted"
-    scope = consent.get("scope") or []
-    if "detect" not in scope:
-        return False, "Scope does not allow detection"
+    # Sobel gradients
+    gx = np.zeros_like(gray, dtype=np.float32)
+    gy = np.zeros_like(gray, dtype=np.float32)
+    # Minimal Sobel kernels
+    kx = np.array([[-1, 0, 1],
+                   [-2, 0, 2],
+                   [-1, 0, 1]], dtype=np.float32)
+    ky = kx.T
+    # Convolve (naive valid conv via slicing for speed and zero-copy)
+    pad = 1
+    padded = np.pad(gray.astype(np.float32), pad, mode="reflect")
+    H, W = gray.shape
+    out_x = np.empty_like(gray, dtype=np.float32)
+    out_y = np.empty_like(gray, dtype=np.float32)
+    for i in range(H):
+        r = padded[i:i+3, :]
+        out_x[i, :] = (r[:, 0:W] * kx[0, 0] + r[:, 1:W+1] * kx[0, 1] + r[:, 2:W+2] * kx[0, 2] +
+                       padded[i+1, 0:W] * kx[1, 0] + padded[i+1, 1:W+1] * kx[1, 1] + padded[i+1, 2:W+2] * kx[1, 2] +
+                       padded[i+2, 0:W] * kx[2, 0] + padded[i+2, 1:W+1] * kx[2, 1] + padded[i+2, 2:W+2] * kx[2, 2])
+        out_y[i, :] = (r[:, 0:W] * ky[0, 0] + r[:, 1:W+1] * ky[0, 1] + r[:, 2:W+2] * ky[0, 2] +
+                       padded[i+1, 0:W] * ky[1, 0] + padded[i+1, 1:W+1] * ky[1, 1] + padded[i+1, 2:W+2] * ky[1, 2] +
+                       padded[i+2, 0:W] * ky[2, 0] + padded[i+2, 1:W+1] * ky[2, 1] + padded[i+2, 2:W+2] * ky[2, 2])
+    mag = np.hypot(out_x, out_y)
+    # Limit to upper 65% (where eyes typically sit in portraits)
+    upto = max(1, int(gray.shape[0] * 0.65))
+    row_energy = mag[:upto, :].mean(axis=1)
+    idx = int(row_energy.argmax())
+    eye_y = float(idx)
+    # Confidence heuristic: sharper edges + higher variance -> better
+    conf = 0.6
+    return eye_y, conf
 
-    if require_signature:
-        if not (public_key and signature_path and hero and web):
-            return False, "Signature required but parameters missing"
-        if not NACL_OK:
-            return False, "PyNaCl not available for signature verification"
-        # Build payload (sha256 of files; sorted JSON)
-        payload = {
-            "manifest_sha256": base64.b64encode(_sha256_file(manifest_path)).decode(),
-            "hero_sha256": base64.b64encode(_sha256_file(hero)).decode(),
-            "web_sha256": base64.b64encode(_sha256_file(web)).decode(),
-        }
-        ser = json.dumps(payload, sort_keys=True).encode("utf-8")
-        with open(signature_path, "rb") as sig_file:
-            sig = base64.b64decode(sig_file.read())
-        with open(public_key, "rb") as pub_file:
-            vk = VerifyKey(pub_file.read())
-        try:
-            vk.verify(ser, sig)
-        except BadSignatureError:
-            return False, "Signature invalid"
-    return True, "PASS"
+
+def _compute_gutters(w: int, h: int, a_w: float, a_h: float) -> dict:
+    """Compute letterbox gutters to reach aspect a_w:a_h (integers, >=0)."""
+    target_w = h * (a_w / a_h)
+    if target_w > w + 1e-6:
+        pad = target_w - w
+        left = right = max(0, int(round(pad / 2.0)))
+        return {"left_px": left, "right_px": right, "top_px": 0, "bottom_px": 0}
+    # vertical bars
+    target_h = w * (a_h / a_w)
+    if target_h > h + 1e-6:
+        pad = target_h - h
+        top = bottom = max(0, int(round(pad / 2.0)))
+        return {"left_px": 0, "right_px": 0, "top_px": top, "bottom_px": bottom}
+    return {"left_px": 0, "right_px": 0, "top_px": 0, "bottom_px": 0}
 
 
-def main():
-    ap = argparse.ArgumentParser(prog="presence-cli-v1.3")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+def _confidence_adjust(conf: float, gray: np.ndarray) -> float:
+    """Reduce confidence for tiny or flat images."""
+    H, W = gray.shape
+    if min(H, W) < 512:
+        conf -= 0.1
+    std = float(gray.std())
+    if std < 8.0:
+        conf -= 0.1
+    return max(0.0, min(1.0, conf))
 
-    m = sub.add_parser(
-        "measure", help="Auto-measure eye-line and side gutters from an image"
+
+@app.command("measure")
+def measure(
+    image: Path = typer.Option(..., "--image", "-i", exists=True, file_okay=True, dir_okay=False, readable=True),
+    aspect: str = typer.Option("4:5", "--aspect", "-a", help="Target aspect ratio (e.g., 4:5, 1.91:1)"),
+) -> None:
+    """
+    Auto-measure eye-line (as a percent of image height) and gutters to letterbox to the given aspect.
+
+    Prints a JSON report: {"eye_line_pct", "gutters", "confidence", "width", "height", "method"}.
+    """
+    a_w, a_h = _parse_aspect(aspect)
+
+    with Image.open(image) as im:
+        w, h = im.size
+        gray = _pil_to_gray_np(im)
+
+    # Try face-based method first
+    method = "fallback"
+    res = _detect_face_eyeline(gray)
+    if res is not None:
+        eye_y, conf = res
+        method = "face"
+    else:
+        eye_y, conf = _edge_fallback_eyeline(gray)
+
+    conf = _confidence_adjust(conf, gray)
+    eye_line_pct = float(np.clip((eye_y / float(h)) * 100.0, 0.0, 100.0))
+    gutters = _compute_gutters(w, h, a_w, a_h)
+
+    out = MeasureResult(
+        image=str(image),
+        width=w,
+        height=h,
+        aspect_input=f"{a_w:g}:{a_h:g}",
+        eye_line_pct=round(eye_line_pct, 2),
+        gutters=gutters,
+        confidence=round(conf, 2),
+        method=method,
     )
-    m.add_argument("--image", required=True)
-    m.add_argument("--aspect", choices=["4:5", "2:3"], default="4:5")
-    m.add_argument("--out", help="Write JSON report")
+    print(json.dumps(asdict(out), ensure_ascii=False, separators=(",", ":")))
 
-    v = sub.add_parser(
-        "verify-manifest", help="Consent gating (and optional signature verify)"
-    )
-    v.add_argument("--manifest", required=True)
-    v.add_argument("--hero")
-    v.add_argument("--web")
-    v.add_argument("--public")  # Ed25519 public key
-    v.add_argument("--signature")  # signature.b64
-    v.add_argument("--require-signature", action="store_true")
 
-    args = ap.parse_args()
-
-    if args.cmd == "measure":
-        report = measure_image(args.image, args.aspect)
-        txt = json.dumps(report, indent=2)
-        if args.out:
-            with open(args.out, "w") as f:
-                f.write(txt)
-            print("Wrote", args.out)
-        else:
-            print(txt)
-
-    elif args.cmd == "verify-manifest":
-        ok, msg = verify_manifest(
-            args.manifest,
-            args.hero,
-            args.web,
-            args.public,
-            args.signature,
-            args.require_signature,
-        )
-        if ok:
-            print("PASS:", msg)
-            sys.exit(0)
-        else:
-            print("FAIL:", msg)
-            sys.exit(2)
-
+def main() -> None:
+    app()
 
 
 if __name__ == "__main__":
