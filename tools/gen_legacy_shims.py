@@ -5,13 +5,16 @@ Auto-generate back-compat shims so legacy imports keep working when code lives u
 - Scans tests/ for imports.
 - For single-segment modules that fail to import, tries src.<mod>.
 - If src.<mod> exists, writes ./<mod>.py that re-exports public names.
+
+Use --fail-on-create in CI to force committing shims instead of generating them ad hoc.
 """
 from __future__ import annotations
 
+import argparse
 import ast
 import importlib
 from pathlib import Path
-from typing import Iterable, Set
+from typing import Iterable, Set, List
 
 HEADER = "# Auto-generated shim by tools/gen_legacy_shims.py; do not edit."
 
@@ -58,9 +61,8 @@ def _importable(mod: str) -> bool:
     except Exception:
         return False
 
-def _write_shim(mod: str, root: Path) -> Path:
-    target = root / f"{mod}.py"
-    code = f'''"""Auto-generated legacy shim for `{mod}`. Re-exports from `src.{mod}`."""
+def _shim_code(mod: str) -> str:
+    return f'''"""Auto-generated legacy shim for `{mod}`. Re-exports from `src.{mod}`."""
 from __future__ import annotations
 {HEADER}
 
@@ -72,11 +74,20 @@ _mod = _importlib.import_module("src.{mod}")
 globals().update({{k: getattr(_mod, k) for k in dir(_mod) if not k.startswith("_")}})
 __all__ = [k for k in globals() if not k.startswith("_")]
 '''
-    target.write_text(code, encoding="utf-8")
+
+def _write_shim(mod: str, root: Path) -> Path:
+    target = root / f"{mod}.py"
+    target.write_text(_shim_code(mod), encoding="utf-8")
     return target
 
-def main() -> int:
-    repo = Path(".").resolve()
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default=".", help="Repository root (default: .)")
+    ap.add_argument("--fail-on-create", action="store_true",
+                    help="Exit non-zero if any new shim would be created (do not write).")
+    args = ap.parse_args(argv)
+
+    repo = Path(args.root).resolve()
     tests_dir = repo / "tests"
     if not tests_dir.exists():
         print("No tests/ directory found; nothing to do.")
@@ -86,18 +97,42 @@ def main() -> int:
     (repo / "src").mkdir(parents=True, exist_ok=True)
     (repo / "src" / "__init__.py").touch()
 
-    created = []
+    to_create: List[str] = []
+    updated: List[Path] = []
+
     for name in sorted(_collect_test_imports(tests_dir)):
         if _importable(name):
             continue
         if _importable(f"src.{name}"):
-            created.append(_write_shim(name, repo))
+            target = repo / f"{name}.py"
+            if not target.exists():
+                to_create.append(name)
+            else:
+                # Refresh existing shim to current template (idempotent).
+                existing = target.read_text(encoding="utf-8")
+                desired = _shim_code(name)
+                if existing != desired and not args.fail_on_create:
+                    target.write_text(desired, encoding="utf-8")
+                    updated.append(target)
 
-    if created:
-        print("Created shims:")
-        for p in created:
+    if to_create:
+        print("Shims missing and required:")
+        for mod in to_create:
+            print(f" - {mod}.py (re-exports from src.{mod})")
+        if args.fail_on_create:
+            print("❌ New shims would be created. Commit shims to the repo or add modules under src/.")
+            return 1
+        # Otherwise, create them now.
+        for mod in to_create:
+            _write_shim(mod, repo)
+        print(f"Created {len(to_create)} shims.")
+
+    if updated:
+        print("Updated existing shims:")
+        for p in updated:
             print(f" - {p.relative_to(repo)}")
-    else:
+
+    if not to_create and not updated:
         print("No shims needed.")
     return 0
 
