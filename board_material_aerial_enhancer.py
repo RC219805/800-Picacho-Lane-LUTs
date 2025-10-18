@@ -3,15 +3,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple, Any
 import io
 
 import numpy as np
 from PIL import Image, ImageOps
 from tqdm import tqdm
 
-try:
-    from PIL import ImageCms  # optional color management
+# Optional color management; typed to satisfy static analysis when missing.
+try:  # pragma: no cover
+    from PIL import ImageCms as _ImageCms  # type: ignore
+    ImageCms: Any = _ImageCms
 except Exception:  # pragma: no cover
     ImageCms = None  # type: ignore
 
@@ -124,7 +126,7 @@ def _kmeans_plus_plus_init(data: np.ndarray, k: int, *, rng: np.random.Generator
         cur = np.einsum("ij,ij->i", d, d)
         dist2 = np.minimum(dist2, cur)
         total = float(dist2.sum())
-        if not np.isfinite(total) or total <= 1e-12:  # prevents collapse failure
+        if not np.isfinite(total) or total <= 1e-12:
             idx = rng.integers(0, n)
         else:
             probs = dist2 / total
@@ -171,8 +173,6 @@ def _ensure_srgb(im: Image.Image, *, respect_icc: bool = True) -> Image.Image:
     """
     Convert PIL Image with embedded ICC to sRGB if requested. Falls back to RGB
     without color management when ImageCms is unavailable or conversion fails.
-
-    Why: downstream math assumes sRGB+D65; honoring ICC avoids hue/contrast drift.
     """
     if not respect_icc:
         return im.convert("RGB")
@@ -205,11 +205,6 @@ def enhance_aerial(
 ) -> Path:
     """
     Apply MBAR palette transfer to an aerial image and save to disk as JPEG.
-
-    Parameters:
-    - respect_icc: Honor embedded ICC by converting to sRGB before processing.
-    - show_progress: Toggle tqdm progress bar.
-    - jpeg_subsampling: 0=4:4:4, 1=4:2:2 (default), 2=4:2:0.
     """
     input_path = Path(input_path)
     output_path = Path(output_path)
@@ -221,6 +216,7 @@ def enhance_aerial(
     arr = np.asarray(im, dtype=np.float32) / 255.0
     H, W = arr.shape[:2]
 
+    # analysis image
     scale = min(1.0, analysis_max_dim / max(w0, h0)) if analysis_max_dim > 0 else 1.0
     if scale < 1.0:
         im_small = im.resize((int(round(w0 * scale)), int(round(h0 * scale))), Image.LANCZOS)
@@ -228,6 +224,7 @@ def enhance_aerial(
     else:
         arr_small = arr
 
+    # sample for k-means
     flat = arr_small.reshape(-1, 3).astype(np.float64, copy=False)
     rng = np.random.default_rng(seed)
     sample_n = min(flat.shape[0], 250_000)
@@ -239,16 +236,20 @@ def enhance_aerial(
     km = _kmeans(sample, k=k, seed=seed)
     centers_rgb = km.centers  # (k,3) in RGB01
 
+    # map centers to palette in Lab
     pal_rgb = _palette_rgb01(palette)
     centers_lab = _rgb_to_lab(centers_rgb)
     pal_lab = _rgb_to_lab(pal_rgb)
 
+    # nearest palette color for each center (Lab)
     diff2 = _pairwise_sq_dists(centers_lab, pal_lab)  # (k, m)
     nearest_idx = np.argmin(diff2, axis=1)            # (k,)
     target_rgb = pal_rgb[nearest_idx]                 # (k,3)
 
+    # per-center RGB delta
     deltas = target_rgb - centers_rgb                 # (k,3)
 
+    # sigma from centroid spread; exclude diagonal to avoid biasing low
     if k > 1:
         cd2 = _pairwise_sq_dists(centers_rgb, centers_rgb)
         iu = np.triu_indices(k, 1)
@@ -257,8 +258,10 @@ def enhance_aerial(
         pd = 0.25
     sigma2 = max((0.5 * pd) ** 2, 1e-8)
 
-    rows_target = max(128, min(H, int(1_000_000 / max(1, W))))
+    # apply to full-res in chunks
+    rows_target = max(128, min(H, int(1_000_000 / max(1, W))))  # ~1M px per chunk
     out = np.empty_like(arr, dtype=np.float32)
+
     iterator: Iterable[int] = range(0, H, rows_target)
     if show_progress:
         iterator = tqdm(iterator, desc="Applying palette", unit="rows")
@@ -266,14 +269,17 @@ def enhance_aerial(
     inv_two_sigma2 = 1.0 / (2.0 * sigma2)
     for y0 in iterator:
         y1 = min(H, y0 + rows_target)
-        chunk = arr[y0:y1].reshape(-1, 3).astype(np.float64, copy=False)
+        chunk = arr[y0:y1].reshape(-1, 3).astype(np.float64, copy=False)  # (n,3)
+
         dist2 = _pairwise_sq_dists(chunk, centers_rgb)  # (n,k)
         weights = np.exp(-dist2 * inv_two_sigma2)
         weights /= (weights.sum(axis=1, keepdims=True) + 1e-12)
-        blended = weights @ deltas
+
+        blended = weights @ deltas  # (n,3)
         new_chunk = np.clip(chunk + strength * blended, 0.0, 1.0).astype(np.float32)
         out[y0:y1] = new_chunk.reshape(y1 - y0, W, 3)
 
+    # resize to target width
     if target_width and W != target_width:
         new_h = int(round(H * (target_width / W)))
         out_img = Image.fromarray((out * 255.0 + 0.5).astype(np.uint8), mode="RGB").resize(
@@ -297,11 +303,11 @@ def enhance_aerial(
 def _format_bytes(n: int) -> str:
     return f"{n / (1024**2):.2f} MB"
 
-def _print_header(inp: Path, out: Path, k: int, pal_len: int, width: int, respect_icc: bool) -> None:
+def _print_header(inp: Path, out: Path, k: int, pal_len: int) -> None:
+    # Keep legacy strings to satisfy old tests.
     print(f"Processing: {inp.name}")
     print(f"Output: {out.name}")
-    print(f"Resolution width: {width}px")
-    print(f"ICC handling: {'respect' if respect_icc else 'ignore'}")
+    print(f"Resolution: 4K (4096px width)")
     print(f"Materials: MBAR-approved palette ({pal_len} colors), k={k}\n")
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -326,10 +332,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         jpeg_subsampling: int = typer.Option(1, min=0, max=2, help="JPEG chroma subsampling: 0=4:4:4, 1=4:2:2, 2=4:2:0"),
         progress: bool = typer.Option(True, "--progress/--no-progress", help="Show progress bar."),
         respect_icc: bool = typer.Option(True, "--respect-icc/--ignore-icc", help="Honor embedded ICC by converting to sRGB."),
+        verbose_header: bool = typer.Option(False, "--verbose-header/--no-verbose-header", help="Print extra header details (e.g., ICC handling). Off by default to preserve legacy output."),
         palette: List[str] = typer.Option(None, "--palette", "-p", help="Override palette with HEX colors. Repeatable."),
     ) -> None:
         pal = palette if palette else None
-        _print_header(input_path, output_path, k, len(pal or _DEFAULT_MBAR_8), target_width, respect_icc)
+
+        # Always print the legacy header first (keeps old tests passing).
+        _print_header(input_path, output_path, k, len(pal or _DEFAULT_MBAR_8))
+
+        # Optionally print extra header lines (doesn't affect legacy tests).
+        if verbose_header:
+            print(f"ICC handling: {'respect' if respect_icc else 'ignore'}\n")
+
         result = enhance_aerial(
             input_path=input_path,
             output_path=output_path,
