@@ -1,514 +1,294 @@
-"""Command-line interface wiring for the luxury TIFF batch processor."""
+# path: luxury_tiff_batch_processor/lux_batch_cli.py
+"""Typer-based batch CLI for luxury TIFF processing.
+
+Install an entrypoint like:
+    lux-batch = luxury_tiff_batch_processor.lux_batch_cli:main
+"""
 
 from __future__ import annotations
 
-import argparse
-import dataclasses
 import json
-import logging
-import uuid
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+from dataclasses import fields
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional
+from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple, Union
 
-try:  # pragma: no cover - optional dependency
-    import yaml
-except ModuleNotFoundError:  # pragma: no cover - optional dependency
-    yaml = None
+import typer
 
-from .adjustments import LUXURY_PRESETS, AdjustmentSettings
-from .pipeline import (_process_image_worker, _wrap_with_progress,
-                       collect_images, ensure_output_path,
-                       process_single_image)
-from .profiles import DEFAULT_PROFILE_NAME, PROCESSING_PROFILES
+from .adjustments import (
+    AdjustmentSettings,
+    LUXURY_PRESETS,
+    apply_adjustments,
+    batch_apply_adjustments,
+)
+from .io_utils import image_to_float, save_image
 
-LOGGER = logging.getLogger("luxury_tiff_batch_processor")
+try:  # optional YAML support
+    import yaml  # type: ignore
+except Exception:  # pragma: no cover
+    yaml = None  # type: ignore
+
+AppMethod = Literal["auto", "vectorized", "multiprocessing"]
+
+app = typer.Typer(name="lux-batch", no_args_is_help=True, add_completion=False)
 
 
-def _load_config_data(path: Path) -> Mapping[str, Any]:
-    """Return the mapping contained in the configuration file at *path*."""
+# --------------------------- internal helpers (why: robustness) ---------------
 
-    if not path.exists():
-        raise FileNotFoundError(f"Configuration file not found: {path}")
+def _ensure_mutually_exclusive(preset: Optional[str], preset_file: Optional[Path]) -> None:
+    if preset and preset_file:
+        raise typer.BadParameter("Use either --preset or --preset-file, not both.")
+    if not preset and not preset_file:
+        raise typer.BadParameter("One of --preset or --preset-file is required.")
 
-    suffix = path.suffix.lower()
+
+def _is_tiff(p: Path) -> bool:
+    return p.suffix.lower() in {".tif", ".tiff"}
+
+
+def _collect_inputs(sources: Sequence[Path]) -> List[Tuple[Path, Path]]:
+    """Return list of (input_path, anchor_root). Anchor is used for mirroring."""
+    pairs: List[Tuple[Path, Path]] = []
+    for src in sources:
+        if src.is_file() and _is_tiff(src):
+            pairs.append((src.resolve(), src.parent.resolve()))
+        elif src.is_dir():
+            for p in src.rglob("*"):
+                if p.is_file() and _is_tiff(p):
+                    pairs.append((p.resolve(), src.resolve()))
+    return pairs
+
+
+def _suffix_for_outputs(uniform_name: Optional[str]) -> str:
+    return (uniform_name or "lux").strip().replace(" ", "_")
+
+
+def _build_output_path(out_root: Path, inp: Path, anchor: Path, suffix: str) -> Path:
+    rel = inp.relative_to(anchor)
+    new_name = f"{rel.stem}_{suffix}{rel.suffix}"
+    return (out_root / rel.parent / new_name).resolve()
+
+
+def _ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _extract_array(image_result) -> "np.ndarray":  # type: ignore[name-defined]
+    # Why: tolerate minor IO result-shape variations without breaking.
+    import numpy as np  # lazy import
+    for attr in ("array", "arr", "data"):
+        if hasattr(image_result, attr):
+            return getattr(image_result, attr).astype("float32", copy=False)
+    if isinstance(image_result, tuple) and image_result:
+        return image_result[0].astype("float32", copy=False)
+    if isinstance(image_result, dict) and "array" in image_result:
+        return image_result["array"].astype("float32", copy=False)
+    raise RuntimeError("Unsupported ImageToFloatResult; expected an '.array' field.")
+
+
+def _safe_save(path: Path, array, reference) -> None:
+    # Why: preserve metadata when available; degrade gracefully if signature changes.
     try:
-        if suffix in {".yaml", ".yml"}:
-            if yaml is None:
-                raise RuntimeError(
-                    "YAML configuration files require the optional 'pyyaml' dependency"
-                )
-            data = yaml.safe_load(path.read_text())  # type: ignore[no-untyped-call]
-        else:
-            data = json.loads(path.read_text())
-    except Exception as exc:  # pragma: no cover - exact exception varies by backend
-        raise ValueError(f"Unable to parse configuration file {path}: {exc}") from exc
-
-    if data is None:
-        return {}
-    if not isinstance(data, Mapping):
-        raise ValueError(
-            f"Configuration file {path} must contain a mapping of option names to values"
-        )
-    return data
-
-
-def _normalise_config_keys(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalise mapping keys to CLI-compatible names (underscored)."""
-
-    normalised: dict[str, Any] = {}
-    for key, value in raw.items():
-        if not isinstance(key, str):
-            raise ValueError("Configuration keys must be strings")
-        normalised[key.replace("-", "_")] = value
-    return normalised
-
-
-def _build_parser_aliases(
-    parser: argparse.ArgumentParser,
-) -> tuple[dict[str, argparse.Action], dict[str, str]]:
-    """Return lookup tables for actions and their normalised aliases."""
-
-    dest_to_action: dict[str, argparse.Action] = {}
-    alias_to_dest: dict[str, str] = {}
-    # Use public methods to get all actions
-    actions = list(parser._get_positional_actions()) + list(
-        parser._get_optional_actions()
-    )
-    for action in actions:
-        if action.dest in {argparse.SUPPRESS, "help", "config"}:
-            continue
-        dest_to_action[action.dest] = action
-        alias_to_dest[action.dest.replace("-", "_")] = action.dest
-        for option_string in action.option_strings:
-            alias = option_string.lstrip("-").replace("-", "_")
-            alias_to_dest[alias] = action.dest
-    return dest_to_action, alias_to_dest
-
-
-def _coerce_config_value(
-    action: argparse.Action, value: Any, *, source: Path, key: str
-) -> Any:  # pragma: no cover - thin wrapper around argparse semantics
-    """Convert configuration values so they match argparse expectations."""
-
-    if value is None:
-        return None
-
-    if isinstance(action, argparse._StoreTrueAction):  # type: ignore[attr-defined]
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            lowered = value.strip().lower()
-            if lowered in {"1", "true", "yes", "on"}:
-                return True
-            if lowered in {"0", "false", "no", "off"}:
-                return False
-        raise ValueError(
-            f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}"
-        )
-
-    if isinstance(action, argparse._StoreFalseAction):  # type: ignore[attr-defined]
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            lowered = value.strip().lower()
-            if lowered in {"1", "true", "yes", "on"}:
-                return True
-            if lowered in {"0", "false", "no", "off"}:
-                return False
-        raise ValueError(
-            f"Invalid boolean for '{key}' in {source}: expected true/false value, got {value!r}"
-        )
-
-    if action.type is not None:
+        save_image(path, array, reference=reference)  # type: ignore[call-arg]
+    except TypeError:
         try:
-            converted = action.type(value)
-        except Exception as exc:  # pragma: no cover - delegated to argparse
-            raise ValueError(f"Invalid value for '{key}' in {source}: {exc}") from exc
+            save_image(path, array, reference)  # type: ignore[misc]
+        except TypeError:
+            save_image(path, array)  # type: ignore[misc]
+
+
+def _settings_from_dict(d: Dict[str, object]) -> AdjustmentSettings:
+    valid = {f.name for f in fields(AdjustmentSettings)}
+    filtered = {k: v for k, v in d.items() if k in valid}
+    return AdjustmentSettings(**filtered)
+
+
+def _load_preset_file(
+    preset_file: Path,
+    inputs: Sequence[Tuple[Path, Path]],
+) -> Union[AdjustmentSettings, List[AdjustmentSettings]]:
+    """Supports:
+    - Single dict of settings (optionally {'preset': 'name', ...overrides})
+    - List[settings] with len==N
+    - {'by_name': {'file.tif': {...}}, 'default': {...}} mapping by basename
+    YAML requires PyYAML if .yml/.yaml is used.
+    """
+    text = preset_file.read_text(encoding="utf-8")
+    if preset_file.suffix.lower() in {".yml", ".yaml"}:
+        if yaml is None:
+            raise typer.BadParameter("PyYAML required for YAML preset files.")
+        data = yaml.safe_load(text)  # type: ignore
     else:
-        converted = value
+        data = json.loads(text)
 
-    if action.choices is not None and converted not in action.choices:
-        raise ValueError(
-            f"Invalid value for '{key}' in {source}: {converted!r} (choose from {sorted(action.choices)})"
-        )
+    if isinstance(data, dict):
+        if "preset" in data:
+            base_name = str(data["preset"])
+            if base_name not in LUXURY_PRESETS:
+                raise typer.BadParameter(f"Unknown preset in file: {base_name!r}")
+            base = LUXURY_PRESETS[base_name]
+            overrides = {k: v for k, v in data.items() if k != "preset"}
+            return _settings_from_dict({**base.__dict__, **overrides})
 
-    return converted
+        if "by_name" in data:
+            by_name = data.get("by_name", {}) or {}
+            default = data.get("default", None)
+            default_settings = _settings_from_dict(default) if isinstance(default, dict) else None
+            out: List[AdjustmentSettings] = []
+            for inp, _anchor in inputs:
+                spec = by_name.get(inp.name)
+                if spec is None:
+                    if default_settings is None:
+                        raise typer.BadParameter(f"Missing settings for {inp.name!r} and no default provided.")
+                    out.append(default_settings)
+                else:
+                    out.append(_settings_from_dict(spec))
+            return out
 
+        return _settings_from_dict(data)
 
-def default_output_folder(input_folder: Path) -> Path:
-    """Return the default output folder for a given input directory."""
+    if isinstance(data, list):
+        out = [_settings_from_dict(x) for x in data if isinstance(x, dict)]
+        if len(out) != len(inputs):
+            raise typer.BadParameter(f"Preset list length {len(out)} != number of inputs {len(inputs)}.")
+        return out
 
-    if input_folder.name:
-        return input_folder.parent / f"{input_folder.name}_lux"
-    return input_folder / "luxury_output"
-
-
-def parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Batch enhance TIFF files for ultra-luxury marketing output.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=None,
-        help="Optional configuration file (JSON by default, YAML when 'pyyaml' is installed)",
-    )
-    parser.add_argument(
-        "input", type=Path, help="Folder that contains source TIFF files"
-    )
-    parser.add_argument(
-        "output",
-        type=Path,
-        nargs="?",
-        default=None,
-        help="Folder where processed files will be written. Defaults to '<input>_lux' next to the input folder.",
-    )
-    parser.add_argument(
-        "--preset",
-        default="signature",
-        choices=sorted(LUXURY_PRESETS.keys()),
-        help="Adjustment preset that provides a starting point",
-    )
-    parser.add_argument(
-        "--profile",
-        default=DEFAULT_PROFILE_NAME,
-        choices=sorted(PROCESSING_PROFILES.keys()),
-        help="Processing profile balancing fidelity and speed",
-    )
-    parser.add_argument(
-        "--recursive",
-        action="store_true",
-        help="Process folders recursively and mirror the directory tree in the output",
-    )
-    parser.add_argument(
-        "--suffix",
-        default="_lux",
-        help="Filename suffix appended before the extension for processed files",
-    )
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
-        help="Allow overwriting existing files in the destination",
-    )
-    parser.add_argument(
-        "--compression",
-        default="tiff_lzw",
-        help="TIFF compression to use when saving (as understood by Pillow)",
-    )
-    parser.add_argument(
-        "--resize-long-edge",
-        type=int,
-        default=None,
-        help="Optionally resize the longest image edge to this many pixels while preserving aspect ratio",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview the work without writing any files",
-    )
-    parser.add_argument(
-        "--no-progress",
-        action="store_true",
-        help="Disable progress reporting (useful for minimal or non-interactive environments)",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=1,
-        help="Number of worker processes for parallel image processing",
-    )
-
-    # Fine control overrides.
-    parser.add_argument(
-        "--exposure", type=float, default=None, help="Exposure adjustment in stops"
-    )
-    parser.add_argument(
-        "--white-balance-temp",
-        type=float,
-        default=None,
-        dest="white_balance_temp",
-        help="Target color temperature in Kelvin",
-    )
-    parser.add_argument(
-        "--white-balance-tint",
-        type=float,
-        default=None,
-        dest="white_balance_tint",
-        help="Green-magenta tint compensation (positive skews magenta)",
-    )
-    parser.add_argument(
-        "--shadow-lift", type=float, default=None, help="Shadow recovery strength (0-1)"
-    )
-    parser.add_argument(
-        "--highlight-recovery",
-        type=float,
-        default=None,
-        help="Highlight compression strength (0-1)",
-    )
-    parser.add_argument(
-        "--midtone-contrast",
-        type=float,
-        default=None,
-        dest="midtone_contrast",
-        help="Midtone contrast strength",
-    )
-    parser.add_argument(
-        "--vibrance", type=float, default=None, help="Vibrance strength (0-1)"
-    )
-    parser.add_argument(
-        "--saturation",
-        type=float,
-        default=None,
-        help="Additional saturation multiplier delta",
-    )
-    parser.add_argument(
-        "--clarity",
-        type=float,
-        default=None,
-        help="Local contrast boost strength (0-1)",
-    )
-    parser.add_argument(
-        "--chroma-denoise",
-        type=float,
-        default=None,
-        dest="chroma_denoise",
-        help="Chrominance denoising amount (0-1)",
-    )
-    parser.add_argument(
-        "--luxury-glow",
-        type=float,
-        default=None,
-        dest="glow",
-        help="Diffusion glow strength (0-1)",
-    )
-
-    parser.add_argument(
-        "--log-level",
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Logging verbosity",
-    )
-
-    argv_list = list(argv) if argv is not None else None
-
-    config_probe, _ = parser.parse_known_args(argv_list)
-    if config_probe.config is not None:
-        try:
-            raw_config = _load_config_data(config_probe.config)
-            normalised_config = _normalise_config_keys(raw_config)
-            dest_to_action, alias_to_dest = _build_parser_aliases(parser)
-
-            converted_defaults: dict[str, Any] = {}
-            for key, value in normalised_config.items():
-                dest = alias_to_dest.get(key)
-                if dest is None:
-                    raise ValueError(
-                        f"Unknown configuration option '{key}' in {config_probe.config}"
-                    )
-                action = dest_to_action[dest]
-                converted_defaults[dest] = _coerce_config_value(
-                    action, value, source=config_probe.config, key=key
-                )
-
-            parser.set_defaults(**converted_defaults)
-        except (OSError, ValueError, RuntimeError) as exc:
-            parser.error(str(exc))
-
-    args = parser.parse_args(argv_list)
-    if args.workers < 1:
-        parser.error("--workers must be a positive integer")
-    if args.output is None:
-        args.output = default_output_folder(args.input)
-    logging.basicConfig(
-        level=getattr(logging, args.log_level), format="%(levelname)s: %(message)s"
-    )
-    return args
+    raise typer.BadParameter("Unrecognized preset-file schema.")
 
 
-def build_adjustments(args: argparse.Namespace) -> AdjustmentSettings:
-    base = dataclasses.replace(LUXURY_PRESETS[args.preset])
-    for field in dataclasses.fields(base):
-        value = getattr(args, field.name, None)
-        if value is not None:
-            setattr(base, field.name, value)
-            base._validate()
-    LOGGER.debug("Using adjustments: %s", base)
-    return base
+# --------------------------------- CLI ---------------------------------------
 
+@app.command("run")
+def lux_batch(
+    sources: List[Path] = typer.Argument(..., exists=True, readable=True, help="Files and/or directories to process."),
+    out_dir: Path = typer.Option(..., "--out-dir", "-o", help="Output root; input tree is mirrored underneath."),
+    preset: Optional[str] = typer.Option(None, "--preset", help=f"Name in presets: {', '.join(sorted(LUXURY_PRESETS))}"),
+    preset_file: Optional[Path] = typer.Option(None, "--preset-file", exists=True, readable=True,
+                                               help="JSON/YAML with a single settings dict, list, or by_name map."),
+    method: AppMethod = typer.Option("auto", "--method", case_sensitive=False,
+                                     help="auto | vectorized | multiprocessing"),
+    workers: Optional[int] = typer.Option(None, "--workers", min=1, help="Process count for multiprocessing."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing outputs."),
+) -> None:
+    """Process TIFFs, mirroring the input directory structure."""
+    _ensure_mutually_exclusive(preset, preset_file)
 
-def _ensure_non_overlapping(input_root: Path, output_root: Path) -> None:
-    def _contains(parent: Path, child: Path) -> bool:
-        try:
-            child.relative_to(parent)
-        except ValueError:
-            return False
-        return True
+    inputs = _collect_inputs(sources)
+    if not inputs:
+        typer.secho("No input .tif/.tiff files found.", fg=typer.colors.YELLOW)
+        raise typer.Exit(code=0)
 
-    if input_root == output_root:
-        raise SystemExit(
-            "Output folder must be different from the input folder to avoid self-overwrites."
-        )
-    if _contains(input_root, output_root):
-        raise SystemExit(
-            "Output folder cannot be located inside the input folder; choose a sibling or separate directory."
-        )
-    if _contains(output_root, input_root):
-        raise SystemExit(
-            "Input folder cannot be located inside the output folder; choose non-overlapping directories."
-        )
+    out_dir.mkdir(parents=True, exist_ok=True)
 
+    if preset:
+        if preset not in LUXURY_PRESETS:
+            raise typer.BadParameter(f"Unknown preset: {preset!r}")
+        settings: Union[AdjustmentSettings, List[AdjustmentSettings]] = LUXURY_PRESETS[preset]
+        suffix = _suffix_for_outputs(preset)
+    else:
+        settings = _load_preset_file(preset_file, inputs)  # type: ignore[arg-type]
+        suffix = _suffix_for_outputs(None if isinstance(settings, list) else "lux")
 
-def run_pipeline(args: argparse.Namespace) -> int:
-    """Run the batch processor with the provided arguments."""
+    outputs: List[Path] = []
+    for inp, anchor in inputs:
+        out_path = _build_output_path(out_dir, inp, anchor, suffix)
+        _ensure_parent(out_path)
+        if out_path.exists() and not overwrite:
+            typer.secho(f"Skip existing: {out_path}", fg=typer.colors.YELLOW)
+        outputs.append(out_path)
 
-    run_id = uuid.uuid4().hex
-    adjustments = build_adjustments(args)
-    profile = PROCESSING_PROFILES[args.profile]
-    input_root = args.input.resolve()
-    output_root = args.output.resolve()
+    failures = 0
 
-    if not input_root.exists():
-        raise FileNotFoundError(f"Input folder not found: {input_root}")
-    if not input_root.is_dir():
-        raise SystemExit(
-            f"Input folder '{input_root}' does not exist or is not a directory"
-        )
+    if isinstance(settings, AdjustmentSettings):
+        # Single settings: vectorize per image size; single read pass.
+        from collections import defaultdict
+        import numpy as np  # lazy import
 
-    _ensure_non_overlapping(input_root, output_root)
-
-    LOGGER.info(
-        "Starting batch run %s for %s using '%s' profile",
-        run_id,
-        input_root,
-        profile.name,
-    )
-    images = sorted(collect_images(input_root, args.recursive))
-    if not images:
-        LOGGER.warning("No TIFF images found in %s (run %s)", input_root, run_id)
-        return 0
-
-    if not args.dry_run:
-        output_root.mkdir(parents=True, exist_ok=True)
-
-    LOGGER.info("Found %s image(s) to process", len(images))
-    processed = 0
-
-    workers = getattr(args, "workers", 1)
-    resize_long_edge = getattr(args, "resize_long_edge", None)
-    resize_target = getattr(args, "resize_target", None)
-    compression = profile.resolve_compression(args.compression)
-
-    if workers <= 1:
-        progress_iterable = _wrap_with_progress(
-            images,
-            total=len(images),
-            description="Processing images",
-            enabled=not getattr(args, "no_progress", False),
-        )
-
-        for image_path in progress_iterable:
-            destination = ensure_output_path(
-                input_root,
-                output_root,
-                image_path,
-                args.suffix,
-                args.recursive,
-                create=not args.dry_run,
-            )
-            if destination.exists() and not args.overwrite and not args.dry_run:
-                LOGGER.warning(
-                    "Skipping %s (exists, use --overwrite to replace)", destination
-                )
+        buckets: Dict[Tuple[int, int], List[Tuple[int, "np.ndarray", object]]] = defaultdict(list)  # type: ignore[name-defined]
+        for idx, (inp, _anchor) in enumerate(inputs):
+            res = image_to_float(inp)
+            arr = _extract_array(res)
+            if arr.ndim != 3 or arr.shape[-1] != 3:
+                failures += 1
+                typer.secho(f"Skip non-RGB 3-channel image: {inp}", fg=typer.colors.RED)
                 continue
-            if args.dry_run:
-                LOGGER.info("Dry run: would process %s -> %s", image_path, destination)
-            process_single_image(
-                image_path,
-                destination,
-                adjustments,
-                compression=compression,
-                resize_long_edge=resize_long_edge,
-                resize_target=resize_target,
-                dry_run=args.dry_run,
-                profile=profile,
-            )
-            if not args.dry_run:
-                processed += 1
-    else:
-        progress_range = _wrap_with_progress(
-            range(len(images)),
-            total=len(images),
-            description="Processing images",
-            enabled=not getattr(args, "no_progress", False),
-        )
-        progress_iterator = iter(progress_range)
+            h, w = int(arr.shape[0]), int(arr.shape[1])
+            buckets[(h, w)].append((idx, arr, res))
 
-        def advance_progress() -> None:
+        for shape, items in buckets.items():
+            inds, arrays, refs = zip(*items)
+            batch = np.stack(arrays, axis=0).astype("float32", copy=False)
             try:
-                next(progress_iterator)
-            except StopIteration:
-                pass
+                out_batch = batch_apply_adjustments(batch, settings, method=method, workers=workers)
+            except Exception as e:
+                typer.secho(f"[vectorized->serial fallback] {shape}: {e}", fg=typer.colors.YELLOW)
+                out_batch = None
 
-        futures = []
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            for image_path in images:
-                destination = ensure_output_path(
-                    input_root,
-                    output_root,
-                    image_path,
-                    args.suffix,
-                    args.recursive,
-                    create=not args.dry_run,
-                )
-                if destination.exists() and not args.overwrite and not args.dry_run:
-                    LOGGER.warning(
-                        "Skipping %s (exists, use --overwrite to replace)", destination
-                    )
-                    advance_progress()
-                    continue
-                if args.dry_run:
-                    LOGGER.info(
-                        "Dry run: would process %s -> %s", image_path, destination
-                    )
-                futures.append(
-                    executor.submit(
-                        _process_image_worker,
-                        image_path,
-                        destination,
-                        adjustments,
-                        compression=compression,
-                        resize_long_edge=resize_long_edge,
-                        resize_target=resize_target,
-                        dry_run=args.dry_run,
-                        profile=profile,
-                    )
-                )
+            if out_batch is None:
+                processed = [apply_adjustments(a, settings) for a in arrays]
+            else:
+                processed = [out_batch[i] for i in range(out_batch.shape[0])]
 
-            for future in as_completed(futures):
+            for slot, idx in enumerate(inds):
                 try:
-                    wrote_output = future.result()
-                except Exception:
-                    advance_progress()
-                    raise
-                if wrote_output:
-                    processed += 1
-                advance_progress()
+                    if outputs[idx].exists() and not overwrite:
+                        continue
+                    _safe_save(outputs[idx], processed[slot], refs[slot])
+                    typer.echo(str(outputs[idx]))
+                except Exception as e:
+                    failures += 1
+                    typer.secho(f"Failed: {inputs[idx][0]} → {e}", fg=typer.colors.RED)
 
-    LOGGER.info("Finished batch run %s; processed %s image(s)", run_id, processed)
-    return processed
+            # free bucket memory
+            del arrays, refs, processed, out_batch
+
+    else:
+        # Per-file settings: allow multiprocessing; each worker loads/saves its own file.
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+
+        def _task(idx: int) -> Tuple[int, Optional[str]]:
+            p_in, _anchor = inputs[idx]
+            p_out = outputs[idx]
+            if p_out.exists() and not overwrite:
+                return idx, None
+            try:
+                res = image_to_float(p_in)
+                arr = _extract_array(res)
+                out = apply_adjustments(arr, settings[idx])
+                _safe_save(p_out, out, res)
+                return idx, None
+            except Exception as exc:  # why: isolate failures; continue rest
+                return idx, f"{p_in} → {exc}"
+
+        n = len(inputs)
+        use_mp = (method == "multiprocessing") or (method == "auto" and n >= 8)
+        if use_mp:
+            max_workers = workers or max(1, (os.cpu_count() or 1))
+            with ProcessPoolExecutor(max_workers=max_workers) as ex:
+                futs = [ex.submit(_task, i) for i in range(n)]
+                for fut in as_completed(futs):
+                    idx, err = fut.result()
+                    if err:
+                        failures += 1
+                        typer.secho(f"Failed: {err}", fg=typer.colors.RED)
+                    else:
+                        typer.echo(str(outputs[idx]))
+        else:
+            for i in range(n):
+                idx, err = _task(i)
+                if err:
+                    failures += 1
+                    typer.secho(f"Failed: {err}", fg=typer.colors.RED)
+                else:
+                    typer.echo(str(outputs[idx]))
+
+    if failures:
+        raise typer.Exit(code=1)
 
 
-def main(argv: Optional[Iterable[str]] = None) -> None:
-    args = parse_args(argv)
-    run_pipeline(args)
+def main() -> None:
+    app()
 
 
-__all__ = [
-    "build_adjustments",
-    "default_output_folder",
-    "main",
-    "parse_args",
-    "run_pipeline",
-]
+if __name__ == "__main__":
+    main()
