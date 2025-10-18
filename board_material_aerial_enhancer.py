@@ -1,417 +1,376 @@
-# path: board_material_aerial_enhancer.py
-"""
-Apply MBAR board material textures to an aerial photograph using a lightweight,
-CI-friendly pipeline focused on deterministic behavior for tests.
-
-Key pieces:
-- k-means clustering on a downscaled analysis image
-- palette JSON for deterministic cluster → material mapping
-- optional texture validation with graceful fallbacks
-- minimal enhancement to keep tests fast (no heavyweight ML/GPU deps)
-"""
-
+# file: board_material_aerial_enhancer.py
 from __future__ import annotations
 
-import argparse
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+import math
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
-try:  # pragma: no cover - optional
-    import tifffile  # type: ignore
-except Exception:  # pragma: no cover - optional
-    tifffile = None  # type: ignore
+# Pillow resampling compat
+_RESAMPLING = getattr(Image, "Resampling", Image)
+_NEAREST = _RESAMPLING.NEAREST
+_BILINEAR = _RESAMPLING.BILINEAR
+_BICUBIC = _RESAMPLING.BICUBIC
 
-if TYPE_CHECKING:  # pragma: no cover
-    from material_response import MaterialRule  # type: ignore
-else:
-    @dataclass(frozen=True)
-    class MaterialRule:  # minimal stub
-        name: str
-
-__all__ = [
-    "ClusterStats",
-    "compute_cluster_stats",
-    "load_palette_assignments",
-    "save_palette_assignments",
-    "relabel",
-    "enhance_aerial",
-    "apply_materials",
-    "assign_materials",
-]
-
-# --------------------------
-# Cluster statistics
-# --------------------------
+# ------------------------- Data models -------------------------
 
 @dataclass(frozen=True)
-class ClusterStats:
+class MaterialRule:
+    """Material parameters for blending."""
+    name: str
+    target_rgb01: np.ndarray
+    blend: float = 0.6       # 0..1, how strong to overlay the texture
+    tint: Tuple[int, int, int] | None = None  # optional swatch for legend/extra tint
+    tint_strength: float = 0.0               # 0..1
+
+@dataclass(frozen=True)
+class ClusterStat:
+    """Per-cluster summary used for rule assignment/reporting."""
     label: int
     count: int
-    centroid: tuple[float, float, float]  # (r,g,b) in [0,1]
+    mean_rgb: Tuple[float, float, float]   # 0..1
+    mean_hsv: Tuple[float, float, float]   # H 0..1, S 0..1, V 0..1
 
+# ------------------------- Color utils -------------------------
 
-def compute_cluster_stats(labels: np.ndarray, rgb: np.ndarray) -> list[ClusterStats]:
-    if rgb.dtype.kind in ("u", "i"):
-        rgb_f = rgb.astype(np.float32) / 255.0
-    else:
-        rgb_f = rgb.astype(np.float32)
+def _hex_to_rgb01(hex_str: str) -> np.ndarray:
+    hex_str = hex_str.strip().lstrip("#")
+    if len(hex_str) == 3:
+        hex_str = "".join(c * 2 for c in hex_str)
+    r = int(hex_str[0:2], 16) / 255.0
+    g = int(hex_str[2:4], 16) / 255.0
+    b = int(hex_str[4:6], 16) / 255.0
+    return np.array([r, g, b], dtype=np.float32)
 
-    labs = labels.reshape(-1)
-    flat = rgb_f.reshape(-1, 3)
+def _srgb_to_linear(c: np.ndarray) -> np.ndarray:
+    a = 0.055
+    return np.where(c <= 0.04045, c / 12.92, ((c + a) / (1 + a)) ** 2.4)
 
-    out: list[ClusterStats] = []
-    for lab in np.unique(labs).tolist():
-        mask = labs == lab
-        cnt = int(mask.sum())
-        if cnt:
-            mean = flat[mask].mean(axis=0)
-            centroid = (float(mean[0]), float(mean[1]), float(mean[2]))
-        else:
-            centroid = (0.0, 0.0, 0.0)
-        out.append(ClusterStats(label=int(lab), count=cnt, centroid=centroid))
-    return out
+def _rgb01_to_lab(rgb: np.ndarray) -> np.ndarray:
+    rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
+    lin = _srgb_to_linear(rgb)
+    M = np.array(
+        [[0.4124564, 0.3575761, 0.1804375],
+         [0.2126729, 0.7151522, 0.0721750],
+         [0.0193339, 0.1191920, 0.9503041]], dtype=np.float32
+    )
+    xyz = lin @ M.T
+    Xn, Yn, Zn = 0.95047, 1.00000, 1.08883
+    x, y, z = xyz[..., 0] / Xn, xyz[..., 1] / Yn, xyz[..., 2] / Zn
 
-# --------------------------
-# Palette (de)serialization
-# --------------------------
+    delta = 6 / 29
+    def _f(t: np.ndarray) -> np.ndarray:
+        return np.where(t > delta**3, np.cbrt(t), t / (3 * delta**2) + 4 / 29)
 
-PALETTE_SCHEMA_VERSION = 1
+    fx, fy, fz = _f(x), _f(y), _f(z)
+    L = 116 * fy - 16
+    a = 500 * (fx - fy)
+    b = 200 * (fy - fz)
+    return np.stack([L, a, b], axis=-1).astype(np.float32)
 
+def _rgb01_to_hsv(rgb: np.ndarray) -> np.ndarray:
+    """Vectorized RGB(0..1) -> HSV(0..1)."""
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    cmax = np.max(rgb, axis=-1)
+    cmin = np.min(rgb, axis=-1)
+    delta = cmax - cmin + 1e-12
+    h = np.zeros_like(cmax)
+    mask = delta > 1e-12
+    r_is_max = (cmax == r) & mask
+    g_is_max = (cmax == g) & mask
+    b_is_max = (cmax == b) & mask
+    h[r_is_max] = ((g - b)[r_is_max] / delta[r_is_max]) % 6
+    h[g_is_max] = (b - r)[g_is_max] / delta[g_is_max] + 2
+    h[b_is_max] = (r - g)[b_is_max] / delta[b_is_max] + 4
+    h = (h / 6.0) % 1.0
+    s = np.where(cmax <= 1e-12, 0.0, delta / (cmax + 1e-12))
+    v = cmax
+    return np.stack([h, s, v], axis=-1).astype(np.float32)
 
-def _serialize_assignments(assignments: Mapping[int, "MaterialRule"]) -> Dict[str, Any]:
-    payload = {str(k): v.name for k, v in assignments.items()}
-    return {"version": PALETTE_SCHEMA_VERSION, "assignments": payload}
+# ------------------------- Image helpers -------------------------
 
+def _image_to_array01(img: Image.Image) -> np.ndarray:
+    return np.asarray(img.convert("RGB"), dtype=np.float32) / 255.0
 
-def _deserialize_assignments(
-    data: Mapping[str, Any],
-    rules: Sequence["MaterialRule"],
-    *,
-    strict: bool = True,
-) -> Dict[int, "MaterialRule"]:
-    if "assignments" in data:
-        raw_map = data.get("assignments", {})
-    else:
-        raw_map = data
+def _array01_to_image(arr: np.ndarray) -> Image.Image:
+    arr8 = np.clip(np.rint(arr * 255.0), 0, 255).astype(np.uint8)
+    return Image.fromarray(arr8, mode="RGB")
 
-    by_name: Dict[str, "MaterialRule"] = {r.name: r for r in rules}
-    out: Dict[int, "MaterialRule"] = {}
+def _downsample_image(img: Image.Image, max_dim: int) -> Image.Image:
+    w, h = img.size
+    m = max(w, h)
+    if m <= max_dim:
+        return img.copy()
+    s = max_dim / float(m)
+    nw, nh = max(1, int(round(w * s))), max(1, int(round(h * s)))
+    return img.resize((nw, nh), _BILINEAR)
 
-    for sk, name in raw_map.items():
-        try:
-            k = int(sk)
-        except Exception:
-            if strict:
-                raise ValueError(f"Palette key is not an int: {sk!r}")
-            continue
+def _tile_image_to_size(tex: Image.Image, size: Tuple[int, int]) -> Image.Image:
+    tw, th = tex.size
+    W, H = size
+    if tw == 0 or th == 0:
+        raise ValueError("Texture has zero dimension.")
+    reps_x = math.ceil(W / tw)
+    reps_y = math.ceil(H / th)
+    canvas = Image.new("RGB", (tw * reps_x, th * reps_y))
+    for y in range(reps_y):
+        for x in range(reps_x):
+            canvas.paste(tex, (x * tw, y * th))
+    return canvas.crop((0, 0, W, H))
 
-        rule = by_name.get(name)
-        if rule is None:
-            if strict:
-                raise ValueError(f"Unknown material in palette: {name!r}")
-            continue
+def _recolor_texture_to_target(tex: Image.Image, target_rgb01: np.ndarray, strength: float = 0.6) -> Image.Image:
+    """Channel-wise gain toward target; blended for stability."""
+    tex_arr = _image_to_array01(tex)
+    mean = tex_arr.reshape(-1, 3).mean(axis=0)
+    eps = 1e-5
+    gains = np.clip((target_rgb01 + eps) / (mean + eps), 0.5, 1.8)
+    recol = np.clip(tex_arr * gains[None, None, :], 0.0, 1.0)
+    blended = np.clip((1.0 - strength) * tex_arr + strength * recol, 0.0, 1.0)
+    return _array01_to_image(blended)
 
-        out[k] = rule
+def _deterministic_noise_texture(size: Tuple[int, int], color: np.ndarray, rng: np.random.Generator) -> Image.Image:
+    H, W = size[1], size[0]
+    noise = rng.random((H, W, 1), dtype=np.float32)
+    base = np.ones((H, W, 3), dtype=np.float32) * color[None, None, :]
+    mod = 0.15 * (noise - 0.5)
+    out = np.clip(base * (1.0 + mod), 0.0, 1.0)
+    return _array01_to_image(out)
 
-    return out
+# ------------------------- K-means -------------------------
 
+def _kmeans_pp_init(samples: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
+    n = samples.shape[0]
+    idx0 = int(rng.integers(0, n))
+    centers = [samples[idx0]]
+    for _ in range(1, k):
+        d2 = np.min(((samples[:, None, :] - np.stack(centers)[None, :, :]) ** 2).sum(axis=2), axis=1)
+        probs = d2 / (d2.sum() + 1e-12)
+        cum = np.cumsum(probs)
+        r = rng.random()
+        idx = int(np.searchsorted(cum, r))
+        centers.append(samples[idx])
+    return np.stack(centers, axis=0)
 
-def load_palette_assignments(
-    path: str | Path,
-    rules: Sequence["MaterialRule"] | Mapping[str, "MaterialRule"] | None = None,
-    *,
-    strict: bool = True,
-) -> dict[int, "MaterialRule"]:
+def _kmeans(samples: np.ndarray, k: int, rng: np.random.Generator, max_iter: int = 30, tol: float = 1e-4) -> np.ndarray:
     """
-    Load cluster→material mapping. If file missing or unreadable, return {}.
-    If rules is provided, names must match; otherwise {}.
+    Deterministic K-means returning centroids only (RGB in 0..1).
+    Why: matches your script's expected signature.
     """
-    p = Path(path)
-    if not p.exists():
-        return {}
+    n = samples.shape[0]
+    k = max(1, min(k, n))
+    centers = _kmeans_pp_init(samples, k, rng)
+    labels = np.zeros((n,), dtype=np.int32)
 
-    try:
-        text = p.read_text(encoding="utf-8")
-        if not text.strip():
-            return {}
-        data = json.loads(text)
-        if not isinstance(data, dict):
-            return {}
-    except Exception:
-        return {}
-
-    if rules is None:
-        return {}
-
-    if isinstance(rules, Mapping):
-        rule_seq: Sequence["MaterialRule"] = list(rules.values())
-    else:
-        rule_seq = rules
-
-    return _deserialize_assignments(data, rule_seq, strict=strict)
-
-
-def _load_palette_assignments_loose(path: str | Path) -> dict[int, "MaterialRule"]:
-    """
-    Loose loader: build MaterialRule stubs from JSON names when rule set isn't provided.
-    Why: allow `--palette` to work in CLI without a textures dict.
-    """
-    p = Path(path)
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        raw_map = data["assignments"] if isinstance(data, dict) and "assignments" in data else data
-        if not isinstance(raw_map, dict):
-            return {}
-    except Exception:
-        return {}
-
-    out: Dict[int, "MaterialRule"] = {}
-    for sk, name in raw_map.items():
-        try:
-            k = int(sk)
-        except Exception:
-            continue
-        out[k] = MaterialRule(name=str(name))
-    return out
-
-
-def _atomic_write_text(path: Path, text: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
-
-
-def save_palette_assignments(assignments: Mapping[int, "MaterialRule"], path: str | Path) -> None:
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    payload = _serialize_assignments(assignments)
-    text = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
-    _atomic_write_text(p, text)
-
-# --------------------------
-# Texture & image helpers
-# --------------------------
-
-def _validate_texture(path: str | Path, size_hint: tuple[int, int] | None = None) -> Image.Image:
-    try:
-        img = Image.open(Path(path)).convert("RGBA")
-    except Exception:
-        w, h = size_hint or (64, 64)
-        return Image.new("RGBA", (w, h), (200, 200, 200, 255))
-    if size_hint and img.size != size_hint:
-        img = img.resize(size_hint, resample=Image.BILINEAR)
-    return img
-
-# --------------------------
-# Lightweight k-means
-# --------------------------
-
-def _kmeans(data: np.ndarray, k: int, seed: int, iters: int = 10) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    centroids = data[rng.choice(data.shape[0], size=k, replace=False)]
-    for _ in range(max(1, iters)):
-        d2 = ((data[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
-        labels = d2.argmin(axis=1)
+    for _ in range(max_iter):
+        dists = ((samples[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)
+        new_labels = np.argmin(dists, axis=1)
+        new_centers = np.zeros_like(centers)
         for i in range(k):
-            mask = labels == i
-            if mask.any():
-                centroids[i] = data[mask].mean(axis=0)
+            mask = new_labels == i
+            if not np.any(mask):
+                new_centers[i] = samples[int(rng.integers(0, n))]
             else:
-                centroids[i] = data[rng.integers(0, data.shape[0])]
-    return labels
+                new_centers[i] = samples[mask].mean(axis=0)
+        shift = np.linalg.norm(new_centers - centers) / (np.linalg.norm(centers) + 1e-8)
+        centers, labels = new_centers, new_labels
+        if shift < tol:
+            break
+    return centers
 
-# --------------------------
-# Public utilities
-# --------------------------
+def _assign_full_image(image_rgb01: np.ndarray, centroids_rgb01: np.ndarray) -> np.ndarray:
+    """Return labels [H,W] assigning each pixel to nearest centroid."""
+    H, W, _ = image_rgb01.shape
+    px = image_rgb01.reshape(-1, 3)
+    dists = ((px[:, None, :] - centroids_rgb01[None, :, :]) ** 2).sum(axis=2)
+    labels = np.argmin(dists, axis=1).astype(np.uint8)
+    return labels.reshape(H, W)
 
-def relabel(assignments: Mapping[int, "MaterialRule"], labels: np.ndarray) -> np.ndarray:
-    if not assignments:
-        return labels
-    pairs = sorted((cid, rule.name) for cid, rule in assignments.items())
-    remap = {cid: new_id for new_id, (cid, _) in enumerate(pairs)}
-    out = labels.copy()
-    for old, new in remap.items():
-        out[labels == old] = new
-    return out
+# ------------------------- Stats & rules -------------------------
 
+_DEFAULT_PALETTE: Dict[str, str] = {
+    "plaster":   "#dcc9b4",
+    "stone":     "#b49a7e",
+    "cladding":  "#9a7a5f",
+    "screens":   "#8c8a86",
+    "equitone":  "#2a2c32",
+    "roof":      "#9b9b9b",
+    "bronze":    "#463a30",
+    "shade":     "#f2f2f2",
+}
+
+DEFAULT_TEXTURES: Dict[str, Path] = {
+    # Optional: user can fill these with real file paths; enhancer falls back to procedural textures.
+    # "plaster": Path("textures/plaster.jpg"),
+    # "stone": Path("textures/stone.jpg"),
+    # ...
+}
+
+def _cluster_stats(image_rgb01: np.ndarray, labels: np.ndarray) -> List[ClusterStat]:
+    """Compute per-cluster counts and mean RGB/HSV."""
+    H, W, _ = image_rgb01.shape
+    n = H * W
+    flat = image_rgb01.reshape(-1, 3)
+    unique = sorted(int(i) for i in np.unique(labels))
+    stats: List[ClusterStat] = []
+    hsv = _rgb01_to_hsv(flat).reshape(H * W, 3)
+    for lbl in unique:
+        mask = (labels.reshape(-1) == lbl)
+        cnt = int(mask.sum())
+        if cnt == 0:
+            mean_rgb = (0.0, 0.0, 0.0)
+            mean_hsv = (0.0, 0.0, 0.0)
+        else:
+            m_rgb = flat[mask].mean(axis=0)
+            m_hsv = hsv[mask].mean(axis=0)
+            mean_rgb = (float(m_rgb[0]), float(m_rgb[1]), float(m_rgb[2]))
+            mean_hsv = (float(m_hsv[0]), float(m_hsv[1]), float(m_hsv[2]))
+        stats.append(ClusterStat(label=lbl, count=cnt, mean_rgb=mean_rgb, mean_hsv=mean_hsv))
+    return stats
+
+def build_material_rules(textures: Mapping[str, Path] | None = None) -> Dict[str, MaterialRule]:
+    """Create default MBAR-ish material rules. Textures are optional (used at render time)."""
+    rules: Dict[str, MaterialRule] = {}
+    for name, hx in _DEFAULT_PALETTE.items():
+        rgb01 = _hex_to_rgb01(hx)
+        # Conservative defaults; specific tweaks can be changed here
+        blend = 0.6 if name not in {"roof", "shade"} else (0.55 if name == "roof" else 0.45)
+        tint = None
+        tint_strength = 0.0
+        rules[name] = MaterialRule(name=name, target_rgb01=rgb01, blend=blend, tint=tint, tint_strength=tint_strength)
+    return rules
+
+def assign_materials(stats: Sequence[ClusterStat], rules: Mapping[str, MaterialRule]) -> Dict[int, MaterialRule]:
+    """Greedy nearest-in-Lab assignment of each cluster to the closest rule target."""
+    # Build palette Lab
+    names = list(rules.keys())
+    pal_rgb = np.stack([rules[n].target_rgb01 for n in names], axis=0)
+    pal_lab = _rgb01_to_lab(pal_rgb)
+    assignments: Dict[int, MaterialRule] = {}
+    for s in stats:
+        c_rgb = np.array(s.mean_rgb, dtype=np.float32)
+        c_lab = _rgb01_to_lab(c_rgb[None, :])[0]
+        d = np.linalg.norm(pal_lab - c_lab[None, :], axis=1)
+        j = int(np.argmin(d))
+        assignments[s.label] = rules[names[j]]
+    return assignments
+
+# ------------------------- Enhancer -------------------------
+
+def _load_textures_or_defaults(
+    textures: Optional[Mapping[str, Path]],
+    rng: np.random.Generator,
+) -> Tuple[Dict[str, Image.Image], Dict[str, np.ndarray]]:
+    """Return (name->texture image, name->palette rgb01)."""
+    tex_images: Dict[str, Image.Image] = {}
+    palette_rgb: Dict[str, np.ndarray] = {}
+
+    # Try provided textures first
+    if textures:
+        for name, p in textures.items():
+            try:
+                if isinstance(p, Path) and p.exists():
+                    img = Image.open(p).convert("RGB")
+                    tex_images[name] = img
+                    palette_rgb[name] = _image_to_array01(img).reshape(-1, 3).mean(axis=0)
+            except Exception:
+                # Ignore unreadable textures; synth fallback will kick in
+                pass
+
+    # Fill any missing with defaults
+    for name, hx in _DEFAULT_PALETTE.items():
+        if name not in tex_images:
+            rgb01 = _hex_to_rgb01(hx)
+            tex_images[name] = _deterministic_noise_texture((512, 512), rgb01, rng)
+            palette_rgb[name] = rgb01
+
+    return tex_images, palette_rgb
 
 def enhance_aerial(
     input_path: Path,
     output_path: Path,
     *,
+    analysis_max_dim: int = 1280,
     k: int = 8,
-    analysis_max: int = 1280,
     seed: int = 22,
-    target_width: int | None = 4096,
-    palette_path: Optional[Path | str] = None,
-    save_palette: Optional[Path | str] = None,
+    target_width: int = 4096,
     textures: Mapping[str, Path] | None = None,
-    save_labels: Optional[Path | str] = None,
 ) -> Path:
     """
-    Deterministic CI enhancement:
-    - k-means on downscaled analysis image
-    - optional palette relabel
-    - gentle label-aware blur mix
-    - RGB output; optional label export
+    Enhance an aerial by clustering colors, assigning materials, and compositing textures.
+
+    Returns:
+        Path to saved enhanced image.
     """
     input_path = Path(input_path)
+    if not input_path.exists():
+        raise FileNotFoundError(f"input not found: {input_path}")
+
+    rng = np.random.default_rng(seed)
+
+    # Load and prepare analysis image
+    src = Image.open(input_path).convert("RGB")
+    src_analysis = _downsample_image(src, analysis_max_dim)
+    small_arr = _image_to_array01(src_analysis)
+    samples = small_arr.reshape(-1, 3)
+
+    # Cluster
+    centroids = _kmeans(samples, k=max(1, k), rng=rng)
+    labels_small = _assign_full_image(small_arr, centroids)
+
+    # Build rules and textures
+    rules = build_material_rules(textures or DEFAULT_TEXTURES)
+    tex_images, palette_rgb = _load_textures_or_defaults(textures or DEFAULT_TEXTURES, rng)
+
+    # Assign clusters -> materials using stats on the ORIGINAL image resized to analysis size
+    stats = _cluster_stats(small_arr, labels_small)
+    assignments = assign_materials(stats, rules)
+
+    # Prepare output canvas dimensions
+    src_w, src_h = src.size
+    scale = target_width / float(src_w)
+    out_w = int(round(target_width))
+    out_h = max(1, int(round(src_h * scale)))
+
+    # Upscale base and label map
+    base = src.resize((out_w, out_h), _BICUBIC)
+    label_img = Image.fromarray(labels_small.astype(np.uint8), mode="L")
+    labels_up = label_img.resize((out_w, out_h), _NEAREST)
+    labels_up_arr = np.array(labels_up, dtype=np.uint8)
+
+    # Composite
+    out = base.copy()
+    feather = 1.2  # px feather for seams
+    unique_clusters = sorted(int(c) for c in np.unique(labels_small))
+
+    for idx in unique_clusters:
+        rule = assignments.get(idx)
+        if rule is None:
+            continue
+        name = rule.name
+        target_rgb01 = rules[name].target_rgb01
+        blend_alpha = float(np.clip(rule.blend, 0.0, 1.0))
+
+        tex = tex_images[name]
+        tex_tiled = _tile_image_to_size(tex, (out_w, out_h))
+        tex_tinted = _recolor_texture_to_target(tex_tiled, target_rgb01, strength=0.6)
+
+        # Optional extra tint (legend swatch parity); kept subtle
+        if rule.tint and rule.tint_strength > 0.0:
+            tint_rgb01 = np.array(rule.tint, dtype=np.float32) / 255.0
+            tex_arr = _image_to_array01(tex_tinted)
+            tex_arr = np.clip((1.0 - rule.tint_strength) * tex_arr + rule.tint_strength * tint_rgb01, 0.0, 1.0)
+            tex_tinted = _array01_to_image(tex_arr)
+
+        mask_bin = (labels_up_arr == idx).astype(np.uint8) * 255
+        mask = Image.fromarray(mask_bin, mode="L").filter(ImageFilter.GaussianBlur(radius=feather))
+        blended = Image.blend(out, tex_tinted, alpha=blend_alpha)
+        out.paste(blended, mask=mask)
+
+    # Save
     output_path = Path(output_path)
-    image = Image.open(input_path).convert("RGB")
-
-    w, h = image.size
-    if max(w, h) > analysis_max:
-        scale = analysis_max / max(w, h)
-        analysis_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-        analysis_image = image.resize(analysis_size, Image.Resampling.BILINEAR)
-    else:
-        analysis_image = image.copy()
-
-    analysis_array = np.asarray(analysis_image, dtype=np.float32) / 255.0
-    flat = analysis_array.reshape(-1, 3)
-
-    labels_small = _kmeans(flat, k=k, seed=seed).astype(np.uint8)
-    labels_small = labels_small.reshape(analysis_image.size[1], analysis_image.size[0])  # (H,W)
-
-    labels_small_img = Image.fromarray(labels_small, mode="L")
-    labels_full = labels_small_img.resize(image.size, Image.Resampling.NEAREST)
-    labels = np.asarray(labels_full, dtype=np.uint8)
-
-    assignments: dict[int, "MaterialRule"] = {}
-    if palette_path:
-        rule_candidates: list["MaterialRule"] = []
-        if textures:
-            for name in textures.keys():
-                rule_candidates.append(MaterialRule(name=name))
-            assignments = load_palette_assignments(palette_path, rule_candidates)
-        if not assignments:  # loose fallback (no textures/rules)
-            assignments = _load_palette_assignments_loose(palette_path)
-        if assignments:
-            labels = relabel(assignments, labels)
-
-    enhanced = np.asarray(image, dtype=np.float32) / 255.0
-    blurred = image.filter(ImageFilter.GaussianBlur(radius=2))
-    blurred_np = np.asarray(blurred, dtype=np.float32) / 255.0
-
-    alpha = (labels.astype(np.float32) % 3) / 10.0  # 0.0–0.2
-    alpha = np.repeat(alpha[:, :, None], 3, axis=2)
-    enhanced = (1.0 - alpha) * enhanced + alpha * blurred_np
-
-    out_img = Image.fromarray((np.clip(enhanced, 0.0, 1.0) * 255.0 + 0.5).astype("uint8"), mode="RGB")
-    if target_width and out_img.width != target_width:
-        tw = int(target_width)
-        th = int(round(out_img.height * (tw / out_img.width)))
-        out_img = out_img.resize((tw, th), Image.Resampling.LANCZOS)
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    out_img.save(output_path)
-
-    if save_labels:
-        lp = Path(save_labels)
-        lp.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(labels, mode="L").save(lp)
-
-    if save_palette:
-        if not assignments:
-            assignments = {i: MaterialRule(name=f"cluster{i}") for i in range(k)}
-        save_palette_assignments(assignments, save_palette)
-
+    out.save(output_path)
     return output_path
-
-
-def apply_materials(
-    input_path: Path,
-    output_path: Path,
-    *,
-    k: int = 8,
-    analysis_max: int = 1280,
-    seed: int = 22,
-    target_width: int | None = 4096,
-    palette_path: Optional[Path | str] = None,
-    save_palette: Optional[Path | str] = None,
-    textures: Mapping[str, Path] | None = None,
-    save_labels: Optional[Path | str] = None,
-) -> Path:
-    return enhance_aerial(
-        input_path=input_path,
-        output_path=output_path,
-        k=k,
-        analysis_max=analysis_max,
-        seed=seed,
-        target_width=target_width,
-        palette_path=palette_path,
-        save_palette=save_palette,
-        textures=textures,
-        save_labels=save_labels,
-    )
-
-
-def assign_materials(
-    input_path: Path,
-    output_path: Path,
-    *,
-    k: int = 8,
-    analysis_max: int = 1280,
-    seed: int = 22,
-    target_width: int | None = 4096,
-    palette_path: Optional[Path | str] = None,
-    save_palette: Optional[Path | str] = None,
-    textures: Mapping[str, Path] | None = None,
-    save_labels: Optional[Path | str] = None,
-) -> Path:
-    return apply_materials(
-        input_path=input_path,
-        output_path=output_path,
-        k=k,
-        analysis_max=analysis_max,
-        seed=seed,
-        target_width=target_width,
-        palette_path=palette_path,
-        save_palette=save_palette,
-        textures=textures,
-        save_labels=save_labels,
-    )
-
-# --------------------------
-# CLI
-# --------------------------
-
-def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path, help="Path to the base aerial image")
-    parser.add_argument("output", type=Path, help="Destination image path")
-    parser.add_argument("--analysis-max", type=int, default=1280, help="Max dimension for clustering image (default: 1280)")
-    parser.add_argument("--k", type=int, default=8, help="Number of clusters (default: 8)")
-    parser.add_argument("--seed", type=int, default=22, help="Random seed (default: 22)")
-    parser.add_argument("--target-width", type=int, default=4096, help="Output width (default: 4096)")
-    parser.add_argument("--palette", type=Path, default=None, help="Load cluster→material assignments from JSON")
-    parser.add_argument("--save-palette", type=Path, default=None, help="Write JSON palette to this path after processing")
-    parser.add_argument("--save-labels", type=Path, default=None, help="Write 8-bit label map image (for tests/QA)")
-    return parser.parse_args(argv)
-
-
-def main(argv: Sequence[str] | None = None) -> Path:
-    ns = _parse_args(argv)
-    out = enhance_aerial(
-        ns.input,
-        ns.output,
-        k=ns.k,
-        analysis_max=ns.analysis_max,
-        seed=ns.seed,
-        target_width=ns.target_width,
-        palette_path=ns.palette,
-        save_palette=ns.save_palette,
-        textures=None,
-        save_labels=ns.save_labels,
-    )
-    print(str(out))
-    return out
-
-
-if __name__ == "__main__":  # pragma: no cover
-    main()
