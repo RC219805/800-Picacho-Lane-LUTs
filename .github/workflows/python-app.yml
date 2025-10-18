@@ -1,4 +1,4 @@
-# .github/workflows/build.yml
+# file: .github/workflows/build.yml
 name: build
 
 on:
@@ -25,7 +25,6 @@ jobs:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    # OIDC for Codecov upload (no token secret needed)
     permissions:
       contents: read
       id-token: write
@@ -46,9 +45,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
-            requirements-ci.txt
-            requirements.txt
             pyproject.toml
+            requirements.txt
+            requirements-ci.txt
 
       - name: Fast lint gate (flake8 errors only)
         run: |
@@ -66,13 +65,15 @@ jobs:
           echo "=== Disk space after cleanup ==="
           df -h
 
-      - name: Install lean dependencies (CPU-only) + coverage tools
+      # 🔧 Use project extras so pytest-cov is present for --cov flags
+      - name: Install dev (lean) dependencies + tools
         env:
           PIP_PROGRESS_BAR: "off"
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements-ci.txt
-          pip install pytest-cov coverage
+          pip install -e ".[dev-lean]"
+          # If you prefer the full toolchain:
+          # pip install -e ".[dev]"
 
       - name: Show installed packages (debug only)
         if: ${{ runner.debug == '1' }}
@@ -92,7 +93,6 @@ jobs:
           retention-days: 14
 
       - name: Upload coverage to Codecov (OIDC)
-        # Skip on PRs from forks (no OIDC token on read-only contexts)
         if: |
           always() &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
@@ -122,51 +122,39 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
-            requirements-ci.txt
-            requirements.txt
             pyproject.toml
+            requirements.txt
+            requirements-ci.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-ci.txt
+          pip install -e ".[dev-lean]"
 
       - name: Generate Montecito manifest
         id: manifest
         shell: bash
         run: |
           set -euo pipefail
-          echo "=== Running Montecito Manifest Tool ==="
           OUT="montecito_manifest.json"
-
           if python tools/montecito_manifest.py --help 2>/dev/null | grep -qi -- '--out'; then
-            echo "Tool accepts --out flag → $OUT"
             python tools/montecito_manifest.py --out "$OUT"
           else
-            echo "Tool doesn't accept --out flag, running without args"
             if ! python tools/montecito_manifest.py; then
               echo "Warning: Manifest generation failed, searching for JSON output..."
             fi
           fi
-
           if [ ! -f "$OUT" ]; then
-            echo "Expected output not found, searching for recent JSON files..."
             CANDIDATE="$(find . -name '*.json' -type f -printf '%T@ %p\n' 2>/dev/null | sort -nr | awk 'NR==1{print $2}')"
             if [ -n "${CANDIDATE:-}" ] && [ -f "$CANDIDATE" ]; then
               OUT="$CANDIDATE"
-              echo "Found candidate manifest: $OUT"
             else
               OUT=""
-              echo "No manifest file found."
             fi
           fi
-
           echo "manifest_path=$OUT" >> "$GITHUB_OUTPUT"
-
           if [ -n "$OUT" ] && [ -f "$OUT" ]; then
-            echo "=== Manifest file info ==="
             ls -lh "$OUT"
-            echo "=== Manifest preview (first 20 lines) ==="
             head -n 20 "$OUT" || true
           fi
 
@@ -179,13 +167,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Verify manifest artifact
-        if: ${{ steps.manifest.outputs.manifest_path != '' }}
-        run: |
-          echo "✅ Manifest generated successfully"
-          echo "Artifact name: montecito-manifest-${{ github.sha }}"
-          echo "File path: ${{ steps.manifest.outputs.manifest_path }}"
-
       - name: Validate manifest JSON
         if: ${{ steps.manifest.outputs.manifest_path != '' }}
         run: |
@@ -194,13 +175,10 @@ jobs:
           p = os.environ.get("MANIFEST_PATH", "${{ steps.manifest.outputs.manifest_path }}")
           try:
               with open(p, "r", encoding="utf-8") as f:
-                  data = json.load(f)
-              print(f"✅ Valid JSON with {len(data) if hasattr(data,'__len__') else 'unknown'} top-level entries")
-          except json.JSONDecodeError as e:
-              print(f"❌ Invalid JSON: {e}")
-              sys.exit(1)
+                  json.load(f)
+              print("✅ Valid JSON")
           except Exception as e:
-              print(f"❌ Error: {e}")
+              print(f"❌ {e}")
               sys.exit(1)
           PY
 
@@ -215,15 +193,11 @@ jobs:
         run: |
           echo "❌ Build job failed"
           exit 1
-
       - name: Check manifest status
         if: ${{ needs.generate-manifest.result != 'success' }}
         run: |
           echo "❌ Manifest generation failed"
           exit 1
-
       - name: All checks passed
         run: |
           echo "✅ All checks passed successfully!"
-          echo "Build: ${{ needs.build.result }}"
-          echo "Manifest: ${{ needs.generate-manifest.result }}"
