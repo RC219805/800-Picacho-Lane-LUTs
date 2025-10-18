@@ -1,111 +1,450 @@
 {
   "generated": "2024-12-12T08:45:00Z",
   "analysis_version": "1.0",
-  "scenes": [
+  "luminance_strategy": {
+    "reference_luminance": 0.31,
+    "notes": "0.30-0.32 scores correlate with top luxury perception. Maintain hierarchy.",
+    "targets": [
+      {
+        "scene": "pool",
+        "current": 0.23,
+        "target": 0.2714,
+        "focus_areas": [
+          "specular_pool_reflections",
+          "architectural_whites"
+        ],
+        "approach": "sculpted masks and dodge layers to avoid uniform brightening"
+      },
+      {
+        "scene": "aerial",
+        "current": 0.22,
+        "target": 0.2596,
+        "focus_areas": [
+          "roofline_glow",
+          "interior_window_bloom"
+        ],
+        "approach": "sculpted masks and dodge layers to avoid uniform brightening"
+      }
+    ]
+  },
+  "awe_alignment": {
+    "benchmark_scene": "kitchen",
+    "benchmark_awe": 0.977,
+    "actions": [
+      {
+        "scene": "great_room",
+        "current": 0.76,
+        "target": 0.85,
+        "moves": [
+          "introduce volumetric sunset shaft through skylight",
+          "amplify contrast on stone wall relief"
+        ]
+      },
+      {
+        "scene": "pool",
+        "current": 0.62,
+        "target": 0.75,
+        "moves": [
+          "activate underwater lighting with geometric caustics",
+          "layer fire feature reflections across water surface"
+        ]
+      }
+    ]
+  },
+  "comfort_realignment": {
+    "scene": "primary_bedroom",
+    "current": 0.982,
+    "target": 0.85,
+    "moves": [
+      "fold in subtle corner shadows to reintroduce tension",
+      "cool ambient color temperature by ~250K",
+      "animate sheer curtains for micro-motion"
+    ]
+  },
+  "texture_dimension_strategy": {
+    "baseline": 1.9,
+    "hero_targets": [
+      {
+        "scene": "kitchen",
+        "surface": "island_waterfall_edge",
+        "current": 1.94,
+        "target": 2.25,
+        "method": "microcontrast maps + procedural detail passes"
+      },
+      {
+        "scene": "great_room",
+        "surface": "stone_feature_wall",
+        "current": 1.93,
+        "target": 2.25,
+        "method": "microcontrast maps + procedural detail passes"
+      },
+      {
+        "scene": "primary_bedroom",
+        "surface": "headboard_textile_panel",
+        "current": 1.92,
+        "target": 2.25,
+        "method": "microcontrast maps + procedural detail passes"
+      }
+    ],
+    "guardrails": "Maintain supporting surfaces at 1.9 to avoid noise accumulation."
+  },
+  "future_alignment": {
+    "summary": "Current readings imply contemporary comfort. Layer visionary cues to exceed 0.70.",
+    "adjustments": [
+      {
+        "scene": "kitchen",
+        "current": 0.66,
+        "target": 0.72,
+        "interventions": [
+          "float linear LED reveals detached from architecture",
+          "introduce high-polish reflections for spatial ambiguity",
+          "embed discreet sensor-like pin lights"
+        ]
+      },
+      {
+        "scene": "great_room",
+        "current": 0.61,
+        "target": 0.72,
+        "interventions": [
+          "float linear LED reveals detached from architecture",
+          "introduce high-polish reflections for spatial ambiguity",
+          "embed discreet sensor-like pin lights"
+        ]
+      },
+      {
+        "scene": "pool",
+        "current": 0.54,
+        "target": 0.72,
+        "interventions": [
+          "float linear LED reveals detached from architecture",
+          "introduce high-polish reflections for spatial ambiguity",
+          "embed discreet sensor-like pin lights"
+        ]
+      },
+      {
+        "scene": "primary_bedroom",
+        "current": 0.58,
+        "target": 0.72,
+        "interventions": [
+          "float linear LED reveals detached from architecture",
+          "introduce high-polish reflections for spatial ambiguity",
+          "embed discreet sensor-like pin lights"
+        ]
+      },
+      {
+        "scene": "aerial",
+        "current": 0.52,
+        "target": 0.72,
+        "interventions": [
+          "float linear LED reveals detached from architecture",
+          "introduce high-polish reflections for spatial ambiguity",
+          "embed discreet sensor-like pin lights"
+        ]
+      }
+    ]
+  },
+  "lux_version_strategy": {
+    "observation": "Lux variants only marginally outperform baseline.",
+    "remedy": [
+      {
+        "scene": "kitchen",
+        "delta": 0.0125,
+        "actions": [
+          "global golden hour regrade",
+          "prismatic highlights in glass and water",
+          "boost natural material saturation by 20%",
+          "layer atmospheric haze for multi-plane depth"
+        ]
+      },
+      {
+        "scene": "great_room",
+        "delta": 0.012,
+        "actions": [
+          "global golden hour regrade",
+          "prismatic highlights in glass and water",
+          "boost natural material saturation by 20%",
+          "layer atmospheric haze for multi-plane depth"
+        ]
+      },
+      {
+        "scene": "pool",
+        "delta": 0.012,
+        "actions": [
+          "global golden hour regrade",
+          "prismatic highlights in glass and water",
+          "boost natural material saturation by 20%",
+          "layer atmospheric haze for multi-plane depth"
+        ]
+      },
+      {
+        "scene": "primary_bedroom",
+        "delta": 0.011,
+        "actions": [
+          "global golden hour regrade",
+          "prismatic highlights in glass and water",
+          "boost natural material saturation by 20%",
+          "layer atmospheric haze for multi-plane depth"
+        ]
+      },
+      {
+        "scene": "aerial",
+        "delta": 0.011,
+        "actions": [
+          "global golden hour regrade",
+          "prismatic highlights in glass and water",
+          "boost natural material saturation by 20%",
+          "layer atmospheric haze for multi-plane depth"
+        ]
+      }
+    ]
+  },
+  "scene_specific_enhancements": {
+    "aerial": {
+      "current_luxury": 0.593,
+      "target": 0.7,
+      "moves": [
+        "paint champagne sunset across pool",
+        "project architectural light patterns onto landscaping",
+        "hint at distant coastline haze"
+      ]
+    },
+    "pool": {
+      "current_luxury": 0.6,
+      "target": 0.72,
+      "moves": [
+        "introduce spa steam plumes",
+        "cast caustic light dances on retaining walls",
+        "stage floating floral candles"
+      ]
+    },
+    "great_room": {
+      "current_luxury": 0.636,
+      "target": 0.75,
+      "moves": [
+        "intensify fire feature for kinetic shadow play",
+        "suspend dust motes inside skylight beam",
+        "animate curtain sway for breathable movement"
+      ]
+    }
+  },
+  "narrative": "transcends conventional luxury through orchestrated tension between photonic drama, tactile richness, and future-forward quiet tech.",
+  "technical_workflow": {
+    "layer_stack": [
+      "base_render",
+      "targeted_luminance_curves",
+      "hero_surface_texture_pass",
+      "atmospheric_depth_layers",
+      "floating_future_elements",
+      "golden_hour_color_grade"
+    ]
+  },
+  "variation_sets": [
     {
-      "name": "kitchen",
-      "versions": {
-        "regular": {
-          "luminance": 0.31,
-          "awe": 0.977,
-          "comfort": 0.74,
-          "texture_dimension": 1.94,
-          "future_alignment": 0.66,
-          "luxury_index": 0.7295
-        },
-        "lux": {
-          "luminance": 0.32,
-          "awe": 0.982,
-          "comfort": 0.75,
-          "texture_dimension": 1.95,
-          "future_alignment": 0.67,
-          "luxury_index": 0.742
-        }
+      "name": "morning_precision",
+      "focus": "heightened focus, tempered comfort",
+      "metrics_bias": {
+        "comfort": -0.05,
+        "awe": 0.03
       }
     },
     {
-      "name": "great_room",
-      "versions": {
-        "regular": {
-          "luminance": 0.29,
-          "awe": 0.76,
-          "comfort": 0.71,
-          "texture_dimension": 1.93,
-          "future_alignment": 0.61,
-          "luxury_index": 0.636
-        },
-        "lux": {
-          "luminance": 0.3,
-          "awe": 0.77,
-          "comfort": 0.72,
-          "texture_dimension": 1.94,
-          "future_alignment": 0.62,
-          "luxury_index": 0.648
-        }
+      "name": "twilight_awe",
+      "focus": "maximum awe and luxury allure",
+      "metrics_bias": {
+        "awe": 0.1,
+        "luxury_index": 0.08
       }
     },
     {
-      "name": "pool",
-      "versions": {
-        "regular": {
-          "luminance": 0.23,
-          "awe": 0.62,
-          "comfort": 0.68,
-          "texture_dimension": 1.91,
-          "future_alignment": 0.54,
-          "luxury_index": 0.6
-        },
-        "lux": {
-          "luminance": 0.24,
-          "awe": 0.64,
-          "comfort": 0.69,
-          "texture_dimension": 1.92,
-          "future_alignment": 0.55,
-          "luxury_index": 0.612
-        }
-      }
-    },
-    {
-      "name": "primary_bedroom",
-      "versions": {
-        "regular": {
-          "luminance": 0.27,
-          "awe": 0.71,
-          "comfort": 0.982,
-          "texture_dimension": 1.92,
-          "future_alignment": 0.58,
-          "luxury_index": 0.655
-        },
-        "lux": {
-          "luminance": 0.28,
-          "awe": 0.73,
-          "comfort": 0.986,
-          "texture_dimension": 1.93,
-          "future_alignment": 0.59,
-          "luxury_index": 0.666
-        }
-      }
-    },
-    {
-      "name": "aerial",
-      "versions": {
-        "regular": {
-          "luminance": 0.22,
-          "awe": 0.58,
-          "comfort": 0.67,
-          "texture_dimension": 1.9,
-          "future_alignment": 0.52,
-          "luxury_index": 0.593
-        },
-        "lux": {
-          "luminance": 0.24,
-          "awe": 0.6,
-          "comfort": 0.68,
-          "texture_dimension": 1.91,
-          "future_alignment": 0.54,
-          "luxury_index": 0.604
-        }
+      "name": "night_future_alignment",
+      "focus": "visionary tech-forward ambience",
+      "metrics_bias": {
+        "future_alignment": 0.12
       }
     }
-  ]
+  ],
+  "ab_testing_framework": {
+    "variants": [
+      {
+        "name": "baseline",
+        "delta": 0.0
+      },
+      {
+        "name": "elevated",
+        "delta": 0.15
+      },
+      {
+        "name": "targeted_room_bias",
+        "delta": "per-metric"
+      }
+    ],
+    "goal": "orchestrate an emotional crescendo instead of uniform gains"
+  },
+  "material_integration": {
+    "great_room": {
+      "material": "herringbone_oak",
+      "current_texture_dimension": 1.93,
+      "target_texture_dimension": 2.25,
+      "rendering_params": {
+        "ior": 1.53,
+        "roughness_min": 0.35,
+        "roughness_max": 0.65,
+        "displacement": {
+          "strength_mm": 1.5,
+          "subdivision_level": 3
+        },
+        "mapping": {
+          "type": "uv",
+          "layers": [
+            "diffuse",
+            "normal",
+            "displacement",
+            "specularity_inverse"
+          ]
+        }
+      },
+      "optimization_notes": "Increase grain contrast by 32% through displacement"
+    },
+    "aerial": {
+      "material": "algorithmic_stone",
+      "current_texture_dimension": 1.9,
+      "target_texture_dimension": 1.95,
+      "rendering_params": {
+        "ior": 1.57,
+        "roughness_min": 0.4,
+        "roughness_max": 0.7,
+        "displacement": {
+          "strength_mm": 3.0,
+          "subdivision_level": 3
+        },
+        "mapping": {
+          "type": "procedural",
+          "layers": [
+            "diffuse_variants",
+            "roughness_noise",
+            "joint_geometry"
+          ]
+        }
+      },
+      "optimization_notes": "Add 8-12 unique variants with procedural distribution"
+    },
+    "kitchen": {
+      "material": "granular_plaster",
+      "current_texture_dimension": 1.94,
+      "target_texture_dimension": 1.95,
+      "rendering_params": {
+        "ior": 1.52,
+        "roughness_min": 0.6,
+        "roughness_max": 0.8,
+        "displacement": {
+          "strength_mm": 8.0,
+          "subdivision_level": 4
+        },
+        "mapping": {
+          "type": "triplanar",
+          "layers": [
+            "base_normal",
+            "macro_undulation",
+            "roughness_variation"
+          ]
+        }
+      },
+      "optimization_notes": "Layer dual-frequency noise for organic complexity"
+    }
+  },
+  "exposure_zones": {
+    "zones": [
+      {
+        "scene": "kitchen",
+        "base_luminance": 0.31,
+        "ev_adjustment": 0.0,
+        "tone_mapping": "aces",
+        "local_adjustments": [
+          {
+            "area": "island_surface",
+            "ev_delta": 0.3
+          },
+          {
+            "area": "backsplash",
+            "ev_delta": 0.0
+          }
+        ]
+      },
+      {
+        "scene": "great_room",
+        "base_luminance": 0.29,
+        "ev_adjustment": 0.1,
+        "tone_mapping": "filmic",
+        "local_adjustments": [
+          {
+            "area": "skylight_shaft",
+            "ev_delta": 1.0
+          },
+          {
+            "area": "corner_shadows",
+            "ev_delta": -0.5
+          }
+        ]
+      },
+      {
+        "scene": "pool",
+        "base_luminance": 0.23,
+        "ev_adjustment": 0.43,
+        "tone_mapping": "filmic",
+        "local_adjustments": [
+          {
+            "area": "water_surface",
+            "ev_delta": 0.5
+          },
+          {
+            "area": "underwater",
+            "ev_delta": -0.3
+          }
+        ]
+      },
+      {
+        "scene": "primary_bedroom",
+        "base_luminance": 0.27,
+        "ev_adjustment": 0.2,
+        "tone_mapping": "filmic",
+        "local_adjustments": []
+      },
+      {
+        "scene": "aerial",
+        "base_luminance": 0.22,
+        "ev_adjustment": 0.49,
+        "tone_mapping": "filmic",
+        "local_adjustments": []
+      }
+    ],
+    "global_reference": 0.31
+  },
+  "shader_settings": {
+    "wood": {
+      "anisotropy": 0.5,
+      "anisotropy_rotation": 0.0,
+      "clearcoat": 0.3,
+      "clearcoat_roughness": 0.1,
+      "subsurface": 0.0,
+      "specular_workflow": "inverse_grain_correlation"
+    },
+    "stone": {
+      "procedural_variation": {
+        "count": 12,
+        "seed": 42,
+        "distribution": "weighted_random",
+        "mortar_depth": 3.0,
+        "mortar_roughness": 0.85
+      }
+    },
+    "plaster": {
+      "multi_layer_noise": {
+        "fine_scale": 0.2,
+        "fine_strength": 0.3,
+        "macro_scale": 8.0,
+        "macro_strength": 0.7,
+        "roughness_correlation": "follow_macro"
+      }
+    }
+  }
 }
