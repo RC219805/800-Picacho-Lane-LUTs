@@ -1,14 +1,52 @@
+# path: .pylintrc
 [MASTER]
-ignore=build,dist,.venv,.eggs
+ignore=build,dist,.venv,.eggs,__pycache__
+# Keep pylint quick; tests and LUT folders are heavy/noisy for style
+ignore-patterns=^(tests/|01_Film_Emulation/|02_Location_Aesthetic/|03_Material_Response/)*
 jobs=0
 persistent=no
 
 [MESSAGES CONTROL]
+# Pragmatic disables to match project conventions & optional deps
 disable=
-    C0114, C0115, C0116,  # missing-docstring family
-    R0902, R0903, R0913,  # class/method arg counts
-    W0511,                # TODO comments
-    E0401, E0611          # import errors (optional deps)
+    C0114, C0115, C0116,   # missing-docstring family
+    C0103,                 # naming (handled by code review)
+    R0902, R0903, R0913,   # class attrs / few public methods / many args
+    W0511,                 # TODO/FIXME notes allowed
+    E0401, E0611,          # import errors from optional deps
+    W1203                  # allow f-string logging
+
+[REPORTS]
+score=no
+output-format=colorized
+
+[FORMAT]
+max-line-length=127
+expected-line-ending-format=LF
+
+[BASIC]
+# Short, domain-specific names commonly used in this codebase
+good-names=i,j,k,x,y,w,h,r,g,b,ex,ok,db,id,fs,np,cv,ax,arr,ctx,cli,app,run,fn,kw,fp,dt,ts
+# Keep defaults for regexes; rely on good-names to reduce noise.
 
 [TYPECHECK]
-ignored-modules=realesrgan,diffusers,controlnet_aux,torch,tifffile
+# Optional/compiled modules not always present in CI/dev
+ignored-modules=realesrgan,diffusers,controlnet_aux,torch,tifffile,imagecodecs,PIL,cv2
+# Classes that dynamically provide attributes
+ignored-classes=torch.nn.Module
+# Generated members (dynamic APIs)
+generated-members=torch.*,cv2.*
+
+[DESIGN]
+max-args=10
+max-attributes=15
+max-locals=25
+
+[IMPORTS]
+# Helps with third-party import ordering messages
+known-third-party=numpy,PIL,tifffile,torch,diffusers
+allow-wildcard-with-all=no
+
+[LOGGING]
+# We use f-strings (W1203 disabled above), keep default formatting otherwise
+logging-format-style=percent
