@@ -65,15 +65,13 @@ jobs:
           echo "=== Disk space after cleanup ==="
           df -h
 
-      # 🔧 Use project extras so pytest-cov is present for --cov flags
+      # Ensure pytest-cov, pylint, etc. via dev-lean, and mypy explicitly.
       - name: Install dev (lean) dependencies + tools
         env:
           PIP_PROGRESS_BAR: "off"
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install -e ".[dev-lean]"
-          # If you prefer the full toolchain:
-          # pip install -e ".[dev]"
+          pip install -e ".[dev-lean]" mypy
 
       - name: Show installed packages (debug only)
         if: ${{ runner.debug == '1' }}
@@ -81,6 +79,29 @@ jobs:
 
       - name: Generate legacy shims from tests
         run: python tools/gen_legacy_shims.py
+
+      # (Removed duplicate install step)
+
+      - name: Restore mypy cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-mypy-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'mypy.ini', 'setup.cfg') }}
+          restore-keys: |
+            ${{ runner.os }}-mypy-${{ matrix.python-version }}-
+            ${{ runner.os }}-mypy-
+
+      - name: Type check (mypy)
+        run: |
+          mypy --version
+          mypy .
+
+      - name: Save mypy cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-mypy-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'mypy.ini', 'setup.cfg') }}
 
       - name: Run tests with coverage
         run: |
