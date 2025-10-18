@@ -1,3 +1,4 @@
+# file: material_response.py
 """Material Response principle support utilities.
 
 The marketing material for the 800 Picacho Lane collection repeatedly alludes
@@ -20,13 +21,11 @@ import numpy as np
 
 def _is_sequence(value: object) -> bool:
     """Return ``True`` when ``value`` should be treated as a sequence."""
-
     return isinstance(value, SequenceABC) and not isinstance(value, (str, bytes, bytearray))
 
 
 def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
     """Convert ``data`` into a rectangular list-of-lists of floats."""
-
     if not _is_sequence(data):
         raise TypeError("material data must be a sequence")
 
@@ -34,7 +33,7 @@ def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
         raise ValueError("material data cannot be empty")
 
     if _is_sequence(data[0]):
-        rows = []
+        rows: List[List[float]] = []
         row_length = None
         for row in data:
             if not _is_sequence(row):
@@ -57,13 +56,11 @@ def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
 
 def _flatten(matrix: Sequence[Sequence[float]]) -> List[float]:
     """Return a flattened representation of ``matrix``."""
-
     return [value for row in matrix for value in row]
 
 
 def _median(values: Sequence[float]) -> float:
     """Compute the median of ``values``."""
-
     ordered = sorted(values)
     length = len(ordered)
     if length == 0:
@@ -76,7 +73,6 @@ def _median(values: Sequence[float]) -> float:
 
 def _fft_frequency(index: int, size: int) -> float:
     """Return the normalised FFT frequency for ``index``."""
-
     if size <= 0:
         raise ValueError("size must be positive")
     half = size // 2
@@ -87,7 +83,6 @@ def _fft_frequency(index: int, size: int) -> float:
 
 def _dft2(matrix: Sequence[Sequence[float]]) -> List[List[complex]]:
     """Compute the 2D discrete Fourier transform for ``matrix``."""
-
     rows = len(matrix)
     cols = len(matrix[0])
     result = [[0j for _ in range(cols)] for _ in range(rows)]
@@ -111,7 +106,6 @@ def _energy_by_band(
     radii: Sequence[Sequence[float]],
 ) -> float:
     """Return the total squared magnitude energy for the requested band."""
-
     total = 0.0
     rows = len(dft)
     cols = len(dft[0])
@@ -129,11 +123,10 @@ def _energy_by_band(
 
 def _radial_frequency_grid(shape: Tuple[int, int]) -> List[List[float]]:
     """Return the radial frequency grid for ``shape``."""
-
     rows, cols = shape
-    grid = []
+    grid: List[List[float]] = []
     for u in range(rows):
-        row = []
+        row: List[float] = []
         freq_u = _fft_frequency(u, rows)
         for v in range(cols):
             freq_v = _fft_frequency(v, cols)
@@ -144,7 +137,6 @@ def _radial_frequency_grid(shape: Tuple[int, int]) -> List[List[float]]:
 
 def _linear_regression(xs: Sequence[float], ys: Sequence[float]) -> Tuple[float, float]:
     """Return the slope and intercept for ``xs``/``ys``."""
-
     if len(xs) != len(ys):
         raise ValueError("xs and ys must have matching lengths")
     n = len(xs)
@@ -167,7 +159,6 @@ def _linear_regression(xs: Sequence[float], ys: Sequence[float]) -> Tuple[float,
 @dataclass(frozen=True)
 class MaterialResponseExample:
     """Structured example describing how the principle manifests."""
-
     material: str
     lighting: str
     challenge: str
@@ -176,7 +167,6 @@ class MaterialResponseExample:
 
     def as_dict(self) -> Dict[str, str]:
         """Return the example in a serialisable dictionary form."""
-
         return {
             "material": self.material,
             "lighting": self.lighting,
@@ -187,15 +177,7 @@ class MaterialResponseExample:
 
 
 class MaterialResponsePrinciple:
-    """Captures the intent behind the Material Response marketing claims.
-
-    The principle is intentionally high-level: it frames how surface-specific
-    adjustments should be reasoned about even when a pipeline primarily applies
-    tone and colour transforms.  Tests that refer to this principle can inspect
-    the structured data returned here without coupling to any particular image
-    processing implementation.
-    """
-
+    """Captures the intent behind the Material Response marketing claims."""
     name: str = "Material Response"
     focus: str = (
         "Honor the unique light interaction of each surface instead of applying "
@@ -210,22 +192,14 @@ class MaterialResponsePrinciple:
 
     def describe(self) -> str:
         """Return a human readable description of the principle."""
-
         return f"{self.name}: {self.focus}"
 
     def guidelines(self) -> List[str]:
         """Return the set of guiding tenets."""
-
         return list(self.tenets)
 
     def generate_examples(self) -> List[Dict[str, str]]:
-        """Produce canonical examples demonstrating the principle in action.
-
-        The examples intentionally cover a variety of materials.  Returning
-        dictionaries keeps the data ergonomic for documentation tooling and
-        avoids a dependency on this module's dataclass by callers.
-        """
-
+        """Produce canonical examples demonstrating the principle in action."""
         examples: Iterable[MaterialResponseExample] = [
             MaterialResponseExample(
                 material="polished marble foyer",
@@ -250,7 +224,6 @@ class MaterialResponsePrinciple:
                 outcome="Velvet keeps tactile depth and directional sheen without waxy highlights.",
             ),
         ]
-
         return [example.as_dict() for example in examples]
 
 
@@ -280,27 +253,23 @@ _STOP_WORDS = {
 
 def _extract_keywords(text: str) -> List[str]:
     """Return a list of meaningful lowercase keywords from ``text``."""
-
     tokens = re.findall(r"[a-z0-9]+", text.lower())
     return [token for token in tokens if token not in _STOP_WORDS and len(token) > 2]
 
 
 def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
     """Return ``value`` limited to the inclusive ``[minimum, maximum]`` range."""
-
     if minimum > maximum:
         raise ValueError(
             "minimum cannot be greater than maximum: "
             f"minimum={minimum!r}, maximum={maximum!r}"
         )
-
     return max(minimum, min(maximum, value))
 
 
 @dataclass(frozen=True)
 class MaterialAestheticProfile:
     """Structured description of how a material should be perceived."""
-
     name: str
     texture: str
     rarity: float
@@ -319,7 +288,6 @@ class MaterialAestheticProfile:
 @dataclass(frozen=True)
 class LightingProfile:
     """Simplified representation of the lighting environment."""
-
     warmth: float
     intensity: float
     diffusion: float
@@ -336,7 +304,6 @@ class LightingProfile:
 @dataclass(frozen=True)
 class ViewerProfile:
     """Describes the viewer in terms of aesthetic preferences."""
-
     cultural_background: str
     novelty_preference: float
     heritage_affinity: float
@@ -356,7 +323,6 @@ class ViewerProfile:
 @dataclass(frozen=True)
 class EmotionalResonance:
     """Container capturing the viewer's predicted emotional response."""
-
     awe: float
     comfort: float
     focus: float
@@ -375,7 +341,6 @@ class EmotionalResonance:
 
     def as_dict(self) -> Dict[str, float]:
         """Return the resonance as a serialisable mapping."""
-
         return {
             "awe": self.awe,
             "comfort": self.comfort,
@@ -387,7 +352,6 @@ class EmotionalResonance:
 @dataclass(frozen=True)
 class ContextualResonance:
     """Emotion scores contextualised for a cultural narrative."""
-
     scores: Dict[str, float]
     narrative: str
 
@@ -427,7 +391,6 @@ class NeuroAestheticEngine:
         self, texture: str, warmth: float, cultural_background: str
     ) -> EmotionalResonance:
         """Return an :class:`EmotionalResonance` derived from qualitative inputs."""
-
         if not 0.0 <= warmth <= 1.0:
             raise ValueError("warmth must be between 0.0 and 1.0 inclusive")
 
@@ -486,7 +449,6 @@ class GlobalLuxurySemantics:
         self, material: MaterialAestheticProfile, resonance: EmotionalResonance
     ) -> ContextualResonance:
         """Return resonance tuned to cultural and material narratives."""
-
         background_key = resonance.cultural_background.strip().lower()
         background = self._CULTURAL_ALIAS_MAP.get(background_key, background_key)
         weights = self._CULTURAL_WEIGHTS.get(background, {})
@@ -518,7 +480,6 @@ class FutureStatePredictor:
         self, material: MaterialAestheticProfile, resonance: ContextualResonance
     ) -> float:
         """Return a 0-1 score indicating forward-looking relevance."""
-
         awe = resonance.scores["awe"]
         focus = resonance.scores["focus"]
 
@@ -545,25 +506,21 @@ class CognitiveMaterialResponse:
         viewer_profile: ViewerProfile,
     ) -> Dict[str, object]:
         """Return a holistic appraisal of the material treatment."""
-
         # Not just physics - but psychophysics
         emotional_resonance = self.perception_model.predict_limbic_response(
             material.texture,
             lighting.warmth,
             viewer_profile.cultural_background,
         )
-
         return self.optimize_for_consciousness(material, emotional_resonance)
 
     def optimize_for_consciousness(
         self, material: MaterialAestheticProfile, emotional_resonance: EmotionalResonance
     ) -> Dict[str, object]:
         """Blend cultural and temporal heuristics into actionable guidance."""
-
         contextualized = self.cultural_context.recontextualize(material, emotional_resonance)
         future_alignment = self.temporal_relevance.project(material, contextualized)
         luxury_index = self._composite_index(material, contextualized, future_alignment)
-
         recommendations = self._recommendations(material, contextualized)
 
         return {
@@ -586,7 +543,6 @@ class CognitiveMaterialResponse:
         rarity_weight = 0.25 * material.rarity
         emotional_weight = 0.25 * (0.5 * resonance.scores["awe"] + 0.5 * resonance.scores["comfort"])
         future_weight = 0.15 * future_alignment
-
         return _clamp(craftsmanship_weight + rarity_weight + emotional_weight + future_weight)
 
     @staticmethod
@@ -624,13 +580,9 @@ class CognitiveMaterialResponse:
 
 def violates(decision: str, tenet: str) -> bool:
     """Heuristically determine whether ``decision`` conflicts with ``tenet``."""
-
     decision_lower = decision.lower()
     tenet_lower = tenet.lower()
 
-    # Specific heuristics for the three marketing tenets.  These catch the most
-    # common contradictions that show up in the architectural documentation and
-    # associated tests.
     tenet_specific_checks = (
         (
             {"energy", "highlight"},
@@ -668,8 +620,6 @@ def violates(decision: str, tenet: str) -> bool:
             if any(phrase in decision_lower for phrase in forbidden_phrases):
                 return True
 
-    # Generic negation handling: if the decision explicitly ignores or bypasses
-    # aspects that the tenet cares about we treat it as a violation.
     negating_words = {
         "ignore",
         "bypass",
@@ -687,10 +637,6 @@ def violates(decision: str, tenet: str) -> bool:
         if negation in decision_lower:
             if any(f"{negation} {keyword}" in decision_lower for keyword in keywords):
                 return True
-            # Fall back to a proximity check if the explicit "negation keyword"
-            # pattern was not matched.  This keeps the heuristic resilient when
-            # the decision references the concept in a different grammatical
-            # order (e.g. "midtone texture gets flattened")
             for keyword in keywords:
                 if keyword in decision_lower:
                     return True
@@ -705,7 +651,6 @@ class MarketingClaimValidator:
         self, decision: str, principle: MaterialResponsePrinciple
     ) -> bool:
         """Return ``True`` when ``decision`` honours ``principle``'s tenets."""
-
         for tenet in principle.guidelines():
             if violates(decision, tenet):
                 return False
@@ -753,7 +698,6 @@ class MaterialResponseValidator:
         zero the ratio gracefully falls back to ``1.0`` so tests can reason about
         a neutral baseline.
         """
-
         return self._fourier_energy_ratio(before, after, band="high")
 
     # ------------------------------------------------------------------
@@ -766,13 +710,7 @@ class MaterialResponseValidator:
         *,
         band: str,
     ) -> float:
-        """Return the ratio of Fourier-band energy between ``after`` and ``before``.
-
-        The helper performs minimal validation and defaults to returning ``1.0``
-        if the reference energy is zero to keep the metric stable for synthetic
-        fixtures used in the tests.
-        """
-
+        """Return the ratio of Fourier-band energy between ``after`` and ``before``."""
         if band not in {"high", "low"}:
             raise ValueError("band must be 'high' or 'low'")
 
@@ -799,7 +737,6 @@ class MaterialResponseValidator:
     @staticmethod
     def _calculate_hausdorff_dimension(surface: Sequence[Sequence[float]]) -> float:
         """Estimate fractal dimension using a simple box-counting approach."""
-
         matrix = _coerce_matrix(surface)
         if len(matrix) == 0 or len(matrix[0]) == 0:
             raise ValueError("surface must contain data")
@@ -834,42 +771,44 @@ class MaterialResponseValidator:
         dimension = max(-slope, 0.0)
         return float(dimension)
 
+    @staticmethod
+    def _boxcount(binary: Sequence[Sequence[bool]], size: int) -> int:
+        """Count non-empty boxes of the given ``size`` for ``binary`` data."""
+        if size <= 0:
+            raise ValueError("size must be positive")
+
+        rows = len(binary)
+        cols = len(binary[0]) if rows else 0
+        if rows == 0 or cols == 0:
+            return 0
+
+        trimmed_rows = rows - (rows % size)
+        trimmed_cols = cols - (cols % size)
+        if trimmed_rows == 0 or trimmed_cols == 0:
+            return 0
+
+        count = 0
+        for row in range(0, trimmed_rows, size):
+            for col in range(0, trimmed_cols, size):
+                occupied = False
+                for dr in range(size):
+                    if occupied:
+                        break
+                    for dc in range(size):
+                        if binary[row + dr][col + dc]:
+                            occupied = True
+                            break
+                if occupied:
+                    count += 1
+
+        return count
+
 
 OperationLike = Any
 
 
 def compose_operations(*operations: OperationLike, size: int = 3, dtype: np.dtype | None = None) -> np.ndarray:
-    """Return a composite linear transformation for channel-wise operations.
-
-    Parameters
-    ----------
-    operations:
-        Arbitrary operation descriptors that can be converted into channel
-        transformation matrices.  Supported inputs include:
-
-        * ``None`` – ignored.
-        * Scalars – interpreted as uniform channel scales.
-        * 1-D sequences – treated as per-channel scale factors.
-        * 2-D square matrices – applied directly.
-        * Mappings with ``"matrix"``/``"mix"`` keys (matrix) or ``"scale"``/
-          ``"diag"`` keys (diagonal factors).  Optional ``"name"``/``"type"``
-          metadata is used to coalesce duplicated operations.
-        * Callables returning any of the above when invoked with ``size``.
-
-    size:
-        Channel dimensionality.  Defaults to ``3`` for RGB imagery.
-
-    dtype:
-        Optional :mod:`numpy` dtype for the returned tensor.  ``float32`` is
-        used by default to match the codebase's image processing conventions.
-
-    The helper performs conflict detection by coalescing repeated named
-    operations.  When two operations share the same ``name``/``type`` metadata
-    they are multiplied together in the order encountered so that the overall
-    effect matches the sequential application that previously existed in the
-    pipeline.
-    """
-
+    """Return a composite linear transformation for channel-wise operations."""
     matrix_dtype = np.dtype(dtype) if dtype is not None else np.float32
     identity = np.eye(size, dtype=np.float64)
 
@@ -962,7 +901,6 @@ def _ensure_matrix(operation: object, size: int) -> np.ndarray:
     matrix = np.asarray(operation, dtype=np.float64)
 
     if matrix.ndim == 0:
-        # Treat scalar matrices as uniform scale factors across channels.
         return np.eye(size, dtype=np.float64) * float(matrix)
 
     if matrix.ndim == 1:
@@ -994,7 +932,6 @@ def apply_transformation_tensor(
     dtype: np.dtype | None = None,
 ) -> np.ndarray:
     """Apply composed operations to ``image`` using a unified tensor multiply."""
-
     if image.ndim != 3:
         raise ValueError("image must be a H×W×C array")
 
@@ -1004,39 +941,6 @@ def apply_transformation_tensor(
     if clip:
         return np.clip(transformed, 0.0, 1.0)
     return transformed
-
-    @staticmethod
-    def _boxcount(binary: Sequence[Sequence[bool]], size: int) -> int:
-        """Count non-empty boxes of the given ``size`` for ``binary`` data."""
-
-        if size <= 0:
-            raise ValueError("size must be positive")
-
-        rows = len(binary)
-        cols = len(binary[0]) if rows else 0
-        if rows == 0 or cols == 0:
-            return 0
-
-        trimmed_rows = rows - (rows % size)
-        trimmed_cols = cols - (cols % size)
-        if trimmed_rows == 0 or trimmed_cols == 0:
-            return 0
-
-        count = 0
-        for row in range(0, trimmed_rows, size):
-            for col in range(0, trimmed_cols, size):
-                occupied = False
-                for dr in range(size):
-                    if occupied:
-                        break
-                    for dc in range(size):
-                        if binary[row + dr][col + dc]:
-                            occupied = True
-                            break
-                if occupied:
-                    count += 1
-
-        return count
 
 
 class QuantumMaterialResponse:
@@ -1065,9 +969,7 @@ class QuantumMaterialResponse:
         observation_context: Mapping[str, Any],
     ) -> Dict[str, object]:
         """Return an entangled aesthetic appraisal for multiple materials."""
-
         matrix = np.asarray(_coerce_matrix(material_tensor), dtype=np.float64)
-
         if matrix.size == 0:
             raise ValueError("material_tensor must contain at least one value")
 
@@ -1092,7 +994,6 @@ class QuantumMaterialResponse:
         coherence_map = self._apply_coherence(amplitude_normalised, context_wave)
         entanglement_matrix = self._entanglement_matrix(coherence_map, frequency_domain)
         conflict_resolution = self.identify_and_resolve_conflicts(coherence_map, context_wave)
-
         collapse_guidance = self._collapse_guidance(conflict_resolution, context_wave)
 
         return {
@@ -1111,7 +1012,6 @@ class QuantumMaterialResponse:
         threshold: float = 0.12,
     ) -> Dict[str, object]:
         """Highlight and resolve non-local conflicts across surfaces."""
-
         np_map = np.asarray(coherence_map, dtype=np.float64)
         if np_map.size == 0:
             raise ValueError("coherence_map cannot be empty")
@@ -1161,7 +1061,6 @@ class QuantumMaterialResponse:
     @staticmethod
     def _contextual_wavefunction(context: Mapping[str, Any]) -> Dict[str, float]:
         """Return a normalised mapping describing contextual influence weights."""
-
         weights: Dict[str, float] = {}
         textual_components: List[str] = []
 
@@ -1192,7 +1091,6 @@ class QuantumMaterialResponse:
         self, amplitude_normalised: np.ndarray, context_wave: Mapping[str, float]
     ) -> np.ndarray:
         """Blend amplitude data with context weights to produce coherence."""
-
         contextual_intensity = sum(context_wave.values())
         scaled = amplitude_normalised * (1.0 + self.coherence_gain * contextual_intensity)
         maximum = np.max(scaled) if scaled.size else 0.0
@@ -1206,7 +1104,6 @@ class QuantumMaterialResponse:
         coherence_map: np.ndarray, frequency_domain: np.ndarray
     ) -> np.ndarray:
         """Return a matrix describing coupled surface influence."""
-
         phase = np.angle(frequency_domain)
         entangled = np.cos(phase) * coherence_map
         normaliser = np.max(np.abs(entangled)) if entangled.size else 0.0
@@ -1220,15 +1117,11 @@ class QuantumMaterialResponse:
         matrix: np.ndarray, coherence_map: np.ndarray
     ) -> List[Dict[str, float]]:
         """Return descriptors for each surface prior to observation."""
-
         states: List[Dict[str, float]] = []
         for index, row in enumerate(matrix):
             mean_reflectance = float(np.mean(row))
             variance = float(np.var(row))
-            if index < len(coherence_map):
-                coherence = float(np.mean(coherence_map[index]))
-            else:
-                coherence = 0.0
+            coherence = float(np.mean(coherence_map[index])) if index < len(coherence_map) else 0.0
             states.append(
                 {
                     "surface_index": index,
@@ -1237,7 +1130,6 @@ class QuantumMaterialResponse:
                     "coherence": coherence,
                 }
             )
-
         return states
 
     @staticmethod
@@ -1245,7 +1137,6 @@ class QuantumMaterialResponse:
         conflict_resolution: Mapping[str, Any], context_wave: Mapping[str, float]
     ) -> str:
         """Return narrative guidance for collapsing the quantum aesthetic state."""
-
         conflicts = conflict_resolution.get("conflicts", [])
         top_context = None
         if context_wave:
