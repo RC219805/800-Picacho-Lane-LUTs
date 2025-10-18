@@ -1,12 +1,3 @@
-TL;DR: Cleaned and normalized your README: fixed code fences, headings, TOC, anchors, and added the v1.3 “measure” docs with a proper JSON fields table.
-
-Plan
-	•	Normalize badges and headings; remove odd separators.
-	•	Close/open code fences correctly; turn lists into Markdown bullets.
-	•	Add TOC with valid anchors.
-	•	Add a short “Requirements” block.
-	•	Insert the v1.3 section (command, fields table, example, notes).
-
 # path: README.md
 [![CI](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/ci.yml/badge.svg)](https://github.com/RC219805/800-Picacho-Lane-LUTs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Attribution-blue.svg)](#license)
