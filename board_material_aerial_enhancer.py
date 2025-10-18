@@ -12,15 +12,17 @@ from tqdm import tqdm
 # ------------------------------- color utils -------------------------------
 
 def _srgb_to_linear(x: np.ndarray) -> np.ndarray:
+    """sRGB(0..1) -> linear RGB(0..1)."""
     a = 0.055
     return np.where(x <= 0.04045, x / 12.92, ((x + a) / (1 + a)) ** 2.4)
 
 def _linear_to_srgb(x: np.ndarray) -> np.ndarray:
+    """linear RGB(0..1) -> sRGB(0..1)."""
     a = 0.055
     return np.where(x <= 0.0031308, 12.92 * x, (1 + a) * np.power(x, 1 / 2.4) - a)
 
 def _rgb_to_xyz(rgb: np.ndarray) -> np.ndarray:
-    # sRGB D65
+    """sRGB D65 -> XYZ with linearization."""
     M = np.array(
         [
             [0.4124564, 0.3575761, 0.1804375],
@@ -33,14 +35,17 @@ def _rgb_to_xyz(rgb: np.ndarray) -> np.ndarray:
     return np.tensordot(lin, M.T, axes=1)
 
 def _xyz_to_lab(xyz: np.ndarray) -> np.ndarray:
-    Xn, Yn, Zn = 0.95047, 1.0, 1.08883  # D65
+    """CIE Lab using D65 white."""
+    Xn, Yn, Zn = 0.95047, 1.0, 1.08883
     x = xyz[..., 0] / Xn
     y = xyz[..., 1] / Yn
     z = xyz[..., 2] / Zn
     eps = (6 / 29) ** 3
     k = (29 / 3) ** 2 / 3
-    def f(t):  # piecewise
+
+    def f(t):
         return np.where(t > eps, np.cbrt(t), k * t + 4 / 29)
+
     fx, fy, fz = f(x), f(y), f(z)
     L = 116 * fy - 16
     a = 500 * (fx - fy)
@@ -51,9 +56,12 @@ def _rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
     return _xyz_to_lab(_rgb_to_xyz(rgb))
 
 def _hex_to_rgb01(code: str) -> Tuple[float, float, float]:
+    """Parse #RGB/#RRGGBB -> RGB in [0,1]. Raises ValueError on bad input."""
     s = code.strip().lstrip("#")
     if len(s) == 3:
         s = "".join(ch * 2 for ch in s)
+    if len(s) != 6 or any(ch not in "0123456789aAbBcCdDeEfF" for ch in s):
+        raise ValueError(f"Invalid HEX color: {code!r}")
     r = int(s[0:2], 16) / 255.0
     g = int(s[2:4], 16) / 255.0
     b = int(s[4:6], 16) / 255.0
@@ -73,8 +81,24 @@ _DEFAULT_MBAR_8 = [
 ]
 
 def _palette_rgb01(palette: Optional[Sequence[str]]) -> np.ndarray:
-    src = _DEFAULT_MBAR_8 if palette is None else list(palette)
+    """Return palette as (m,3) float64 RGB01."""
+    src = _DEFAULT_MBAR_8 if palette is None or len(palette) == 0 else list(palette)
     return np.asarray([_hex_to_rgb01(h) for h in src], dtype=np.float64)
+
+# ------------------------------- distances ---------------------------------
+
+def _pairwise_sq_dists(X: np.ndarray, C: np.ndarray) -> np.ndarray:
+    """
+    Efficient squared Euclidean distances between rows of X (n,3) and C (k,3).
+    Avoids allocating (n,k,3). Clamps tiny negatives to 0 for numerical safety.
+    """
+    X = X.astype(np.float64, copy=False)
+    C = C.astype(np.float64, copy=False)
+    X2 = np.einsum("ij,ij->i", X, X)[:, None]          # (n,1)
+    C2 = np.einsum("ij,ij->i", C, C)[None, :]          # (1,k)
+    XC = X @ C.T                                       # (n,k)
+    D = X2 + C2 - 2.0 * XC
+    return np.maximum(D, 0.0)
 
 # -------------------------------- k-means ----------------------------------
 
@@ -84,6 +108,7 @@ class KMeansResult:
     inertia: float
 
 def _kmeans_plus_plus_init(data: np.ndarray, k: int, *, rng: np.random.Generator) -> np.ndarray:
+    """k-means++ seeding on (n,3) data."""
     n = data.shape[0]
     idx0 = rng.integers(0, n)
     centers = [data[idx0]]
@@ -97,6 +122,10 @@ def _kmeans_plus_plus_init(data: np.ndarray, k: int, *, rng: np.random.Generator
     return np.asarray(centers, dtype=np.float64)
 
 def _kmeans(data: np.ndarray, k: int, *, seed: int, max_iter: int = 25, tol: float = 1e-4) -> KMeansResult:
+    """
+    Simple k-means on RGB01. Returns final centers and inertia.
+    Uses memory-friendly distance computation.
+    """
     rng = np.random.default_rng(seed)
     n = data.shape[0]
     if n < k:
@@ -104,25 +133,27 @@ def _kmeans(data: np.ndarray, k: int, *, seed: int, max_iter: int = 25, tol: flo
     centers = _kmeans_plus_plus_init(data, k, rng=rng)
     last_inertia = np.inf
     for _ in range(max_iter):
-        # assign
-        # distances to centers: (n,k)
-        d = data[:, None, :] - centers[None, :, :]
-        dist2 = np.einsum("nik,nik->ni", d, d)
+        # assign to current centers
+        dist2 = _pairwise_sq_dists(data, centers)   # (n,k)
         labels = np.argmin(dist2, axis=1)
-        # update
+        inertia = float(dist2[np.arange(n), labels].sum())
+
+        # convergence check against previous inertia (fix returning the right inertia)
+        if abs(last_inertia - inertia) <= tol * max(1.0, last_inertia):
+            last_inertia = inertia
+            break
+        last_inertia = inertia
+
+        # update centers; if any empty cluster -> random re-seed (keeps progress moving)
         new_centers = np.empty_like(centers)
         for j in range(k):
             mask = labels == j
             if not np.any(mask):
-                # re-seed empty center
                 new_centers[j] = data[rng.integers(0, n)]
             else:
                 new_centers[j] = data[mask].mean(axis=0)
         centers = new_centers
-        inertia = float(dist2[np.arange(n), labels].sum())
-        if abs(last_inertia - inertia) <= tol * max(1.0, last_inertia):
-            break
-        last_inertia = inertia
+
     return KMeansResult(centers=centers, inertia=last_inertia)
 
 # ---------------------------- aerial enhancer ------------------------------
@@ -139,7 +170,10 @@ def enhance_aerial(
     jpeg_quality: int = 95,
     palette: Optional[Sequence[str]] = None,
 ) -> Path:
-    """Apply MBAR palette transfer to aerial; return Path to saved file."""
+    """
+    Apply MBAR palette transfer to an aerial image and save to disk as JPEG.
+    Keeps API stable; faster & more numerically robust.
+    """
     input_path = Path(input_path)
     output_path = Path(output_path)
 
@@ -161,6 +195,8 @@ def enhance_aerial(
     flat = arr_small.reshape(-1, 3).astype(np.float64)
     rng = np.random.default_rng(seed)
     sample_n = min(flat.shape[0], 250_000)
+    if sample_n < 1:
+        raise ValueError("Image appears empty after preprocessing.")
     idx = rng.choice(flat.shape[0], size=sample_n, replace=False)
     sample = flat[idx]
 
@@ -171,47 +207,41 @@ def enhance_aerial(
     pal_rgb = _palette_rgb01(palette)
     centers_lab = _rgb_to_lab(centers_rgb)
     pal_lab = _rgb_to_lab(pal_rgb)
-    # nearest palette color for each center
-    diff = centers_lab[:, None, :] - pal_lab[None, :, :]
-    d2 = np.einsum("ijk,ijk->ij", diff, diff)
-    nearest_idx = np.argmin(d2, axis=1)  # (k,)
+
+    # nearest palette color for each center (Lab)
+    diff2 = _pairwise_sq_dists(centers_lab, pal_lab)  # (k, m)
+    nearest_idx = np.argmin(diff2, axis=1)  # (k,)
     target_rgb = pal_rgb[nearest_idx]  # (k,3)
 
     # per-center RGB delta
     deltas = target_rgb - centers_rgb  # (k,3)
 
-    # sigma from centroid spread
+    # sigma from centroid spread; floor to keep weights well-behaved
     if k > 1:
-        pd = np.sqrt(
-            np.maximum(
-                1e-8,
-                np.mean(
-                    [
-                        np.sum((centers_rgb[i] - centers_rgb[j]) ** 2)
-                        for i in range(k)
-                        for j in range(i + 1, k)
-                    ]
-                )
-            )
-        )
+        # RMS pairwise distance between centers in RGB space
+        pairwise = centers_rgb[:, None, :] - centers_rgb[None, :, :]
+        pd = float(np.sqrt(np.mean(np.sum(pairwise**2, axis=-1))))
     else:
         pd = 0.25
-    sigma2 = (0.5 * pd) ** 2
+    sigma2 = max((0.5 * pd) ** 2, 1e-8)
 
     # apply to full-res in chunks
     H, W, _ = arr.shape
     rows_target = max(128, min(H, int(1_000_000 / max(1, W))))  # ~1M px per chunk
     out = np.empty_like(arr, dtype=np.float32)
 
-    for y0 in tqdm(range(0, H, rows_target), desc="Applying palette", unit="rows"):
+    iterator: Iterable[int] = range(0, H, rows_target)
+    iterator = tqdm(iterator, desc="Applying palette", unit="rows")
+
+    for y0 in iterator:
         y1 = min(H, y0 + rows_target)
         chunk = arr[y0:y1].reshape(-1, 3).astype(np.float64)  # (n,3)
-        # distances to centers -> weights
-        dd = chunk[:, None, :] - centers_rgb[None, :, :]  # (n,k,3)
-        dist2 = np.einsum("nkj,nkj->nk", dd, dd)
-        weights = np.exp(-dist2 / (2 * sigma2 + 1e-12))  # (n,k)
-        ws = weights.sum(axis=1, keepdims=True) + 1e-12
-        weights /= ws
+
+        # distances to centers -> weights (no (n,k,3) allocation)
+        dist2 = _pairwise_sq_dists(chunk, centers_rgb)  # (n,k)
+        weights = np.exp(-dist2 / (2 * sigma2))
+        weights /= (weights.sum(axis=1, keepdims=True) + 1e-12)
+
         # blended delta
         blended = weights @ deltas  # (n,3)
         new_chunk = np.clip(chunk + strength * blended, 0.0, 1.0).astype(np.float32)
@@ -235,16 +265,16 @@ def enhance_aerial(
 def _format_bytes(n: int) -> str:
     return f"{n / (1024**2):.2f} MB"
 
-def _print_header(inp: Path, out: Path, k: int) -> None:
+def _print_header(inp: Path, out: Path, k: int, pal_len: int) -> None:
     print(f"Processing: {inp.name}")
     print(f"Output: {out.name}")
     print(f"Resolution: 4K (4096px width)")
-    print(f"Materials: MBAR-approved palette ({k} materials)\n")
+    print(f"Materials: MBAR-approved palette ({pal_len} colors), k={k}\n")
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         import typer  # lazy import for optional dep
-    except Exception as e:
+    except Exception:
         print("This CLI requires 'typer'. Install with: pip install typer", flush=True)
         return 2
 
@@ -260,8 +290,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         target_width: int = typer.Option(4096, help="Final output width."),
         strength: float = typer.Option(0.85, min=0.0, max=1.0, help="Blend strength toward palette."),
         jpeg_quality: int = typer.Option(95, min=70, max=100, help="JPEG quality."),
+        palette: List[str] = typer.Option(None, "--palette", "-p", help="Override palette with HEX colors. Repeatable."),
     ) -> None:
-        _print_header(input_path, output_path, k)
+        pal = palette if palette else None
+        _print_header(input_path, output_path, k, len(pal or _DEFAULT_MBAR_8))
         result = enhance_aerial(
             input_path=input_path,
             output_path=output_path,
@@ -271,6 +303,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             target_width=target_width,
             strength=strength,
             jpeg_quality=jpeg_quality,
+            palette=pal,
         )
         print(f"✅ Enhanced aerial saved to: {result}")
         try:
