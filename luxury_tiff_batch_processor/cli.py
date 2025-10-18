@@ -11,7 +11,7 @@ import json
 import os
 from dataclasses import fields
 from pathlib import Path
-from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple, Union, TYPE_CHECKING
 
 import typer
 
@@ -22,6 +22,10 @@ from .adjustments import (
     batch_apply_adjustments,
 )
 from .io_utils import image_to_float, save_image
+
+if TYPE_CHECKING:  # pragma: no cover
+    import numpy as np  # noqa: F401
+    from numpy.typing import NDArray  # noqa: F401
 
 try:  # optional YAML support
     import yaml  # type: ignore
@@ -73,17 +77,12 @@ def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _extract_array(image_result) -> "np.ndarray":  # type: ignore[name-defined]
-    # Why: tolerate minor IO result-shape variations without breaking.
-    import numpy as np  # lazy import
-    for attr in ("array", "arr", "data"):
-        if hasattr(image_result, attr):
-            return getattr(image_result, attr).astype("float32", copy=False)
-    if isinstance(image_result, tuple) and image_result:
-        return image_result[0].astype("float32", copy=False)
-    if isinstance(image_result, dict) and "array" in image_result:
-        return image_result["array"].astype("float32", copy=False)
-    raise RuntimeError("Unsupported ImageToFloatResult; expected an '.array' field.")
+def _extract_array(image_result) -> NDArray[np.float32]:
+     # Why: tolerate minor IO result-shape variations without breaking.
+     import numpy as np  # lazy import
+     for attr in ("array", "arr", "data"):
+         if hasattr(image_result, attr):
+             return getattr(image_result, attr).astype("float32", copy=False)    
 
 
 def _safe_save(path: Path, array, reference) -> None:
@@ -204,7 +203,7 @@ def lux_batch(
         from collections import defaultdict
         import numpy as np  # lazy import
 
-        buckets: Dict[Tuple[int, int], List[Tuple[int, "np.ndarray", object]]] = defaultdict(list)  # type: ignore[name-defined]
+        buckets: Dict[Tuple[int, int], List[Tuple[int, NDArray[np.float32], object]]] = defaultdict(list)
         for idx, (inp, _anchor) in enumerate(inputs):
             res = image_to_float(inp)
             arr = _extract_array(res)
