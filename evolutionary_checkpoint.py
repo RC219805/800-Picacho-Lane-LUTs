@@ -1,15 +1,11 @@
-# file: evolutionary_checkpoint.py
-"""Compatibility shim for legacy imports.
-
-Tests and downstream code may import from `evolutionary_checkpoint`.
-This file re-exports the canonical implementations from `src.evolutionary`.
-"""
+# file: evolutionary_checkpoint.py  (pre-generate & commit this known shim)
+"""Compatibility shim for legacy imports. Re-exports src.evolutionary."""
 from __future__ import annotations
 
-from src.evolutionary import (  # type: ignore[import-not-found]
+from src.evolutionary import (
     EvolutionStatus,
     EvolutionOutcome,
     EvolutionaryCheckpoint,
 )
 
-__all__ = ["EvolutionStatus", "EvolutionOutcome", "EvolutionaryCheckpoint"]
+__all__ = ["EvolutionaryCheckpoint", "EvolutionOutcome", "EvolutionStatus"]
