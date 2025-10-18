@@ -47,6 +47,6 @@ max-locals=25
 known-third-party=numpy,PIL,tifffile,torch,diffusers
 allow-wildcard-with-all=no
 
+# in your .pylintrc (or pylintrc)
 [LOGGING]
-# We use f-strings (W1203 disabled above), keep default formatting otherwise
-logging-format-style=percent
+logging-format-style=old
