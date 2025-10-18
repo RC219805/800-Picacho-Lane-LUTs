@@ -62,4 +62,5 @@ jobs:
             echo "No Python files to lint."
             exit 0
           fi
-          pylint -j 0 --fail-under=8.0 $(tr '\0' ' ' < pyfiles.z)
+          # Pylint 3 expects logging-format-style in {old,new}; 'percent' is invalid.
+          pylint -j 0 --fail-under=8.0 --logging-format-style=old $(tr '\0' ' ' < pyfiles.z)
