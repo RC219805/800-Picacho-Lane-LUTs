@@ -50,6 +50,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev-lean]" pylint
 
+      - name: Generate legacy shims from tests
+        run: python tools/gen_legacy_shims.py
+
       - name: Run Pylint
         shell: bash
         run: |
