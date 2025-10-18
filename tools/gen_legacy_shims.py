@@ -6,6 +6,8 @@ Usage:
   Report only:   python tools/gen_legacy_shims.py --report
   Write shims:   python tools/gen_legacy_shims.py --write
   JSON report:   python tools/gen_legacy_shims.py --json
+  Limit files:   python tools/gen_legacy_shims.py --modules tests/test_*.py,tests/smoke/**.py
+                  (you can repeat --modules; comma-separated globs are supported)
 
 In CI, keep using: --fail-on-create to enforce that shims are already committed.
 """
@@ -16,7 +18,7 @@ import ast
 import importlib
 import json
 from pathlib import Path
-from typing import Iterable, List, Set, Tuple
+from typing import Iterable, List, Sequence, Set, Tuple
 
 HEADER = "# Auto-generated shim by tools/gen_legacy_shims.py; do not edit."
 
@@ -25,6 +27,8 @@ SKIP_NAMES = {
     "scipy","typer","tqdm","json","pathlib","argparse","logging","os","sys","math","re","io","importlib",
 }
 
+# ------------------------------- file discovery -------------------------------
+
 def _iter_py(paths: Iterable[Path]) -> Iterable[Path]:
     for p in paths:
         if p.is_dir():
@@ -32,9 +36,25 @@ def _iter_py(paths: Iterable[Path]) -> Iterable[Path]:
         elif p.is_file() and p.suffix == ".py":
             yield p
 
-def _collect_test_imports(test_root: Path) -> Set[str]:
+def _expand_module_globs(root: Path, patterns: Sequence[str]) -> List[Path]:
+    files: List[Path] = []
+    seen: Set[Path] = set()
+    for raw in patterns:
+        pat = raw.strip()
+        if not pat:
+            continue
+        # Path.glob supports ** recursive patterns
+        for m in root.glob(pat):
+            if m.is_file() and m.suffix == ".py" and m not in seen:
+                files.append(m)
+                seen.add(m)
+    return files
+
+# ------------------------------- import scanning ------------------------------
+
+def _collect_imports_from_files(files: Iterable[Path]) -> Set[str]:
     mods: Set[str] = set()
-    for path in _iter_py([test_root]):
+    for path in files:
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         except Exception:
@@ -51,6 +71,11 @@ def _collect_test_imports(test_root: Path) -> Set[str]:
                     mods.add(base)
     return mods
 
+def _collect_test_imports(test_root: Path) -> Set[str]:
+    return _collect_imports_from_files(_iter_py([test_root]))
+
+# --------------------------------- utilities ---------------------------------
+
 def _importable(mod: str) -> bool:
     try:
         importlib.import_module(mod)
@@ -58,10 +83,8 @@ def _importable(mod: str) -> bool:
     except Exception:
         return False
 
-def _shim_code(mod: str) -> str:
-    # For evolutionary_checkpoint we want a strict, minimal public surface.
-    if mod == "evolutionary_checkpoint":
-        return '''"""Compatibility shim for legacy imports. Re-exports src.evolutionary."""
+def _strict_evo_shim() -> str:
+    return '''"""Compatibility shim for legacy imports. Re-exports src.evolutionary."""
 from __future__ import annotations
 {header}
 
@@ -71,10 +94,10 @@ from src.evolutionary import (
     EvolutionaryCheckpoint,
 )
 
-__all__ = ["EvolutionaryCheckpoint", "EvolutionOutcome", "EvolutionStatus"]
+__all__ = ["EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionStatus"]
 '''.format(header=HEADER)
 
-    # Generic re-export shim
+def _generic_shim(mod: str) -> str:
     return f'''"""Auto-generated legacy shim for `{mod}`. Re-exports from `src.{mod}`."""
 from __future__ import annotations
 {HEADER}
@@ -88,15 +111,28 @@ globals().update({{k: getattr(_mod, k) for k in dir(_mod) if not k.startswith("_
 __all__ = [k for k in globals() if not k.startswith("_")]
 '''
 
+def _shim_code(mod: str) -> str:
+    return _strict_evo_shim() if mod == "evolutionary_checkpoint" else _generic_shim(mod)
+
 def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
-def scan(repo: Path) -> Tuple[List[str], List[str], List[str]]:
-    """Returns (ok, missing_shims, updatable_shims) as module names."""
-    tests_dir = repo / "tests"
-    if not tests_dir.exists():
-        return [], [], []
-    mods = sorted(_collect_test_imports(tests_dir))
+# ----------------------------------- scan ------------------------------------
+
+def scan(repo: Path, limit_files: Sequence[Path] | None = None) -> Tuple[List[str], List[str], List[str]]:
+    """
+    Returns (ok, missing_shims, updatable_shims) as module names.
+    If limit_files is provided, only those files are scanned; otherwise scans tests/.
+    """
+    if limit_files is not None:
+        files = list(limit_files)
+    else:
+        tests_dir = repo / "tests"
+        if not tests_dir.exists():
+            return [], [], []
+        files = list(_iter_py([tests_dir]))
+
+    mods = sorted(_collect_imports_from_files(files))
     ok, missing, updatable = [], [], []
     for name in mods:
         if _importable(name):
@@ -116,6 +152,8 @@ def scan(repo: Path) -> Tuple[List[str], List[str], List[str]]:
             pass
     return ok, missing, updatable
 
+# ----------------------------------- CLI -------------------------------------
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Repository root (default: .)")
@@ -124,13 +162,37 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="Print JSON result to stdout.")
     ap.add_argument("--fail-on-create", action="store_true",
                     help="Exit non-zero if any new shim would be created (do not write).")
+    ap.add_argument(
+        "--modules",
+        action="append",
+        default=[],
+        help="Limit scan to given glob(s), e.g. 'tests/test_*.py'. "
+             "May be repeated or comma-separated.",
+    )
     args = ap.parse_args()
 
     repo = Path(args.root).resolve()
     (repo / "src").mkdir(parents=True, exist_ok=True)
     (repo / "src" / "__init__.py").touch()
 
-    ok, missing, updatable = scan(repo)
+    # Build limited file list if --modules provided
+    limit_files: List[Path] | None = None
+    if args.modules:
+        patterns: List[str] = []
+        for entry in args.modules:
+            patterns.extend([p.strip() for p in entry.split(",") if p.strip()])
+        matches = _expand_module_globs(repo, patterns)
+        if not matches:
+            msg = f"No files matched --modules patterns: {patterns}"
+            if args.json:
+                print(json.dumps({"ok": [], "missing": [], "updatable": [], "note": msg}, indent=2))
+            else:
+                print(msg)
+            return 0
+        limit_files = matches
+        print(f"Scanning subset ({len(matches)} files) from --modules filter.")
+
+    ok, missing, updatable = scan(repo, limit_files=limit_files)
 
     if args.json:
         print(json.dumps({"ok": ok, "missing": missing, "updatable": updatable}, indent=2))
