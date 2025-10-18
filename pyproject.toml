@@ -38,14 +38,20 @@ upscale = [
 ]
 cv = ["opencv-python-headless>=4.8,<5"]
 exr = ["OpenEXR>=2.5,<4", "Imath>=3.1,<4"]
+
+# Full dev toolchain (install in main CI)
 dev = [
     "pytest>=7.3,<9",
+    "pytest-cov>=4,<5",      # <-- needed for --cov flags
+    "pylint>=3,<4",          # <-- CI runs pylint
     "ruff>=0.5,<1",
     "black>=24,<25",
     "mypy>=1.8,<2",
     "types-Pillow",
     "types-requests",
 ]
+
+# Lean CI toolchain (used by 'CI (lean)')
 dev-lean = [
     "numpy>=1.24,<3",
     "Pillow>=10,<12",
@@ -54,7 +60,10 @@ dev-lean = [
     "imagecodecs>=2023.9.18,<2025",
     "tqdm>=4.66,<5",
     "pytest>=8,<9",
+    "pytest-cov>=4,<5",      # <-- needed for --cov flags
+    "pylint>=3,<4",          # <-- CI runs pylint
 ]
+
 all = [
     "torch>=2.0,<3",
     "diffusers>=0.20,<1",
