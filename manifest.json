@@ -1,211 +1,463 @@
-// file: code.ts
-// Presence Overlay Guides — add centered 4:5 or 2:3 page guides.
-// Requires manifest relaunchButtons with commands: add-guides-4x5, add-guides-2x3
+# file: presence_guides_cli.py
+from __future__ import annotations
 
-type Num = number;
-type Rect = { x: Num; y: Num; width: Num; height: Num };
+import argparse
+import json
+import sys
+from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
-const PLUGIN_NS = 'com.carolwood.presence.overlay';
-const STORE_KEY = 'presence-overlay-guides';
-const EPS = 0.5; // why: fuzzy match to delete last-run guides without touching user guides
+# ----------------------------- core data & sim ------------------------------
 
-const CMD_TO_ASPECT: Record<string, { name: string; ratio: number }> = {
-  'add-guides-4x5': { name: '4×5', ratio: 4 / 5 },
-  'add-guides-2x3': { name: '2×3', ratio: 2 / 3 },
-};
+Num = float
+Axis = Literal["X", "Y"]
+Transform = Tuple[Tuple[Num, Num, Num], Tuple[Num, Num, Num]]
 
-run().catch((err) => {
-  // Surface unexpected failures; avoid silent exits.
-  console.error(err);
-  figma.closePlugin('Presence Overlay Guides: unexpected error (see console).');
-});
+PLUGIN_NS = "com.carolwood.presence.overlay"
+STORE_KEY = "presence-overlay-guides"
+EPS = 0.5  # why: fuzzy deletion of last-run guides, preserves user guides
 
-async function run(): Promise<void> {
-  // Hard guard: only works in Figma Design normal mode.
-  if (figma.editorType !== 'figma' || figma.mode !== 'default') {
-    figma.closePlugin('Presence Overlay Guides: run in Figma Design (not FigJam/Dev Mode).');
-    return;
-  }
 
-  // Determine command (default to 4×5 if launched directly).
-  const command = figma.command && CMD_TO_ASPECT[figma.command] ? figma.command : 'add-guides-4x5';
-  const { name: label, ratio } = CMD_TO_ASPECT[command];
+@dataclass
+class Rect:
+    x: Num
+    y: Num
+    width: Num
+    height: Num
 
-  // Prepare quick relaunch on current selection.
-  setRelaunchOnSelection();
 
-  // Resolve container bounds.
-  const container = getContainerBounds();
-  if (!container) {
-    figma.closePlugin('Presence Overlay Guides: nothing visible to align (select something or zoom to canvas).');
-    return;
-  }
+@dataclass
+class Guide:
+    axis: Axis
+    offset: Num
 
-  const crop = fitCentered(container, ratio);
-  const newGuides = rectToGuides(crop);
 
-  const page = figma.currentPage;
-  const prev = readPreviousOffsets(page);
-  const retained = filterOutPrevious(page.guides, prev);
+@dataclass
+class Stored:
+    x: List[Num]
+    y: List[Num]
 
-  page.guides = retained.concat(newGuides); // PageNode-guides requires full-array assignment
-  writePreviousOffsets(page, newGuides);
 
-  figma.notify(`Added Presence Guides ${label} at ${fmtRect(crop)}.`);
-  figma.closePlugin();
+@dataclass
+class SceneNode:
+    visible: bool = True
+    absolute_render_bounds: Optional[Rect] = None
+    width: Optional[Num] = None
+    height: Optional[Num] = None
+    absolute_transform: Transform = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    # relaunch flags are ignored by CLI but kept for parity
+    supports_relaunch: bool = False
+
+    def set_relaunch_data(self, _: Dict[str, str]) -> None:
+        if not self.supports_relaunch:
+            raise RuntimeError("Relaunch not supported for this node.")
+
+
+@dataclass
+class PageNode:
+    selection: List[SceneNode] = field(default_factory=list)
+    guides: List[Guide] = field(default_factory=list)
+    _plugin_data: Dict[str, str] = field(default_factory=dict)
+
+    def get_plugin_data(self, key: str) -> str:
+        return self._plugin_data.get(key, "")
+
+    def set_plugin_data(self, key: str, value: str) -> None:
+        self._plugin_data[key] = value
+
+
+@dataclass
+class Viewport:
+    bounds: Rect
+
+
+class Figma:
+    def __init__(
+        self,
+        *,
+        editor_type: str = "figma",
+        mode: str = "default",
+        command: Optional[str] = None,
+        current_page: Optional[PageNode] = None,
+        viewport: Optional[Viewport] = None,
+    ) -> None:
+        self.editorType = editor_type
+        self.mode = mode
+        self.command = command
+        self.currentPage = current_page or PageNode()
+        self.viewport = viewport or Viewport(
+            bounds=Rect(x=0.0, y=0.0, width=1000.0, height=800.0)
+        )
+
+
+# ------------------------------ aspect mapping ------------------------------
+
+CMD_TO_ASPECT: Dict[str, Dict[str, Num]] = {
+    "add-guides-4x5": {"name": "4×5", "ratio": 4 / 5},
+    "add-guides-2x3": {"name": "2×3", "ratio": 2 / 3},
 }
 
-/* -------------------------- selection & viewport -------------------------- */
 
-function getContainerBounds(): Rect | null {
-  const sel = figma.currentPage.selection.filter((n) => n.visible);
-  if (sel.length >= 1) {
-    return unionBounds(sel);
-  }
-  // Fallback: viewport
-  const v = figma.viewport.bounds;
-  if (v.width > 1 && v.height > 1) return { x: v.x, y: v.y, width: v.width, height: v.height };
-  return null;
-}
+def normalize_command(cmd: Optional[str]) -> str:
+    if not cmd:
+        return "add-guides-4x5"
+    c = cmd.strip().lower()
+    if c in ("4x5", "4:5", "4×5"):
+        return "add-guides-4x5"
+    if c in ("2x3", "2:3", "2×3"):
+        return "add-guides-2x3"
+    return cmd if cmd in CMD_TO_ASPECT else "add-guides-4x5"
 
-function unionBounds(nodes: readonly SceneNode[]): Rect | null {
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
 
-  for (const node of nodes) {
-    const b = node.absoluteRenderBounds ?? approxBounds(node);
-    if (!b) continue;
-    minX = Math.min(minX, b.x);
-    minY = Math.min(minY, b.y);
-    maxX = Math.max(maxX, b.x + b.width);
-    maxY = Math.max(maxY, b.y + b.height);
-  }
-  if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return null;
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-}
+# ----------------------------- math / geometry ------------------------------
 
-// Fallback when absoluteRenderBounds is null (invisible, exotic nodes)
-function approxBounds(node: SceneNode): Rect | null {
-  // Transform local (0,0) and (w,h) by absoluteTransform; ignores rotation of children, ok here.
-  const w = ('width' in node ? (node as any).width : null) as number | null;
-  const h = ('height' in node ? (node as any).height : null) as number | null;
-  if (w == null || h == null) return null;
+def _is_finite(v: float) -> bool:
+    return not (v == float("inf") or v == float("-inf") or v != v)
 
-  const m = node.absoluteTransform; // [ [m00, m01, m02], [m10, m11, m12] ]
-  const p0 = applyMat(m, 0, 0);
-  const p1 = applyMat(m, w, 0);
-  const p2 = applyMat(m, 0, h);
-  const p3 = applyMat(m, w, h);
-  const xs = [p0.x, p1.x, p2.x, p3.x];
-  const ys = [p0.y, p1.y, p2.y, p3.y];
-  const minX = Math.min(...xs), minY = Math.min(...ys);
-  const maxX = Math.max(...xs), maxY = Math.max(...ys);
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-}
 
-function applyMat(m: Transform, x: number, y: number): { x: number; y: number } {
-  return { x: m[0][0] * x + m[0][1] * y + m[0][2], y: m[1][0] * x + m[1][1] * y + m[1][2] };
-}
+def apply_mat(m: Transform, x: Num, y: Num) -> Tuple[Num, Num]:
+    return (m[0][0] * x + m[0][1] * y + m[0][2], m[1][0] * x + m[1][1] * y + m[1][2])
 
-/* ----------------------------- crop computation ----------------------------- */
 
-function fitCentered(container: Rect, aspectWoverH: number): Rect {
-  const r = aspectWoverH;
-  const cw = container.width;
-  const ch = container.height;
-  const cX = container.x;
-  const cY = container.y;
+def approx_bounds(node: SceneNode) -> Optional[Rect]:
+    # why: fallback when absolute_render_bounds missing; ignores children rotation
+    w, h = node.width, node.height
+    if w is None or h is None:
+        return None
+    m = node.absolute_transform
+    p0 = apply_mat(m, 0.0, 0.0)
+    p1 = apply_mat(m, w, 0.0)
+    p2 = apply_mat(m, 0.0, h)
+    p3 = apply_mat(m, w, h)
+    xs = [p0[0], p1[0], p2[0], p3[0]]
+    ys = [p0[1], p1[1], p2[1], p3[1]]
+    min_x, min_y = min(xs), min(ys)
+    max_x, max_y = max(xs), max(ys)
+    return Rect(x=min_x, y=min_y, width=max_x - min_x, height=max_y - min_y)
 
-  const cAspect = cw / ch;
-  let w: number, h: number;
-  if (cAspect >= r) {
-    // container wider → clamp width, keep height
-    h = ch;
-    w = ch * r;
-  } else {
-    // container taller → clamp height, keep width
-    w = cw;
-    h = cw / r;
-  }
-  const x = cX + (cw - w) / 2;
-  const y = cY + (ch - h) / 2;
-  return { x, y, width: w, height: h };
-}
 
-function rectToGuides(r: Rect): Guide[] {
-  const left = r.x;
-  const right = r.x + r.width;
-  const top = r.y;
-  const bottom = r.y + r.height;
-  return [
-    { axis: 'X', offset: left },
-    { axis: 'X', offset: right },
-    { axis: 'Y', offset: top },
-    { axis: 'Y', offset: bottom },
-  ];
-}
+def union_bounds(nodes: List[SceneNode]) -> Optional[Rect]:
+    min_x = float("inf")
+    min_y = float("inf")
+    max_x = float("-inf")
+    max_y = float("-inf")
 
-/* -------------------------- replace-previous strategy -------------------------- */
+    for node in nodes:
+        b = node.absolute_render_bounds or approx_bounds(node)
+        if b is None:
+            continue
+        min_x = min(min_x, b.x)
+        min_y = min(min_y, b.y)
+        max_x = max(max_x, b.x + b.width)
+        max_y = max(max_y, b.y + b.height)
 
-type Stored = { x: number[]; y: number[] };
+    if not all(map(_is_finite, (min_x, min_y, max_x, max_y))):
+        return None
+    return Rect(x=min_x, y=min_y, width=max_x - min_x, height=max_y - min_y)
 
-function readPreviousOffsets(page: PageNode): Stored | null {
-  try {
-    const raw = page.getPluginData(STORE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Stored;
-    if (!parsed || !Array.isArray(parsed.x) || !Array.isArray(parsed.y)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
 
-function writePreviousOffsets(page: PageNode, guides: Guide[]): void {
-  const xs = guides.filter((g) => g.axis === 'X').map((g) => round(g.offset));
-  const ys = guides.filter((g) => g.axis === 'Y').map((g) => round(g.offset));
-  page.setPluginData(STORE_KEY, JSON.stringify({ x: xs, y: ys }));
-}
+def fit_centered(container: Rect, aspect_w_over_h: float) -> Rect:
+    r = float(aspect_w_over_h)
+    cw, ch = container.width, container.height
+    cx, cy = container.x, container.y
+    c_aspect = cw / ch
+    if c_aspect >= r:
+        h = ch
+        w = ch * r
+    else:
+        w = cw
+        h = cw / r
+    x = cx + (cw - w) / 2.0
+    y = cy + (ch - h) / 2.0
+    return Rect(x=x, y=y, width=w, height=h)
 
-function filterOutPrevious(existing: readonly Guide[], prev: Stored | null): Guide[] {
-  if (!prev) return existing.slice();
-  const keep = (g: Guide): boolean => {
-    if (g.axis === 'X') return !prev.x.some((o) => close(o, g.offset));
-    return !prev.y.some((o) => close(o, g.offset));
-  };
-  return existing.filter(keep);
-}
 
-function round(n: number): number {
-  return Math.round(n * 1000) / 1000;
-}
+def rect_to_guides(r: Rect) -> List[Guide]:
+    left, right, top, bottom = r.x, r.x + r.width, r.y, r.y + r.height
+    return [
+        Guide(axis="X", offset=left),
+        Guide(axis="X", offset=right),
+        Guide(axis="Y", offset=top),
+        Guide(axis="Y", offset=bottom),
+    ]
 
-function close(a: number, b: number): boolean {
-  return Math.abs(a - b) <= EPS;
-}
 
-/* ----------------------------- relaunch buttons ----------------------------- */
+# ---------------------------- previous-run state ----------------------------
 
-function setRelaunchOnSelection(): void {
-  const sel = figma.currentPage.selection;
-  if (sel.length === 0) return;
-  for (const node of sel) {
-    try {
-      node.setRelaunchData({
-        'add-guides-4x5': 'Add Presence Guides (4×5)',
-        'add-guides-2x3': 'Add Presence Guides (2×3)',
-      });
-    } catch {
-      // Some nodes may not support relaunch data; ignore safely.
+def round3(n: float) -> float:
+    return round(n * 1000.0) / 1000.0
+
+
+def is_close(a: float, b: float) -> bool:
+    return abs(a - b) <= EPS
+
+
+def read_previous_offsets(page: PageNode) -> Optional[Stored]:
+    try:
+        raw = page.get_plugin_data(STORE_KEY)
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        if not isinstance(parsed.get("x"), list) or not isinstance(parsed.get("y"), list):
+            return None
+        return Stored(x=[float(v) for v in parsed["x"]], y=[float(v) for v in parsed["y"]])
+    except Exception:
+        return None
+
+
+def write_previous_offsets(page: PageNode, guides: List[Guide]) -> None:
+    xs = [round3(g.offset) for g in guides if g.axis == "X"]
+    ys = [round3(g.offset) for g in guides if g.axis == "Y"]
+    page.set_plugin_data(STORE_KEY, json.dumps({"x": xs, "y": ys}))
+
+
+def filter_out_previous(existing: List[Guide], prev: Optional[Stored]) -> List[Guide]:
+    if not prev:
+        return list(existing)
+
+    def keep(g: Guide) -> bool:
+        if g.axis == "X":
+            return not any(is_close(o, g.offset) for o in prev.x)
+        return not any(is_close(o, g.offset) for o in prev.y)
+
+    return [g for g in existing if keep(g)]
+
+
+# --------------------------------- helpers ----------------------------------
+
+def fmt_rect(r: Rect) -> str:
+    n = lambda v: int(round(v))
+    return f"{n(r.width)}×{n(r.height)} @ ({n(r.x)}, {n(r.y)})"
+
+
+def get_container_bounds(viewport: Viewport, page: PageNode) -> Optional[Rect]:
+    visible = [n for n in page.selection if n.visible]
+    if visible:
+        u = union_bounds(visible)
+        if u:
+            return u
+    v = viewport.bounds
+    if v.width > 1 and v.height > 1:
+        return Rect(x=v.x, y=v.y, width=v.width, height=v.height)
+    return None
+
+
+# --------------------------------- compute ----------------------------------
+
+def compute_and_apply(figma: Figma, command: Optional[str]) -> Dict[str, Any]:
+    """
+    Pure CLI execution. No printing. Returns a machine-friendly result JSON.
+    """
+    cmd = normalize_command(command or figma.command)
+    if figma.editorType != "figma" or figma.mode != "default":
+        return {
+            "ok": False,
+            "error": "Presence Overlay Guides: run in Figma Design (not FigJam/Dev Mode).",
+        }
+
+    aspect = CMD_TO_ASPECT[cmd]
+    label = str(aspect["name"])
+    ratio = float(aspect["ratio"])
+
+    container = get_container_bounds(figma.viewport, figma.currentPage)
+    if container is None:
+        return {
+            "ok": False,
+            "error": "Presence Overlay Guides: nothing visible to align (select something or provide viewport).",
+        }
+
+    crop = fit_centered(container, ratio)
+    new_guides = rect_to_guides(crop)
+
+    page = figma.currentPage
+    prev = read_previous_offsets(page)
+    retained = filter_out_previous(page.guides, prev)
+
+    page.guides = retained + new_guides
+    write_previous_offsets(page, new_guides)
+
+    result = {
+        "ok": True,
+        "label": label,
+        "message": f"Added Presence Guides {label} at {fmt_rect(crop)}.",
+        "crop": asdict(crop),
+        "newGuides": [asdict(g) for g in new_guides],
+        "result": {
+            "page": {
+                "guides": [asdict(g) for g in page.guides],
+                "pluginData": dict(page._plugin_data),
+            }
+        },
+        "counts": {"retained": len(retained), "added": len(new_guides), "total": len(page.guides)},
     }
-  }
-}
+    return result
 
-/* -------------------------------- utilities -------------------------------- */
 
-function fmtRect(r: Rect): string {
-  const n = (v: number) => Math.round(v);
-  return `${n(r.width)}×${n(r.height)} @ (${n(r.x)}, ${n(r.y)})`;
-}
+# --------------------------------- I/O layer --------------------------------
+
+def _to_transform(value: Any) -> Transform:
+    try:
+        a = value[0]
+        b = value[1]
+        return ((float(a[0]), float(a[1]), float(a[2])), (float(b[0]), float(b[1]), float(b[2])))
+    except Exception as e:
+        raise ValueError(f"absoluteTransform must be [[m00,m01,m02],[m10,m11,m12]]: {value}") from e
+
+
+def _to_rect(value: Any) -> Rect:
+    return Rect(
+        x=float(value["x"]),
+        y=float(value["y"]),
+        width=float(value["width"]),
+        height=float(value["height"]),
+    )
+
+
+def _to_guide(value: Any) -> Guide:
+    axis = str(value["axis"]).upper()
+    if axis not in ("X", "Y"):
+        raise ValueError(f"Guide axis must be 'X' or 'Y': {axis}")
+    return Guide(axis=axis, offset=float(value["offset"]))
+
+
+def build_figma_from_json(doc: Dict[str, Any]) -> Figma:
+    editor_type = str(doc.get("editorType", "figma"))
+    mode = str(doc.get("mode", "default"))
+    command = doc.get("command")
+
+    viewport_dict = doc.get("viewport", {"x": 0, "y": 0, "width": 1440, "height": 900})
+    viewport = Viewport(bounds=_to_rect(viewport_dict))
+
+    page_dict = doc.get("page", {})
+    guides = [_to_guide(g) for g in page_dict.get("guides", [])]
+    plugin_data_in = page_dict.get("pluginData", {})
+
+    selection_dicts = doc.get("selection", [])
+    selection: List[SceneNode] = []
+    for nd in selection_dicts:
+        ar = nd.get("absoluteRenderBounds")
+        absolute_render_bounds = _to_rect(ar) if isinstance(ar, dict) else None
+        t = nd.get("absoluteTransform", [[1, 0, 0], [0, 1, 0]])
+        node = SceneNode(
+            visible=bool(nd.get("visible", True)),
+            absolute_render_bounds=absolute_render_bounds,
+            width=float(nd["width"]) if nd.get("width") is not None else None,
+            height=float(nd["height"]) if nd.get("height") is not None else None,
+            absolute_transform=_to_transform(t),
+            supports_relaunch=bool(nd.get("supportsRelaunch", False)),
+        )
+        selection.append(node)
+
+    page = PageNode(selection=selection, guides=guides)
+    # load plugin data raw strings
+    for k, v in (plugin_data_in or {}).items():
+        page.set_plugin_data(str(k), str(v))
+
+    return Figma(
+        editor_type=editor_type,
+        mode=mode,
+        command=command,
+        current_page=page,
+        viewport=viewport,
+    )
+
+
+def example_input() -> Dict[str, Any]:
+    return {
+        "editorType": "figma",
+        "mode": "default",
+        "command": "add-guides-4x5",
+        "viewport": {"x": 0, "y": 0, "width": 1440, "height": 900},
+        "page": {
+            "guides": [{"axis": "X", "offset": 50.0}, {"axis": "Y", "offset": 75.0}],
+            "pluginData": {
+                # state from previous run (optional)
+                STORE_KEY: json.dumps({"x": [100.0, 400.0], "y": [200.0, 800.0]})
+            },
+        },
+        "selection": [
+            {
+                "visible": True,
+                "width": 300,
+                "height": 200,
+                "absoluteTransform": [[1, 0, 100], [0, 1, 150]],
+                "absoluteRenderBounds": None,
+            },
+            {
+                "visible": True,
+                "width": 200,
+                "height": 150,
+                "absoluteTransform": [[1, 0, 500], [0, 1, 400]],
+                "absoluteRenderBounds": {"x": 500, "y": 400, "width": 200, "height": 150},
+            },
+        ],
+    }
+
+
+def read_json_from(path: str) -> Dict[str, Any]:
+    if path == "-":
+        return json.load(sys.stdin)
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_json_to(path: str, data: Dict[str, Any], pretty: bool) -> None:
+    dump = json.dumps(data, indent=2 if pretty else None, ensure_ascii=False)
+    if path == "-":
+        sys.stdout.write(dump + ("\n" if pretty else ""))
+        return
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(dump)
+
+
+# ------------------------------------ CLI -----------------------------------
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="presence-guides",
+        description="Compute centered overlay guides (4×5 or 2×3) from scene/page JSON.",
+    )
+    parser.add_argument("-i", "--input", default="-", help="Input JSON file or '-' for stdin.")
+    parser.add_argument("-o", "--output", default="-", help="Output JSON file or '-' for stdout.")
+    parser.add_argument(
+        "-c",
+        "--command",
+        default=None,
+        help="Command: add-guides-4x5 | add-guides-2x3 | 4x5 | 2x3 (default 4x5).",
+    )
+    parser.add_argument("--eps", type=float, default=EPS, help="Fuzzy match epsilon (default 0.5).")
+    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
+    parser.add_argument("--schema", action="store_true", help="Print example input schema and exit.")
+    args = parser.parse_args(argv)
+
+    if args.schema:
+        sample = example_input()
+        write_json_to("-", sample, pretty=True)
+        return 0
+
+    global EPS
+    EPS = float(args.eps)
+
+    try:
+        doc = read_json_from(args.input)
+    except Exception as e:
+        write_json_to(
+            args.output,
+            {"ok": False, "error": f"Failed to read/parse input JSON: {e}"},
+            pretty=args.pretty,
+        )
+        return 1
+
+    try:
+        figma = build_figma_from_json(doc)
+        result = compute_and_apply(figma, args.command)
+        write_json_to(args.output, result, pretty=args.pretty)
+        return 0 if result.get("ok") else 2
+    except Exception as e:
+        # why: never crash pipelines; always emit machine-friendly error JSON
+        write_json_to(args.output, {"ok": False, "error": str(e)}, pretty=args.pretty)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
