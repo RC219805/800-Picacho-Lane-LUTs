@@ -46,6 +46,15 @@ dev = [
     "types-Pillow",
     "types-requests",
 ]
+dev-lean = [
+    "numpy>=1.24,<3",
+    "Pillow>=10,<12",
+    "scipy>=1.15,<2",
+    "tifffile>=2023.7.18,<2025",
+    "imagecodecs>=2023.9.18,<2025",
+    "tqdm>=4.66,<5",
+    "pytest>=8,<9",
+]
 all = [
     "torch>=2.0,<3",
     "diffusers>=0.20,<1",
