@@ -1,4 +1,4 @@
-# file: process_renderings_750.py
+# file: picacho_lane_luts/process_renderings_750.py
 from __future__ import annotations
 
 import argparse
@@ -12,15 +12,13 @@ import os
 import shutil
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Literal, Optional, Sequence
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 SUPPORTED_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif"}
 CONVERTIBLE_IMAGE_SUFFIXES = {".tif", ".tiff", ".webp", ".bmp", ".tga", ".psd", ".exr"}
-
-# ----------------------------- data/config ---------------------------------
 
 @dataclass(frozen=True)
 class RenderRecipe:
@@ -59,8 +57,6 @@ BASE_RECIPES: Dict[str, RenderRecipe] = {
     ),
 }
 
-# ----------------------------- discovery -----------------------------------
-
 def _iter_render_candidates(input_dir: Path) -> Iterable[Path]:
     for path in sorted(input_dir.iterdir()):
         if path.is_file():
@@ -68,31 +64,22 @@ def _iter_render_candidates(input_dir: Path) -> Iterable[Path]:
 
 def _require_module(module_name: str):
     if importlib.util.find_spec(module_name) is None:
-        raise ModuleNotFoundError(
-            f"The optional dependency '{module_name}' is required to convert that asset."
-        )
+        raise ModuleNotFoundError(f"The optional dependency '{module_name}' is required to convert that asset.")
     return importlib.import_module(module_name)
 
 def _convert_exr_to_jpg(exr_path: Path, jpg_path: Path, *, exposure: float = 1.0, gamma: float = 2.2) -> None:
-    # why: provide a gentle tonemap; keep dependency optional
     OpenEXR = _require_module("OpenEXR")
     Imath = _require_module("Imath")
-
     exr_file = OpenEXR.InputFile(str(exr_path))
     header = exr_file.header()
     dw = header["dataWindow"]
     width = dw.max.x - dw.min.x + 1
     height = dw.max.y - dw.min.y + 1
-
-    pt = Imath.PixelType(Imath.PixelType.HALF if "half" in str(header).lower() else Imath.PixelType.FLOAT)
-    channels = [np.frombuffer(exr_file.channel(c, pt), dtype=np.float16 if pt == Imath.PixelType(Imath.PixelType.HALF) else np.float32)
-                for c in ("R", "G", "B")]
+    pt = Imath.PixelType(Imath.PixelType.FLOAT)
+    channels = [np.frombuffer(exr_file.channel(c, pt), dtype=np.float32) for c in ("R", "G", "B")]
     exr_file.close()
-
-    rgb = [ch.astype(np.float32, copy=False).reshape(height, width) for ch in channels]
+    rgb = [ch.reshape(height, width) for ch in channels]
     rgb = np.stack(rgb, axis=-1)
-
-    # Simple Reinhard tonemap with exposure and gamma
     x = np.clip(rgb * float(exposure), 0.0, None)
     tonemapped = x / (1.0 + x)
     tonemapped = np.power(np.clip(tonemapped, 0.0, 1.0), 1.0 / float(gamma))
@@ -101,7 +88,7 @@ def _convert_exr_to_jpg(exr_path: Path, jpg_path: Path, *, exposure: float = 1.0
 
 def _convert_with_pillow(source: Path, destination: Path) -> None:
     with Image.open(source) as img:
-        img = ImageOps.exif_transpose(img)  # why: correct orientation
+        img = ImageOps.exif_transpose(img)
         if img.mode in {"RGBA", "LA", "P"}:
             base = Image.new("RGB", img.size, (255, 255, 255))
             if img.mode == "P":
@@ -116,7 +103,6 @@ def convert_renderings_to_jpeg(input_dir: Path, output_dir: Path | None = None) 
     input_dir = Path(input_dir)
     output_dir = Path(output_dir) if output_dir else input_dir / "converted_for_api"
     output_dir.mkdir(parents=True, exist_ok=True)
-
     for path in _iter_render_candidates(input_dir):
         suffix = path.suffix.lower()
         if suffix in SUPPORTED_IMAGE_SUFFIXES:
@@ -125,19 +111,15 @@ def convert_renderings_to_jpeg(input_dir: Path, output_dir: Path | None = None) 
                 continue
             shutil.copy2(path, copied)
             continue
-
         if suffix not in CONVERTIBLE_IMAGE_SUFFIXES:
             continue
-
         destination = output_dir / (path.stem + ".jpg")
         if destination.exists() and path.stat().st_mtime <= destination.stat().st_mtime:
             continue
-
         if suffix == ".exr":
             _convert_exr_to_jpg(path, destination)
         else:
             _convert_with_pillow(path, destination)
-
     return output_dir
 
 def ensure_supported_renderings(input_dir: Path) -> Path:
@@ -146,11 +128,9 @@ def ensure_supported_renderings(input_dir: Path) -> Path:
         return convert_renderings_to_jpeg(input_dir)
     return input_dir
 
-# ----------------------------- image ops -----------------------------------
-
 def _load_rgb(path: Path) -> np.ndarray:
     with Image.open(path) as img:
-        img = ImageOps.exif_transpose(img)  # why: composition depends on upright frame
+        img = ImageOps.exif_transpose(img)
         rgb = img.convert("RGB")
         arr = np.asarray(rgb, dtype=np.float32) / 255.0
     return np.clip(arr, 0.0, 1.0)
@@ -194,10 +174,8 @@ def _apply_split_tone(arr: np.ndarray, *, highlight_cool: float, shadow_warm: fl
 def _apply_temperature(arr: np.ndarray, shift: float) -> np.ndarray:
     if shift == 0.0:
         return arr
-    red_scale = 1.0 + shift
-    blue_scale = 1.0 - shift
-    arr[..., 0] *= red_scale
-    arr[..., 2] *= blue_scale
+    arr[..., 0] *= 1.0 + shift
+    arr[..., 2] *= 1.0 - shift
     return arr
 
 def _apply_contact_shadows(arr: np.ndarray, strength: float, radius: int) -> np.ndarray:
@@ -238,16 +216,12 @@ def _apply_sharpness(pil_img: Image.Image, factor: float) -> Image.Image:
         return pil_img
     return ImageEnhance.Sharpness(pil_img).enhance(factor)
 
-# ----------------------------- recipes -------------------------------------
-
 def _match_recipe(path: Path) -> RenderRecipe:
     stem = path.stem.lower()
     for key, recipe in BASE_RECIPES.items():
         if key in stem:
             return recipe
     raise KeyError(f"Unable to match render '{path.name}' to a configured recipe")
-
-# ----------------------------- processing ----------------------------------
 
 @dataclass
 class Job:
@@ -270,7 +244,6 @@ def process_render(path: Path, output_path: Path, recipe: RenderRecipe, *, quali
     _apply_split_tone(arr, highlight_cool=recipe.highlight_cool, shadow_warm=recipe.shadow_warm)
     _apply_contact_shadows(arr, recipe.contact_shadow, recipe.contact_radius)
     arr = _apply_haze(arr, recipe.haze)
-
     pil_img = Image.fromarray((np.clip(arr, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8))
     pil_img = _apply_saturation(pil_img, recipe.saturation)
     pil_img = _apply_contrast(pil_img, recipe.contrast)
@@ -314,17 +287,15 @@ def _run_job(job: Job, *, quality: int, overwrite: bool, on_error: Literal["skip
             raise
         return JobResult(src=str(job.src), dst=str(job.dst), status="error", detail=str(e))
 
-# ----------------------------- CLI -----------------------------------------
-
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Process the 750px rendering review set.")
     p.add_argument("--input", type=Path, default=Path("/Users/rc/input_renderings_750"), help="Input directory.")
     p.add_argument("--output", type=Path, default=Path("/Users/rc/output_renderings_750"), help="Output directory.")
-    p.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="Parallel jobs (processes). Use 1 for serial.")
-    p.add_argument("--pattern", action="append", default=[], help="Glob filter (e.g. --pattern '*kitchen*'). Repeatable.")
+    p.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="Parallel jobs. Use 1 for serial.")
+    p.add_argument("--pattern", action="append", default=[], help="Glob filter; repeatable.")
     p.add_argument("--overwrite", action="store_true", help="Recompute even if output is newer.")
     p.add_argument("--dry-run", action="store_true", help="Plan only; print summary and exit.")
-    p.add_argument("--quality", type=int, default=95, help="JPEG quality (when saving .jpg).")
+    p.add_argument("--quality", type=int, default=95, help="JPEG quality when saving .jpg.")
     p.add_argument("--on-error", choices=["skip", "raise"], default="skip", help="Behavior on processing error.")
     p.add_argument("--report", type=Path, default=None, help="Write a JSON report to this path.")
     return p.parse_args()
@@ -336,12 +307,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     jobs = _plan_jobs(input_dir, output_dir, args.pattern)
-    summary = {
-        "input": str(input_dir),
-        "output": str(output_dir),
-        "planned": len(jobs),
-        "jobs": [asdict(j) for j in jobs],
-    }
+    summary = {"input": str(input_dir), "output": str(output_dir), "planned": len(jobs), "jobs": [asdict(j) for j in jobs]}
 
     if args.dry_run:
         print(json.dumps({"ok": True, "dry_run": True, **summary}, indent=2))
@@ -362,15 +328,10 @@ def main() -> None:
                 print(f"[{r.status}] {j.src.name} -> {j.dst.name}" + (f" ({r.detail})" if r.detail else ""))
 
     ok = all(r.status in {"ok", "skipped"} for r in results)
-    report = {
-        "ok": ok,
-        **summary,
-        "results": [asdict(r) for r in results],
-    }
+    report = {"ok": ok, **summary, "results": [asdict(r) for r in results]}
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(report, indent=2), encoding="utf-8")
-
     print(json.dumps(report, indent=2))
 
 if __name__ == "__main__":
