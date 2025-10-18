@@ -1,3 +1,4 @@
+# path: .pre-commit-config.yaml
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -6,6 +7,9 @@ repos:
         exclude: '\.(cube|lut|3dl)$'
       - id: end-of-file-fixer
         exclude: '\.(cube|lut|3dl)$'
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: [--fix=lf]
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=10000']
@@ -13,7 +17,18 @@ repos:
       - id: check-toml
       - id: check-merge-conflict
       - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: forbid-files
+        args: ['--filename-regex', '(^|/)\.DS_Store$|(^|/)\.coverage(\..*)?$']
       - id: detect-private-key
+
+  # Run isort BEFORE black
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--profile", "black", "--line-length", "127"]
 
   - repo: https://github.com/psf/black
     rev: 24.10.0
@@ -22,32 +37,35 @@ repos:
         language_version: python3
         args: [--line-length=127]
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
+  # Modernize syntax automatically
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.19.0
     hooks:
-      - id: isort
-        args: ["--profile", "black", "--line-length", "127"]
+      - id: pyupgrade
+        args: [--py311-plus]
 
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.1
     hooks:
       - id: flake8
-        additional_dependencies: [flake8-docstrings, flake8-bugbear]
+        additional_dependencies: [flake8-docstrings==1.7.0, flake8-bugbear==24.8.19]
         args: ['--config=.flake8']
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.11.2
     hooks:
       - id: mypy
-        additional_dependencies: [types-Pillow, types-requests]
-        args: [--ignore-missing-imports]
+        additional_dependencies: [types-Pillow, types-requests, types-PyYAML]
+        args: [--ignore-missing-imports, --python-version=3.10]
         exclude: '^(tests/|01_Film_Emulation/|02_Location_Aesthetic/|03_Material_Response/)'
+        stages: [push]
 
   - repo: https://github.com/pycqa/bandit
     rev: 1.7.10
     hooks:
       - id: bandit
         args: ['-x', 'tests/', '--skip', 'B101,B601']
+        stages: [push]
 
   - repo: https://github.com/pycqa/pylint
     rev: v3.3.1
@@ -55,3 +73,18 @@ repos:
       - id: pylint
         args: ['--max-line-length=127', '--disable=C0111,C0103,R0903,R0913,W0613,W0622']
         exclude: '^(tests/|01_Film_Emulation/|02_Location_Aesthetic/|03_Material_Response/)'
+        stages: [push]
+
+  # Shell lint/format for your bash scripts (e.g., hdr_production_pipeline.sh)
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        files: '\.sh$'
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.7.0-4
+    hooks:
+      - id: shfmt
+        args: ['-i', '2', '-ci', '-bn']
+        files: '\.sh$'
