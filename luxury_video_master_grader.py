@@ -1,14 +1,18 @@
-"""Luxury video master grading pipeline.
+# file: luxury_tiff_batch_processor_cli.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Preset-driven LUT grading pipeline orchestrated via FFmpeg.
 
-This module orchestrates an FFmpeg-based finishing pass tuned for the
-"800 Picacho Lane" look. It applies a curated LUT, contrast and color
-balancing refinements, optional spatial denoising, clarity boosts and film
-grain, then outputs a mezzanine/master grade file (Apple ProRes by default).
+Highlights
+- Robust ffprobe probing + concise source summary.
+- Smart tone-map planner (auto/off/operator) with HDR detection.
+- Frame-rate assessment & conformance plan with tolerance.
+- Filter-graph builder: denoise → tonemap → grade → LUT → effects → fps.
+- Color metadata priority: explicit > from source > tone-map defaults > none.
+- Fully runnable: includes minimal PRESETS registry.
 
-The script mirrors the ergonomics of the TIFF batch processor already in the
-repository, exposing a preset-driven command line with opt-in overrides and a
-dry-run preview.  A short ffprobe inspection is performed up-front to surface
-source metadata before processing.
+Note: LUT files must exist at the specified paths or `--custom-lut` must be set.
 """
 
 from __future__ import annotations
@@ -22,129 +26,103 @@ import sys
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, Callable
 
-# Repository-rooted LUT presets curated for short-form luxury real-estate video.
-REPO_ROOT = Path(__file__).resolve().parent
+# ---------------------------- Data Models & Presets ----------------------------
 
-
-@dataclass
-class GradePreset:
-    """Container describing the finishing recipe for a video preset."""
-
+@dataclass(frozen=True)
+class Preset:
+    """A grading preset with a human description and default config."""
     name: str
     description: str
     lut: Path
-    lut_strength: float = 1.0
-    denoise: Optional[str] = None
-    contrast: float = 1.0
-    saturation: float = 1.0
-    gamma: float = 1.0
-    brightness: float = 0.0
-    warmth: float = 0.0
-    cool: float = 0.0
-    sharpen: Optional[str] = None
-    grain: float = 0.0
-    notes: str = ""
-    deband: Optional[str] = None
-    halation_intensity: float = 0.0
-    halation_radius: float = 18.0
-    halation_threshold: float = 0.6
+    defaults: Dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, object]:
-        """Return a mutable dictionary representation for override merging."""
-
-        data = {
-            "lut": self.lut,
-            "lut_strength": self.lut_strength,
-            "denoise": self.denoise,
-            "contrast": self.contrast,
-            "saturation": self.saturation,
-            "gamma": self.gamma,
-            "brightness": self.brightness,
-            "warmth": self.warmth,
-            "cool": self.cool,
-            "sharpen": self.sharpen,
-            "grain": self.grain,
-            "deband": self.deband,
-            "halation_intensity": self.halation_intensity,
-            "halation_radius": self.halation_radius,
-            "halation_threshold": self.halation_threshold,
-        }
-        return data
+        # Why: keep immutability of preset, hand out a copy for mutation.
+        out = dict(self.defaults)
+        out["lut"] = self.lut
+        return out
 
 
-PRESETS: Dict[str, GradePreset] = {
-    "signature_estate": GradePreset(
-        name="Signature Estate",
-        description="Flagship Kodak 2393 emulation with gentle highlight roll-off, soft denoise and warm mid-tones.",
-        lut=REPO_ROOT / "01_Film_Emulation" / "Kodak" / "Kodak_2393_D55.cube",
-        lut_strength=0.85,
-        denoise="soft",
-        contrast=1.06,
-        saturation=1.10,
-        gamma=0.98,
-        brightness=0.02,
-        warmth=0.015,
-        cool=-0.010,
-        sharpen="medium",
-        grain=6.0,
-        deband="fine",
-        halation_intensity=0.14,
-        halation_radius=20.0,
-        halation_threshold=0.52,
-        notes="Primary hero look for exterior fly-throughs and architectural establishing shots.",
+# Minimal, sensible presets; extend in real project.
+_REPO_ROOT = Path(__file__).resolve().parent
+_PRESET_LUTS = _REPO_ROOT / "luts"
+
+PRESETS: Dict[str, Preset] = {
+    "signature_estate": Preset(
+        name="signature_estate",
+        description="Warm, vibrant estate look with subtle clarity and fine grain.",
+        lut=_PRESET_LUTS / "signature_estate.cube",
+        defaults={
+            "denoise": "soft",
+            "contrast": 1.06,
+            "saturation": 1.08,
+            "gamma": 1.00,
+            "brightness": 0.00,
+            "warmth": 0.08,
+            "cool": -0.02,
+            "sharpen": "medium",
+            "grain": 0.12,
+            "deband": "off",
+            "lut_strength": 1.0,
+            "tone_map": "auto",
+            "tone_map_peak": 1000.0,
+            "tone_map_desat": 0.10,
+        },
     ),
-    "golden_hour_courtyard": GradePreset(
-        name="Golden Hour Courtyard",
-        description="Sunset warmth inspired by Montecito golden light with richer saturation and restrained grain.",
-        lut=REPO_ROOT
-        / "02_Location_Aesthetic"
-        / "California"
-        / "Montecito_Golden_Hour_HDR.cube",
-        lut_strength=0.9,
-        denoise="soft",
-        contrast=1.04,
-        saturation=1.14,
-        gamma=0.96,
-        brightness=0.015,
-        warmth=0.025,
-        cool=-0.015,
-        sharpen="soft",
-        grain=4.0,
-        halation_intensity=0.10,
-        halation_radius=18.0,
-        halation_threshold=0.50,
-        notes="Use for west-facing terraces, pool decks and garden lifestyle coverage.",
+    "modern_minimal": Preset(
+        name="modern_minimal",
+        description="Neutral, clean, low-contrast commercial aesthetic.",
+        lut=_PRESET_LUTS / "modern_minimal.cube",
+        defaults={
+            "denoise": "soft",
+            "contrast": 0.98,
+            "saturation": 0.96,
+            "gamma": 1.02,
+            "brightness": 0.02,
+            "warmth": 0.00,
+            "cool": 0.00,
+            "sharpen": "soft",
+            "grain": 0.06,
+            "deband": "off",
+            "lut_strength": 0.85,
+            "tone_map": "auto",
+            "tone_map_peak": 1000.0,
+            "tone_map_desat": 0.08,
+        },
     ),
-    "interior_neutral_luxe": GradePreset(
-        name="Interior Neutral Luxe",
-        description="Clean, neutral interior pass with FilmConvert Nitrate base, elevated clarity and no added grain.",
-        lut=REPO_ROOT
-        / "01_Film_Emulation"
-        / "FilmConvert"
-        / "FilmConvert_Nitrate_LuxuryRE.cube",
-        lut_strength=0.8,
-        denoise="medium",
-        contrast=1.03,
-        saturation=1.04,
-        gamma=1.0,
-        brightness=0.01,
-        warmth=0.005,
-        cool=0.0,
-        sharpen="strong",
-        grain=0.0,
-        deband="fine",
-        halation_threshold=0.60,
-        notes="Ideal for natural light interiors where texture detail and neutrality are paramount.",
+    "heritage_cinematic": Preset(
+        name="heritage_cinematic",
+        description="Richer contrast, gentle warmth, light halation for cinematic feel.",
+        lut=_PRESET_LUTS / "heritage_cinematic.cube",
+        defaults={
+            "denoise": "medium",
+            "contrast": 1.12,
+            "saturation": 1.05,
+            "gamma": 0.98,
+            "brightness": -0.01,
+            "warmth": 0.10,
+            "cool": -0.04,
+            "sharpen": "soft",
+            "grain": 0.18,
+            "deband": "soft",
+            "lut_strength": 0.95,
+            "tone_map": "auto",
+            "tone_map_peak": 1000.0,
+            "tone_map_desat": 0.12,
+            "halation_intensity": 0.15,
+            "halation_radius": 20.0,
+            "halation_threshold": 0.60,
+        },
     ),
 }
 
+# --------------------------- Utility & Domain Types ----------------------------
 
 @dataclass
 class FrameRatePlan:
     """Summary of how the script will handle frame rate conformance."""
-
     target: Optional[str]
     note: str
 
@@ -167,11 +145,9 @@ DEBAND_PRESETS = {
     "strong": "gradfun=strength=0.90:radius=20",
 }
 
-
 @dataclass
 class ToneMapPlan:
     """Description of the tone-mapping strategy for the current clip."""
-
     enabled: bool
     note: str
     config: Dict[str, object] = field(default_factory=dict)
@@ -199,19 +175,14 @@ def ensure_tools_available() -> None:
 
 def shutil_which(binary: str) -> Optional[str]:
     from shutil import which
-
     return which(binary)
 
 
 def probe_source(path: Path) -> Dict[str, object]:
     cmd = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-print_format",
-        "json",
-        "-show_streams",
-        "-show_format",
+        "ffprobe", "-v", "error",
+        "-print_format", "json",
+        "-show_streams", "-show_format",
         str(path),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -225,7 +196,6 @@ def probe_source(path: Path) -> Dict[str, object]:
 
 def _parse_probe_duration(raw: object) -> Optional[float]:
     """Return a finite float duration from ffprobe metadata when possible."""
-
     if raw in (None, ""):
         return None
     try:
@@ -243,10 +213,12 @@ def summarize_probe(data: Dict[str, object]) -> str:
     streams = data.get("streams", [])
     video = next((s for s in streams if s.get("codec_type") == "video"), {})
     audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
-    pieces = []
+    pieces: List[str] = []
+
     numeric_duration = _parse_probe_duration(duration)
     if numeric_duration is not None:
         pieces.append(f"duration {numeric_duration:.2f}s")
+
     if video:
         w = video.get("width")
         h = video.get("height")
@@ -256,26 +228,22 @@ def summarize_probe(data: Dict[str, object]) -> str:
         codec = video.get("codec_name")
         pix_fmt = video.get("pix_fmt")
 
-        # Build video info string
         video_info = f"video {codec} {w}x{h} @ {fps}"
         if pix_fmt:
             video_info += f" {pix_fmt}"
 
-        # Add bit depth if available
         bits_per_raw_sample = video.get("bits_per_raw_sample")
         if bits_per_raw_sample:
             video_info += f" {bits_per_raw_sample}bit"
         elif pix_fmt:
-            # Try to derive bit depth from pixel format
-            if "10" in pix_fmt:
+            if "10" in str(pix_fmt):
                 video_info += " 10bit"
-            elif "12" in pix_fmt:
+            elif "12" in str(pix_fmt):
                 video_info += " 12bit"
-            elif "16" in pix_fmt:
+            elif "16" in str(pix_fmt):
                 video_info += " 16bit"
 
-        # Add color metadata if present
-        color_parts = []
+        color_parts: List[str] = []
         color_primaries = normalise_color_tag(video.get("color_primaries"))
         color_trc = normalise_color_tag(video.get("color_trc"))
         colorspace = normalise_color_tag(get_color_space_tag(video))
@@ -291,17 +259,18 @@ def summarize_probe(data: Dict[str, object]) -> str:
             video_info += f" ({', '.join(color_parts)})"
 
         pieces.append(video_info)
+
     if audio:
         codec = audio.get("codec_name")
         sr = audio.get("sample_rate")
         channels = audio.get("channels")
         pieces.append(f"audio {codec} {channels}ch {sr}Hz")
+
     return ", ".join(pieces)
 
 
 def extract_video_stream(probe: Dict[str, object]) -> Dict[str, object]:
     """Return the first video stream dictionary from an ffprobe result."""
-
     streams = probe.get("streams", [])
     return next((s for s in streams if s.get("codec_type") == "video"), {})
 
@@ -314,7 +283,6 @@ INVALID_COLOR_TAGS = {"unknown", "unspecified", "undefined", "na"}
 
 def normalise_color_tag(value: Optional[str]) -> Optional[str]:
     """Return a cleaned, lower-case color tag or ``None`` when not meaningful."""
-
     if value is None:
         return None
     cleaned = str(value).strip()
@@ -328,7 +296,6 @@ def normalise_color_tag(value: Optional[str]) -> Optional[str]:
 
 def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
     """Fetch the reported color space tag, handling legacy ffprobe key variants."""
-
     value = stream.get("color_space")
     if value is None:
         value = stream.get("colorspace")
@@ -339,7 +306,6 @@ def plan_tone_mapping(
     args: argparse.Namespace, probe: Dict[str, object]
 ) -> ToneMapPlan:
     """Determine whether tone mapping should run for this clip."""
-
     method = (args.tone_map or "auto").lower()
     tone_map_peak = args.tone_map_peak
     tone_map_desat = args.tone_map_desat
@@ -377,10 +343,7 @@ def plan_tone_mapping(
         "tone_map_peak": tone_map_peak,
         "tone_map_desat": tone_map_desat,
     }
-    note_parts = [
-        "Applying HDR tone mapping using",
-        chosen_method,
-    ]
+    note_parts = ["Applying HDR tone mapping using", chosen_method]
     if detected_hdr:
         note_parts.append(f"(detected {'/'.join(hdr_indicators)})")
     else:
@@ -397,7 +360,6 @@ def plan_tone_mapping(
 
 def describe_frame_rates(avg: Optional[str], real: Optional[str]) -> str:
     """Return a friendly description of frame rate metadata."""
-
     avg_fraction = parse_ffprobe_fraction(avg)
     real_fraction = parse_ffprobe_fraction(real)
     if avg_fraction and real_fraction and avg_fraction != real_fraction:
@@ -425,7 +387,6 @@ STANDARD_FRAME_RATES: Tuple[Tuple[str, Fraction], ...] = (
 
 def parse_ffprobe_fraction(value: Optional[str]) -> Optional[Fraction]:
     """Parse an FFprobe rational string into a Fraction."""
-
     if not value or value in {"0/0", "N/A"}:
         return None
     try:
@@ -442,7 +403,6 @@ def format_fraction(fraction: Fraction) -> str:
 
 def normalize_frame_rate(value: str) -> Tuple[str, Fraction]:
     """Normalise arbitrary frame-rate expressions to a rational string and Fraction."""
-
     parsed = parse_ffprobe_fraction(value)
     if not parsed:
         raise ValueError(f"Unable to parse frame rate value: {value}")
@@ -452,7 +412,6 @@ def normalize_frame_rate(value: str) -> Tuple[str, Fraction]:
 
 def choose_standard_rate(fps: Fraction) -> Tuple[str, Fraction]:
     """Return the closest known delivery frame rate to the provided value."""
-
     best = min(
         STANDARD_FRAME_RATES,
         key=lambda item: abs(float(item[1]) - float(fps)),
@@ -466,7 +425,6 @@ def assess_frame_rate(
     tolerance: float,
 ) -> FrameRatePlan:
     """Evaluate the source frame rate and decide whether to conform it."""
-
     tolerance = max(tolerance, 0.0001)
     streams = probe.get("streams", [])
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
@@ -536,6 +494,8 @@ def assess_frame_rate(
     )
 
 
+# -------------------------- Filter Graph Construction --------------------------
+
 def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     nodes: List[str] = []
     label_index = 0
@@ -584,8 +544,8 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
 
     denoise = config.get("denoise")
-    if denoise and denoise.lower() != "off":
-        expr = HQDN3D_PRESETS.get(denoise.lower())
+    if denoise and str(denoise).lower() != "off":
+        expr = HQDN3D_PRESETS.get(str(denoise).lower())
         if not expr:
             raise ValueError(f"Unsupported denoise preset: {denoise}")
         new_label = next_label()
@@ -626,7 +586,6 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         cool, 0.0, abs_tol=1e-4
     ):
         new_label = next_label()
-        # Clamp values to [-0.5, 0.5] to stay within tasteful limits.
         warmth_c = clamp(warmth, -0.5, 0.5)
         cool_c = clamp(cool, -0.5, 0.5)
         nodes.append(
@@ -639,7 +598,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
 
     pre_lut_label = post_color_label
 
-    lut_path: Path = Path(config["lut"]).resolve()
+    lut_path = Path(str(config.get("lut"))).resolve()
     if not lut_path.exists():
         raise FileNotFoundError(f"LUT file not found: {lut_path}")
 
@@ -650,7 +609,6 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     graded_label = current
 
     lut_strength = float(config.get("lut_strength", 1.0))
-
     if lut_strength < 0.999:
         blend_label = next_label()
         nodes.append(
@@ -659,8 +617,8 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = blend_label
 
     sharpen = config.get("sharpen")
-    if sharpen and sharpen.lower() != "off":
-        expr = UNSHARP_PRESETS.get(sharpen.lower())
+    if sharpen and str(sharpen).lower() != "off":
+        expr = UNSHARP_PRESETS.get(str(sharpen).lower())
         if not expr:
             raise ValueError(f"Unsupported sharpen preset: {sharpen}")
         new_label = next_label()
@@ -725,16 +683,15 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     return graph, "vout"
 
 
+# ----------------------------- Color Tag Selection -----------------------------
+
 def determine_color_metadata(
     args: argparse.Namespace, probe: Dict[str, object]
 ) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Determine color metadata based on priority: explicit > color-from-source > none."""
-
-    # Priority 1: Explicit overrides
     if args.color_primaries or args.color_transfer or args.color_space:
         return args.color_primaries, args.color_transfer, args.color_space
 
-    # Priority 2: Copy from source if requested
     if args.color_from_source:
         video = extract_video_stream(probe)
         if video:
@@ -743,9 +700,10 @@ def determine_color_metadata(
             space = normalise_color_tag(get_color_space_tag(video))
             return primaries, transfer, space
 
-    # Priority 3: None (default behavior - no color tags set)
     return None, None, None
 
+
+# ------------------------------ Command Assembly -------------------------------
 
 def build_command(
     input_path: Path,
@@ -790,7 +748,7 @@ def build_command(
     if bitrate:
         cmd.extend(["-b:v", bitrate])
 
-    # Add color metadata if specified (priority: explicit > none by default)
+    # Color metadata (explicit only; tone-map default handled earlier)
     if color_primaries:
         cmd.extend(["-color_primaries", color_primaries])
     if color_transfer:
@@ -809,10 +767,11 @@ def build_command(
         cmd.extend(["-threads", str(threads)])
 
     cmd.extend(["-vsync", vsync])
-
     cmd.append(str(output_path))
     return cmd
 
+
+# ---------------------------------- CLI Layer ----------------------------------
 
 class ListPresetsAction(argparse.Action):
     """Custom argparse action that prints presets and exits early."""
@@ -1117,49 +1076,53 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         brightness = float(config.get("brightness", 0.0))
         if brightness < -1.0 or brightness > 1.0:
             raise ValueError("brightness must be in range [-1.0, 1.0]")
-        # Use existing clamp helper to ensure brightness is within bounds
         config["brightness"] = clamp(brightness, -1.0, 1.0)
 
         lut_strength = float(config.get("lut_strength", 1.0))
-        if lut_strength < 0.0 or lut_strength > 1.0:
+        if not (0.0 <= lut_strength <= 1.0):
             raise ValueError("lut_strength must be in range [0.0, 1.0]")
+
         tone_map_peak = config.get("tone_map_peak")
         if tone_map_peak is not None and float(tone_map_peak) <= 0.0:
             raise ValueError("tone_map_peak must be greater than 0")
+
         tone_map_desat = config.get("tone_map_desat")
         if tone_map_desat is not None and not (0.0 <= float(tone_map_desat) <= 1.0):
             raise ValueError("tone_map_desat must be within [0.0, 1.0]")
+
         halation_intensity = float(config.get("halation_intensity", 0.0))
         if halation_intensity < 0.0:
             raise ValueError("halation_intensity must be non-negative")
         config["halation_intensity"] = clamp(halation_intensity, 0.0, 1.0)
+
         halation_radius = float(config.get("halation_radius", 0.0))
         if halation_radius < 0.0:
             raise ValueError("halation_radius must be non-negative")
         config["halation_radius"] = clamp(halation_radius, 0.0, 128.0)
+
         threshold_value = float(config.get("halation_threshold", 0.6))
         if not 0.0 <= threshold_value <= 1.0:
             raise ValueError("halation_threshold must be within [0.0, 1.0]")
         config["halation_threshold"] = clamp(threshold_value, 0.0, 1.0)
+
     except ValueError as exc:
         print(f"Parameter validation error: {exc}", file=sys.stderr)
         return 7
 
     try:
         filter_graph, filter_output = build_filter_graph(config)
-    except Exception as exc:  # pylint: disable=broad-except
+    except Exception as exc:  # surface graph errors for clear diagnosis
         print(f"Failed to build filter graph: {exc}", file=sys.stderr)
         return 5
 
     if args.print_filter_graph:
         print("\nFilter graph (human-readable):")
-        # Convert semicolon-separated filter chain to multi-line format
         filter_nodes = filter_graph.split(";")
         for i, node in enumerate(filter_nodes):
             print(f"  {i+1:2d}. {node}")
         print()
 
-    # Determine color metadata based on priority system
+    # Determine color metadata (explicit > source copy > tone-map defaults)
     color_primaries, color_transfer, color_space = determine_color_metadata(args, probe)
     if (
         color_primaries is None
