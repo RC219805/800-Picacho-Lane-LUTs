@@ -277,13 +277,13 @@ jobs:
     # and added files. 
     # Type: boolean
     # Default: "false"
-    output_renamed_files_as_deleted_and_added: ''
+
 
     # Specify a relative path under 
     # `$GITHUB_WORKSPACE` to locate the repository. 
     # Type: string
     # Default: "."
-    path: ''
+
 
     # Use non-ASCII characters to match 
     # files and output the filenames 
@@ -291,19 +291,17 @@ jobs:
     # to `false` 
     # Type: boolean
     # Default: "true"
-    quotepath: ''
+
 
     # Recover deleted files.
     # Type: boolean
     # Default: "false"
-    recover_deleted_files: ''
+
 
     # Recover deleted files to a 
     # new destination directory, defaults to 
     # the original location. 
     # Type: string
-    recover_deleted_files_to_destination: ''
-
     # File and directory patterns used 
     # to recover deleted files, defaults 
     # to the patterns provided via 
