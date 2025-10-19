@@ -420,8 +420,8 @@ jobs:
     # Default: "false"
     write_output_files: ''
 
-        with:
-          files: '**.py'
+      
+      
       
       - name: Fast security scan (changed files only)
         if: steps.changed.outputs.any_changed == 'true'
