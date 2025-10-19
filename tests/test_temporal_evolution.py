@@ -38,6 +38,7 @@ def test_from_mapping_parses_nested_temporal_evolution_block() -> None:
         "Predict",
         "Pre-adapt",
     ]
+    assert predictive.directives[0].detail is not None
     assert predictive.directives[0].detail.startswith("Industry trend APIs")
 
     quantum = roadmap.disciplines[1]
@@ -80,7 +81,7 @@ def test_serialise_round_trip() -> None:
     [42, "   "],
 )
 def test_from_mapping_validates_discipline_names(invalid_name) -> None:
-    payload = {"temporal_evolution": {invalid_name: []}}
+    payload: dict[str, object] = {"temporal_evolution": {invalid_name: []}}
 
     with pytest.raises(TypeError):
         TemporalEvolutionRoadmap.from_mapping(payload)
