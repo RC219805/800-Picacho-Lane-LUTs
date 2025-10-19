@@ -43,3 +43,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 *~
+
+# Security artifacts
+security_report.json
+security.sarif
+*.backup
+codeql-db/

@@ -1,0 +1,17 @@
+# file: requirements-security.txt
+# Security-critical dependencies with pinned versions to prevent vulnerabilities
+
+# Core security libraries
+cryptography>=42.0.0,<43  # CVE fixes for older versions
+urllib3>=2.2.0,<3         # Security fixes for HTTP handling
+requests>=2.32.0,<3       # Security patches for requests library
+
+# Security scanning tools
+bandit>=1.7.5,<2          # Security linter for Python
+safety>=3.0.0,<4          # Checks dependencies for known vulnerabilities
+
+# YAML parsing security
+PyYAML>=6.0.1,<7          # Fixes arbitrary code execution
+
+# Web framework security (if needed)
+Jinja2>=3.1.3,<4          # Template injection fixes
