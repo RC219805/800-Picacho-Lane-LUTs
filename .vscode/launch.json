@@ -1,0 +1,23 @@
+// file: .vscode/launch.json
+{
+  // VS Code debug configurations (JSON with comments is allowed here)
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": { "PYTHONUNBUFFERED": "1" }
+    },
+    {
+      "name": "Run npm start",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm start"
+    }
+  ]
+}
