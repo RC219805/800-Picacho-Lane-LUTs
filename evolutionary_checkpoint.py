@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
-__all__ = ["EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionaryStatus"]
+__all__ = ["EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionaryStatus", "EvolutionStatus"]
 
 class EvolutionaryStatus(str, Enum):
     """Lifecycle state of an evolutionary step."""
