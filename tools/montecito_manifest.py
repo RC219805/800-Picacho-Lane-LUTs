@@ -160,12 +160,13 @@ def write_manifest(
                     else:
                         raise
 
-            for e, md5 in zip(files, results):
-                if md5 is None or md5 == "":
+            for e, md5_result in zip(files, results):
+                if md5_result is None or md5_result == "":
                     if skip_errors:
                         continue
                     raise RuntimeError(f"Missing hash for {e.rel_posix}")
-                writer.writerow([e.rel_posix, e.size, md5])
+                # Type narrowing: md5_result is guaranteed to be str here
+                writer.writerow([e.rel_posix, e.size, md5_result])
 
 
 # --- CLI ---------------------------------------------------------------------
