@@ -72,7 +72,9 @@ def test_metrics_and_diff(tmp_path: Path) -> None:
 
     diff_image = Image.open(diff)
     assert diff_image.getpixel((0, 0)) == (0, 0, 0, 0)
-    assert diff_image.getpixel((0, 1))[0] == 12  # delta on red channel
+    pixel_01 = diff_image.getpixel((0, 1))
+    assert isinstance(pixel_01, tuple)
+    assert pixel_01[0] == 12  # delta on red channel
 
     metrics = json.loads(metrics_json.read_text())
     assert metrics["original_colors"] == 2
