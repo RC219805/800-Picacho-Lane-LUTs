@@ -1,3 +1,4 @@
+````markdown
 # GitHub Actions Workflows
 
 This directory contains GitHub Actions workflow definitions for the **800 Picacho Lane LUTs** repository.
@@ -94,3 +95,78 @@ Posts a short OpenAI-generated summary on new issues.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+````
+
+**Permissions**
+
+* Default minimal: `contents: read`.
+* Codecov OIDC: add `id-token: write`.
+* Issue comments: `issues: write` or `pull-requests: write` as needed.
+
+**Codecov (OIDC)**
+
+```yaml
+permissions:
+  id-token: write
+
+- uses: codecov/codecov-action@v5
+  with:
+    use_oidc: true
+    files: ./coverage.xml
+    fail_ci_if_error: false
+```
+
+**Shim Guard**
+
+* CI step: `python tools/gen_legacy_shims.py --fail-on-create`
+* Manual fix: run **shim-sync** → commit shims.
+
+**Sanity Imports**
+
+* Early failure context:
+
+```yaml
+- name: Sanity imports
+  run: |
+    python - <<'PY'
+    import importlib, sys
+    try:
+        importlib.import_module('src.evolutionary')
+        importlib.import_module('evolutionary_checkpoint')
+        print("✅ import sanity OK")
+    except Exception as e:
+        print(f"❌ Import sanity failed: {e}")
+        sys.exit(2)
+    PY
+```
+
+---
+
+## Troubleshooting
+
+**“Unrecognized arguments: --cov”** → Install `pytest-cov>=4,<5` (pinned in `requirements-ci.txt`).
+**Pylint `--logging-format-style=percent` error** → Use `--logging-format-style=old` with Pylint 3.
+**Import errors on `evolutionary_checkpoint`** → Ensure `src/evolutionary.py` + `src/__init__.py` exist and shim is committed.
+**CI vs local mismatch** → Check Python versions, secrets, and branch filters.
+
+Handy debug:
+
+```yaml
+- name: Debug Environment
+  run: |
+    python --version
+    pip list
+    env | sort
+    pwd
+```
+
+---
+
+## Contributing
+
+1. Add/adjust workflow in `.github/workflows/`
+2. Run locally with [`act`](https://github.com/nektos/act) or push a PR
+3. Keep pins in `requirements-ci.txt` updated
+4. Update this README if the workflow set changes
+
+---
