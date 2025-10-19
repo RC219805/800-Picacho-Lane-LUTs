@@ -26,7 +26,7 @@ import sys
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Callable
+from typing import Dict, Iterable, List, Optional, Tuple, Callable, cast, Any
 
 # ---------------------------- Data Models & Presets ----------------------------
 
@@ -208,11 +208,11 @@ def _parse_probe_duration(raw: object) -> Optional[float]:
 
 
 def summarize_probe(data: Dict[str, object]) -> str:
-    fmt = data.get("format", {})
+    fmt = cast(Dict[str, Any], data.get("format", {}))
     duration = fmt.get("duration")
-    streams = data.get("streams", [])
-    video = next((s for s in streams if s.get("codec_type") == "video"), {})
-    audio = next((s for s in streams if s.get("codec_type") == "audio"), {})
+    streams = cast(List[Dict[str, Any]], data.get("streams", []))
+    video: Dict[str, Any] = next((s for s in streams if s.get("codec_type") == "video"), {})
+    audio: Dict[str, Any] = next((s for s in streams if s.get("codec_type") == "audio"), {})
     pieces: List[str] = []
 
     numeric_duration = _parse_probe_duration(duration)
@@ -271,7 +271,7 @@ def summarize_probe(data: Dict[str, object]) -> str:
 
 def extract_video_stream(probe: Dict[str, object]) -> Dict[str, object]:
     """Return the first video stream dictionary from an ffprobe result."""
-    streams = probe.get("streams", [])
+    streams = cast(List[Dict[str, Any]], probe.get("streams", []))
     return next((s for s in streams if s.get("codec_type") == "video"), {})
 
 
@@ -299,7 +299,7 @@ def get_color_space_tag(stream: Dict[str, object]) -> Optional[str]:
     value = stream.get("color_space")
     if value is None:
         value = stream.get("colorspace")
-    return value
+    return cast(Optional[str], value)
 
 
 def plan_tone_mapping(
@@ -316,8 +316,8 @@ def plan_tone_mapping(
         )
 
     video = extract_video_stream(probe)
-    transfer = (video.get("color_trc") or "").lower()
-    primaries = (video.get("color_primaries") or "").lower()
+    transfer = str(video.get("color_trc") or "").lower()
+    primaries = str(video.get("color_primaries") or "").lower()
     matrix = (get_color_space_tag(video) or "").lower()
 
     hdr_indicators: List[str] = []
@@ -426,7 +426,7 @@ def assess_frame_rate(
 ) -> FrameRatePlan:
     """Evaluate the source frame rate and decide whether to conform it."""
     tolerance = max(tolerance, 0.0001)
-    streams = probe.get("streams", [])
+    streams = cast(List[Dict[str, Any]], probe.get("streams", []))
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
     if not video:
         return FrameRatePlan(
@@ -467,6 +467,7 @@ def assess_frame_rate(
         drift = 0.0
 
     if vfr:
+        assert avg_fraction is not None and real_fraction is not None  # for type checker
         return FrameRatePlan(
             target=standard_label,
             note=(
@@ -518,17 +519,17 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         tone_map_peak = config.get("tone_map_peak")
         pre_tonemap_args = ["transfer=linear"]
         if tone_map_peak is not None:
-            pre_tonemap_args.append(f"npl={float(tone_map_peak):.4f}")
+            pre_tonemap_args.append(f"npl={float(cast(float, tone_map_peak)):.4f}")
         new_label = next_label()
         nodes.append(f"[{current}]zscale={':'.join(pre_tonemap_args)}[{new_label}]")
         current = new_label
 
         tonemap_args = [str(tone_map)]
         if tone_map_peak is not None:
-            tonemap_args.append(f"peak={float(tone_map_peak):.4f}")
+            tonemap_args.append(f"peak={float(cast(float, tone_map_peak)):.4f}")
         tone_map_desat = config.get("tone_map_desat")
         if tone_map_desat is not None:
-            tonemap_args.append(f"desat={float(tone_map_desat):.4f}")
+            tonemap_args.append(f"desat={float(cast(float, tone_map_desat)):.4f}")
         new_label = next_label()
         nodes.append(f"[{current}]tonemap={':'.join(tonemap_args)}[{new_label}]")
         current = new_label
@@ -558,10 +559,10 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     current = new_label
 
     eq_parts: List[str] = []
-    contrast = float(config.get("contrast", 1.0))
-    saturation = float(config.get("saturation", 1.0))
-    gamma = float(config.get("gamma", 1.0))
-    brightness = float(config.get("brightness", 0.0))
+    contrast = float(cast(float, config.get("contrast", 1.0)))
+    saturation = float(cast(float, config.get("saturation", 1.0)))
+    gamma = float(cast(float, config.get("gamma", 1.0)))
+    brightness = float(cast(float, config.get("brightness", 0.0)))
 
     if not math.isclose(contrast, 1.0, abs_tol=1e-3):
         eq_parts.append(f"contrast={contrast:.4f}")
@@ -579,8 +580,8 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         current = new_label
     post_eq_label = current
 
-    warmth = float(config.get("warmth", 0.0))
-    cool = float(config.get("cool", 0.0))
+    warmth = float(cast(float, config.get("warmth", 0.0)))
+    cool = float(cast(float, config.get("cool", 0.0)))
     post_color_label = post_eq_label
     if not math.isclose(warmth, 0.0, abs_tol=1e-4) or not math.isclose(
         cool, 0.0, abs_tol=1e-4
@@ -625,7 +626,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         nodes.append(f"[{current}]{expr}[{new_label}]")
         current = new_label
 
-    grain = float(config.get("grain", 0.0))
+    grain = float(cast(float, config.get("grain", 0.0)))
     if grain > 0.0:
         new_label = next_label()
         nodes.append(f"[{current}]noise=alls={grain:.2f}:allf=t+u[{new_label}]")
@@ -640,12 +641,12 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
         nodes.append(f"[{current}]{expr}[{new_label}]")
         current = new_label
 
-    halation_intensity = float(config.get("halation_intensity", 0.0))
+    halation_intensity = float(cast(float, config.get("halation_intensity", 0.0)))
     if halation_intensity > 0.0:
         intensity = clamp(halation_intensity, 0.0, 1.0)
-        radius = clamp(float(config.get("halation_radius", 18.0)), 0.0, 128.0)
+        radius = clamp(float(cast(float, config.get("halation_radius", 18.0))), 0.0, 128.0)
         radius = max(radius, 1.0)
-        threshold = clamp(float(config.get("halation_threshold", 0.6)), 0.0, 1.0)
+        threshold = clamp(float(cast(float, config.get("halation_threshold", 0.6))), 0.0, 1.0)
 
         base_label = next_label()
         halo_label = next_label()
@@ -695,8 +696,8 @@ def determine_color_metadata(
     if args.color_from_source:
         video = extract_video_stream(probe)
         if video:
-            primaries = normalise_color_tag(video.get("color_primaries"))
-            transfer = normalise_color_tag(video.get("color_trc"))
+            primaries = normalise_color_tag(cast(Optional[str], video.get("color_primaries")))
+            transfer = normalise_color_tag(cast(Optional[str], video.get("color_trc")))
             space = normalise_color_tag(get_color_space_tag(video))
             return primaries, transfer, space
 
@@ -782,7 +783,7 @@ class ListPresetsAction(argparse.Action):
         dest: str = argparse.SUPPRESS,
         **kwargs: object,
     ) -> None:
-        super().__init__(option_strings, dest, nargs=0, **kwargs)
+        super().__init__(option_strings, dest, nargs=0, **kwargs)  # type: ignore[arg-type]
 
     def __call__(
         self,
@@ -1061,46 +1062,46 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     # Validate grading parameters early with clear error messages
     try:
-        contrast = float(config.get("contrast", 1.0))
+        contrast = float(cast(float, config.get("contrast", 1.0)))
         if contrast <= 0:
             raise ValueError("contrast must be greater than 0")
 
-        saturation = float(config.get("saturation", 1.0))
+        saturation = float(cast(float, config.get("saturation", 1.0)))
         if saturation <= 0:
             raise ValueError("saturation must be greater than 0")
 
-        gamma = float(config.get("gamma", 1.0))
+        gamma = float(cast(float, config.get("gamma", 1.0)))
         if gamma <= 0:
             raise ValueError("gamma must be greater than 0")
 
-        brightness = float(config.get("brightness", 0.0))
+        brightness = float(cast(float, config.get("brightness", 0.0)))
         if brightness < -1.0 or brightness > 1.0:
             raise ValueError("brightness must be in range [-1.0, 1.0]")
         config["brightness"] = clamp(brightness, -1.0, 1.0)
 
-        lut_strength = float(config.get("lut_strength", 1.0))
+        lut_strength = float(cast(float, config.get("lut_strength", 1.0)))
         if not (0.0 <= lut_strength <= 1.0):
             raise ValueError("lut_strength must be in range [0.0, 1.0]")
 
         tone_map_peak = config.get("tone_map_peak")
-        if tone_map_peak is not None and float(tone_map_peak) <= 0.0:
+        if tone_map_peak is not None and float(cast(float, tone_map_peak)) <= 0.0:
             raise ValueError("tone_map_peak must be greater than 0")
 
         tone_map_desat = config.get("tone_map_desat")
-        if tone_map_desat is not None and not (0.0 <= float(tone_map_desat) <= 1.0):
+        if tone_map_desat is not None and not (0.0 <= float(cast(float, tone_map_desat)) <= 1.0):
             raise ValueError("tone_map_desat must be within [0.0, 1.0]")
 
-        halation_intensity = float(config.get("halation_intensity", 0.0))
+        halation_intensity = float(cast(float, config.get("halation_intensity", 0.0)))
         if halation_intensity < 0.0:
             raise ValueError("halation_intensity must be non-negative")
         config["halation_intensity"] = clamp(halation_intensity, 0.0, 1.0)
 
-        halation_radius = float(config.get("halation_radius", 0.0))
+        halation_radius = float(cast(float, config.get("halation_radius", 0.0)))
         if halation_radius < 0.0:
             raise ValueError("halation_radius must be non-negative")
         config["halation_radius"] = clamp(halation_radius, 0.0, 128.0)
 
-        threshold_value = float(config.get("halation_threshold", 0.6))
+        threshold_value = float(cast(float, config.get("halation_threshold", 0.6)))
         if not 0.0 <= threshold_value <= 1.0:
             raise ValueError("halation_threshold must be within [0.0, 1.0]")
         config["halation_threshold"] = clamp(threshold_value, 0.0, 1.0)

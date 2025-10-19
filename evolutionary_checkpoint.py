@@ -1,7 +1,7 @@
 # file: evolutionary_checkpoint.py
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
@@ -37,7 +37,7 @@ class EvolutionaryCheckpoint:
     score: Optional[float] = None
     created_at: datetime = datetime.now(timezone.utc)
     notes: Optional[str] = None
-    meta: Dict[str, Any] = None  # intentionally plain dict for JSON-friendliness
+    meta: Dict[str, Any] = field(default_factory=dict)  # intentionally plain dict for JSON-friendliness
 
     def to_dict(self) -> Dict[str, Any]:
         """Stable, JSON-serializable representation."""

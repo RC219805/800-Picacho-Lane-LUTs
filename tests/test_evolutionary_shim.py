@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from evolutionary_checkpoint import EvolutionaryCheckpoint as EC_legacy, EvolutionStatus as ES_legacy
-from src.evolutionary import EvolutionaryCheckpoint as EC_new, EvolutionStatus as ES_new
+from evolutionary_checkpoint import EvolutionaryCheckpoint as EC_legacy, EvolutionaryStatus as ES_legacy
+from src.evolutionary import EvolutionaryCheckpoint as EC_new, EvolutionaryStatus as ES_new
 
 
 def test_shim_exports_identical_objects():
