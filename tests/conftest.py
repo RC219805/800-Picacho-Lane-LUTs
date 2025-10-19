@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from PIL import Image
 
 
-def pytest_configure(config):
+def pytest_configure(config) -> None:
     """Configure pytest with functional module stubs."""
     
     import sys
