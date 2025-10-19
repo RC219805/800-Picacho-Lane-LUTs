@@ -14,7 +14,7 @@ from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
 import re
-from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -24,7 +24,7 @@ def _is_sequence(value: object) -> bool:
     return isinstance(value, SequenceABC) and not isinstance(value, (str, bytes, bytearray))
 
 
-def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
+def _coerce_matrix(data: Union[Sequence[Sequence[float]], Sequence[float]]) -> List[List[float]]:
     """Convert ``data`` into a rectangular list-of-lists of floats."""
     if not _is_sequence(data):
         raise TypeError("material data must be a sequence")
@@ -38,7 +38,7 @@ def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
         for row in data:
             if not _is_sequence(row):
                 raise TypeError("material rows must be sequences")
-            coerced_row = [float(value) for value in row]
+            coerced_row = [float(value) for value in row]  # type: ignore[arg-type,union-attr]
             if row_length is None:
                 row_length = len(coerced_row)
                 if row_length == 0:
@@ -48,7 +48,7 @@ def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
             rows.append(coerced_row)
         return rows
 
-    coerced = [float(value) for value in data]
+    coerced = [float(value) for value in data]  # type: ignore[arg-type]
     if len(coerced) == 0:
         raise ValueError("material data cannot be empty")
     return [coerced]
@@ -339,7 +339,7 @@ class EmotionalResonance:
         if not self.cultural_background:
             raise ValueError("cultural_background must be a non-empty string")
 
-    def as_dict(self) -> Dict[str, float]:
+    def as_dict(self) -> Dict[str, Union[float, str]]:
         """Return the resonance as a serialisable mapping."""
         return {
             "awe": self.awe,
@@ -631,13 +631,13 @@ def violates(decision: str, tenet: str) -> bool:
         "crush",
         "erase",
     }
-    keywords = _extract_keywords(tenet_lower)
+    tenet_keywords: List[str] = _extract_keywords(tenet_lower)
 
     for negation in negating_words:
         if negation in decision_lower:
-            if any(f"{negation} {keyword}" in decision_lower for keyword in keywords):
+            if any(f"{negation} {keyword}" in decision_lower for keyword in tenet_keywords):
                 return True
-            for keyword in keywords:
+            for keyword in tenet_keywords:
                 if keyword in decision_lower:
                     return True
 
@@ -1007,7 +1007,7 @@ class QuantumMaterialResponse:
 
     def identify_and_resolve_conflicts(
         self,
-        coherence_map: Sequence[Sequence[float]],
+        coherence_map: Union[Sequence[Sequence[float]], np.ndarray],
         context_wave: Mapping[str, float],
         threshold: float = 0.12,
     ) -> Dict[str, object]:
