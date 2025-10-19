@@ -100,8 +100,22 @@ jobs:
 
       - name: Type check (mypy)
         run: |
-          mypy --version
-          mypy .
+          mypy --version | tee mypy.version.txt
+          # tee ensures logs are kept even if mypy fails
+          mypy . 2>&1 | tee mypy.log
+          # rethrow failure if any
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload mypy logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-${{ matrix.python-version }}
+          path: |
+            mypy.log
+            mypy.version.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Save mypy cache
         if: always()
@@ -125,7 +139,18 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest -v --cov=. --cov-report=xml --cov-report=term-missing
+          set -o pipefail
+          pytest -v --cov=. --cov-report=xml --cov-report=term-missing 2>&1 | tee pytest.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.python-version }}
+          path: pytest.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload coverage artifact
         if: always()
