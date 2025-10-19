@@ -212,16 +212,18 @@ jobs:
     needs: [build, generate-manifest]
     runs-on: ubuntu-24.04
     steps:
-      - name: Check build status
-        if: ${{ needs.build.result != 'success' }}
+      - name: Summary
         run: |
-          echo "❌ Build job failed"
+          echo "### Pipeline summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- build: ${{ needs.build.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- manifest: ${{ needs.generate-manifest.result }}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce all-green
+        if: ${{ needs.build.result != 'success' || needs.generate-manifest.result != 'success' }}
+        run: |
+          echo "❌ Required jobs failed."
+          echo "build=${{ needs.build.result }}, manifest=${{ needs.generate-manifest.result }}"
           exit 1
-      - name: Check manifest status
-        if: ${{ needs.generate-manifest.result != 'success' }}
-        run: |
-          echo "❌ Manifest generation failed"
-          exit 1
-      - name: All checks passed
-        run: |
-          echo "✅ All checks passed successfully!"
+      - name: All good
+        if: ${{ needs.build.result == 'success' && needs.generate-manifest.result == 'success' }}
+        run: echo "✅ All checks passed successfully!"
+
