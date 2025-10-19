@@ -27,12 +27,12 @@ class _Generator:
         return self
 
 
-torch_stub.cuda = torch_cuda
-torch_stub.Generator = _Generator
-torch_stub.manual_seed = lambda seed: None
-torch_stub.float16 = float
-torch_stub.float32 = float
-torch_stub.inference_mode = lambda: (lambda fn: fn)
+torch_stub.cuda = torch_cuda  # type: ignore[attr-defined]
+torch_stub.Generator = _Generator  # type: ignore[attr-defined]
+torch_stub.manual_seed = lambda seed: None  # type: ignore[attr-defined]
+torch_stub.float16 = float  # type: ignore[attr-defined]
+torch_stub.float32 = float  # type: ignore[attr-defined]
+torch_stub.inference_mode = lambda: (lambda fn: fn)  # type: ignore[attr-defined]
 
 sys.modules.setdefault("torch", torch_stub)
 sys.modules.setdefault("torch.cuda", torch_cuda)
@@ -67,12 +67,12 @@ class _DummyScheduler:
         return inst
 
 
-diffusers_stub.ControlNetModel = _DummyPipeline
-diffusers_stub.StableDiffusionControlNetImg2ImgPipeline = _DummyPipeline
-diffusers_stub.StableDiffusionLatentUpscalePipeline = _DummyPipeline
-diffusers_stub.UniPCMultistepScheduler = _DummyScheduler
-diffusers_stub.StableDiffusionXLControlNetPipeline = _DummyPipeline
-diffusers_stub.StableDiffusionXLImg2ImgPipeline = _DummyPipeline
+diffusers_stub.ControlNetModel = _DummyPipeline  # type: ignore[attr-defined]
+diffusers_stub.StableDiffusionControlNetImg2ImgPipeline = _DummyPipeline  # type: ignore[attr-defined]
+diffusers_stub.StableDiffusionLatentUpscalePipeline = _DummyPipeline  # type: ignore[attr-defined]
+diffusers_stub.UniPCMultistepScheduler = _DummyScheduler  # type: ignore[attr-defined]
+diffusers_stub.StableDiffusionXLControlNetPipeline = _DummyPipeline  # type: ignore[attr-defined]
+diffusers_stub.StableDiffusionXLImg2ImgPipeline = _DummyPipeline  # type: ignore[attr-defined]
 
 sys.modules.setdefault("diffusers", diffusers_stub)
 
@@ -93,8 +93,8 @@ class _MidasDetector:
         return image
 
 
-controlnet_aux_stub.CannyDetector = _CannyDetector
-controlnet_aux_stub.MidasDetector = _MidasDetector
+controlnet_aux_stub.CannyDetector = _CannyDetector  # type: ignore[attr-defined]
+controlnet_aux_stub.MidasDetector = _MidasDetector  # type: ignore[attr-defined]
 
 sys.modules.setdefault("controlnet_aux", controlnet_aux_stub)
 
@@ -143,8 +143,8 @@ def test_floor_texture_blend_enriches_lower_rows(tmp_path: Path) -> None:
         sky_environment_strength=0.0,
     )
 
-    assert result[-1, :, 0].mean() > 0.5
-    assert np.allclose(result[0, :, :], rgb[0, :, :], atol=1e-2)
+    assert result[-1, :, 0].mean() > 0.5  # type: ignore[index]
+    assert np.allclose(result[0, :, :], rgb[0, :, :], atol=1e-2)  # type: ignore[index]
 
 
 def test_sky_environment_tints_exterior_region(tmp_path: Path) -> None:
@@ -181,8 +181,8 @@ def test_sky_environment_tints_exterior_region(tmp_path: Path) -> None:
         sky_environment_strength=1.0,
     )
 
-    sky_region = result[:3, 4:, :]
-    interior_region = result[5:, :4, :]
+    sky_region = result[:3, 4:, :]  # type: ignore[index]
+    interior_region = result[5:, :4, :]  # type: ignore[index]
 
     assert sky_region[..., 2].mean() > 0.2
     assert np.allclose(interior_region, rgb[5:, :4, :], atol=1e-2)
