@@ -13,7 +13,7 @@ import logging
 import math
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Iterable, Literal, Optional, Sequence, Tuple
+from typing import Iterable, List, Literal, Optional, Sequence, Tuple, cast
 
 import numpy as np
 
@@ -514,7 +514,7 @@ def batch_apply_adjustments(
         tasks: Iterable[Tuple[int, np.ndarray, AdjustmentSettings, Optional[ProcessingProfile]]] = (
             (i, arr[i], adjustments[i], profile) for i in range(n)
         )
-        results = [None] * n  # type: ignore[var-annotated]
+        results: List[Optional[np.ndarray]] = [None] * n
         try:
             with ProcessPoolExecutor(max_workers=max_workers) as ex:
                 futs = [ex.submit(_apply_adjustments_single, t) for t in tasks]
@@ -524,7 +524,7 @@ def batch_apply_adjustments(
         except Exception as exc:
             LOGGER.warning("Multiprocessing failed (%s); falling back to serial.", exc)
             results = [apply_adjustments(arr[i], adjustments[i], profile=profile) for i in range(n)]
-        return np.stack(results, axis=0).astype(np.float32, copy=False)
+        return np.stack(cast(List[np.ndarray], results), axis=0).astype(np.float32, copy=False)
 
     # "vectorized" here means efficient serial loop (different presets).
     outputs = [apply_adjustments(arr[i], adjustments[i], profile=profile) for i in range(n)]
