@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import fields
 from pathlib import Path
-from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple, Union, TYPE_CHECKING
+from typing import Dict, List, Literal, Optional, Sequence, Tuple, Union, TYPE_CHECKING
 
 import typer
 
@@ -71,7 +71,6 @@ def _ensure_parent(path: Path) -> None:
 
 def _extract_array(image_result) -> "NDArray[np.float32]":
     # Why: tolerate minor IO result-shape variations without breaking.
-    import numpy as np  # lazy import
     for attr in ("array", "arr", "data"):
         if hasattr(image_result, attr):
             return getattr(image_result, attr).astype("float32", copy=False)
