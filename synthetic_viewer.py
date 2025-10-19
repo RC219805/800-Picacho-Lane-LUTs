@@ -157,7 +157,7 @@ class ArchetypeProfile:
 class ExperientialMemory:
     """Stores light-weight snapshots of journeys the viewer has taken."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._snapshots: MutableSequence[Mapping[str, float]] = []
 
     @property
