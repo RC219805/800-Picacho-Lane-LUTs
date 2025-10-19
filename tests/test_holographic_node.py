@@ -8,7 +8,7 @@ from holographic_node import (EntanglementField, GlobalSystemState,
                               HolographicNode, Superposition)
 
 
-def test_global_state_notifies_subscribers():
+def test_global_state_notifies_subscribers() -> None:
     state = GlobalSystemState()
     snapshots: list[dict[str, int]] = []
 
@@ -22,7 +22,7 @@ def test_global_state_notifies_subscribers():
     ]
 
 
-def test_superposition_collapse_without_observer_returns_first_outcome():
+def test_superposition_collapse_without_observer_returns_first_outcome() -> None:
     sup = Superposition(
         source="raw",
         outcomes=[(lambda value: value, "primary"), (lambda v: v, "secondary")],
@@ -31,7 +31,7 @@ def test_superposition_collapse_without_observer_returns_first_outcome():
     assert sup.collapse() == "primary"
 
 
-def test_entanglement_field_evaluates_all_transforms():
+def test_entanglement_field_evaluates_all_transforms() -> None:
     field = EntanglementField()
     calls: list[int] = []
 
@@ -45,7 +45,7 @@ def test_entanglement_field_evaluates_all_transforms():
     assert calls == [3]
 
 
-def test_holographic_node_pipeline_and_scoring():
+def test_holographic_node_pipeline_and_scoring() -> None:
     transforms = [
         lambda value: value + 1,
         lambda value: value * 10,
@@ -64,7 +64,7 @@ def test_holographic_node_pipeline_and_scoring():
     assert node.process(2) == 30
 
 
-def test_requires_expansion_when_transforms_added():
+def test_requires_expansion_when_transforms_added() -> None:
     node = HolographicNode(transforms=[lambda value: value + 1])
     node.process(0)
 

@@ -17,8 +17,8 @@ def load_module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
         "luxury_video_master_grader", module_path
     )
-    module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader  # for mypy
+    module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
