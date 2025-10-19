@@ -148,7 +148,6 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 out_path,
                 settings,
                 resize_target=getattr(args, "resize_long_edge", None),
-                overwrite=overwrite,
             )
             processed_count += 1
         except Exception as e:
