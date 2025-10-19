@@ -99,30 +99,25 @@ jobs:
     # `dir_names_include_files` input 
     # Type: string
     # Default: "\n"
-    dir_names_include_files_separator: ''
 
     # Limit the directory output to 
     # a maximum depth e.g `test/test1/test2` 
     # with max depth of `2` 
     # returns `test/test1`. 
     # Type: string
-    dir_names_max_depth: ''
 
     # Escape JSON output.
     # Type: boolean
     # Default: "true"
-    escape_json: ''
 
     # Exclude changes to submodules.
     # Type: boolean
     # Default: "false"
-    exclude_submodules: ''
 
     # Fail when the initial diff 
     # fails. 
     # Type: boolean
     # Default: "false"
-    fail_on_initial_diff_error: ''
 
     # Fail when the submodule diff 
     # fails. 
