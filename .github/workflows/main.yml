@@ -1,0 +1,80 @@
+--- .github/workflows/build.yml
++++ .github/workflows/build.yml
+@@ -165,9 +165,7 @@
+           retention-days: 14
+ 
+       - name: Upload coverage to Codecov (OIDC)
+-        if: |
+-          always() &&
+-          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
++        if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+         uses: codecov/codecov-action@v5
+         with:
+           use_oidc: true
+@@ -273,4 +271,4 @@
+           exit 1
+       - name: All good
+         if: ${{ needs.build.result == 'success' && needs.generate-manifest.result == 'success' }}
+-        run: echo "✅ All checks passed successfully!"
++        run: echo "✅ All checks passed successfully!"--- .github/workflows/ci-3.yml
++++ .github/workflows/ci-3.yml
+@@ -103,4 +103,4 @@
+ 
+       - name: Verify metadata
+         run: |
+-          python -m pip check || true
++          python -m pip check || true--- .github/workflows/codeql-advanced.yml
++++ .github/workflows/codeql-advanced.yml
+@@ -86,4 +86,4 @@
+       - name: Perform CodeQL Analysis
+         uses: github/codeql-action/analyze@v3
+         with:
+-          category: "/language:${{ matrix.language }}"
++          category: "/language:${{ matrix.language }}"--- .github/workflows/dependabot-2.yml
++++ .github/workflows/dependabot-2.yml
+@@ -69,4 +69,4 @@
+         patterns:
+           - "actions/*"
+           - "github/codeql-action*"
+-          - "codecov/codecov-action*"
++          - "codecov/codecov-action*"--- .github/workflows/pylint-4.yml
++++ .github/workflows/pylint-4.yml
+@@ -108,4 +108,4 @@
+             exit 0
+           fi
+           # Pylint 3 expects {old,new}; explicitly set to 'old' for % formatting.
+-          pylint -j 0 --fail-under=8.0 --logging-format-style=old $(tr '\0' ' ' < pyfiles.z)
++          pylint -j 0 --fail-under=8.0 --logging-format-style=old $(tr '\0' ' ' < pyfiles.z)--- .github/workflows/shim-sync.yml
++++ .github/workflows/shim-sync.yml
+@@ -85,4 +85,4 @@
+           commit_message: ${{ github.event.inputs.commit_message }}
+           commit_user_name: github-actions
+           commit_user_email: github-actions@users.noreply.github.com
+-          file_pattern: "*.py"
++          file_pattern: "*.py"--- .github/workflows/static-analysis-2.folded.yml
++++ .github/workflows/static-analysis-2.folded.yml
+@@ -182,8 +182,7 @@
+ 
+       # Upload coverage once (3.12)
+       - name: Upload Coverage to Codecov (OIDC)
+-        if: >-
+-          always() && matrix.python-version == '3.12' && hashFiles('coverage.xml') != ''
++        if: ${{ always() && matrix.python-version == '3.12' && hashFiles('coverage.xml') != '' }}
+         uses: codecov/codecov-action@v5
+         with:
+           use_oidc: true
+--- .github/workflows/static-analysis-2.yml
++++ .github/workflows/static-analysis-2.yml
+@@ -189,4 +189,4 @@
+           files: ./coverage.xml
+           flags: unittests
+           name: codecov-umbrella
+-          fail_ci_if_error: false
++          fail_ci_if_error: false--- .github/workflows/summary-4.yml
++++ .github/workflows/summary-4.yml
+@@ -145,4 +145,4 @@
+           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+           ISSUE_NUMBER: ${{ github.event.issue.number }}
+         run: |
+-          gh issue comment "$ISSUE_NUMBER" --body "⚠️ AI summarization was unavailable. Check workflow logs or configure OPENAI_API_KEY."
++          gh issue comment "$ISSUE_NUMBER" --body "⚠️ AI summarization was unavailable. Check workflow logs or configure OPENAI_API_KEY."
