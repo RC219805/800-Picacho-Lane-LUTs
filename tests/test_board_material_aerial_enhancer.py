@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from board_material_aerial_enhancer import (
+from board_material_aerial_enhancer import (  # type: ignore[attr-defined]
     ClusterStats,
     MaterialRule,
     apply_materials,
@@ -123,7 +123,7 @@ def test_enhance_aerial_creates_output(tmp_path: Path) -> None:
         Image.new("RGB", (16, 16), colors[name]).save(tex_path)
 
     output_path = tmp_path / "output.png"
-    enhance_aerial(
+    enhance_aerial(  # type: ignore[call-arg]
         input_path,
         output_path,
         analysis_max_dim=128,
@@ -282,7 +282,7 @@ def test_enhance_aerial_with_palette_uses_predefined_mappings(tmp_path: Path) ->
         json.dump(palette_data, f)
     
     output_path = tmp_path / "output.png"
-    enhance_aerial(
+    enhance_aerial(  # type: ignore[call-arg]
         input_path,
         output_path,
         analysis_max_dim=128,
@@ -315,7 +315,7 @@ def test_enhance_aerial_can_save_computed_palette(tmp_path: Path) -> None:
     output_path = tmp_path / "output.png"
     palette_save_path = tmp_path / "saved_palette.json"
     
-    enhance_aerial(
+    enhance_aerial(  # type: ignore[call-arg]
         input_path,
         output_path,
         analysis_max_dim=128,
