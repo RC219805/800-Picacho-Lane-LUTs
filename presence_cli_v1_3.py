@@ -14,10 +14,10 @@ from PIL import Image, ImageOps
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Presence v1.3 CLI utilities.")
 
 try:
-    import cv2  # type: ignore
+    import cv2
     _CV_OK = True
 except Exception:
-    cv2 = None  # type: ignore
+    cv2 = None
     _CV_OK = False
 
 

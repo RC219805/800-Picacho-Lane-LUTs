@@ -17,7 +17,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, List, Sequence, Tuple
+from typing import Iterable, Iterator, List, Optional, Sequence, Tuple
 
 
 # --- Core helpers ------------------------------------------------------------
@@ -132,8 +132,8 @@ def write_manifest(
             # Linear path: simplest and most predictable
             for e in files:
                 try:
-                    md5 = _md5(e.abs_path)
-                    writer.writerow([e.rel_posix, e.size, md5])
+                    md5_hash = _md5(e.abs_path)
+                    writer.writerow([e.rel_posix, e.size, md5_hash])
                 except Exception as exc:
                     if skip_errors:
                         print(f"[skip] {e.rel_posix}: {exc}", file=sys.stderr)

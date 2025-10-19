@@ -181,7 +181,7 @@ def test_param_name_validation():
     with pytest.raises(ValueError):
         FilterNode("scale", {"w:h": 1280})
     with pytest.raises(TypeError):
-        FilterNode("scale", {None: 720})  # type: ignore[arg-type]
+        FilterNode("scale", {None: 720})
 
 def test_omit_none():
     node = FilterNode("scale", {"w": 1280, "h": None})
