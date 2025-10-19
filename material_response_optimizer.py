@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 # Only import the public entrypoint; vendor internal math locally.
-from board_material_aerial_enhancer import enhance_aerial  # type: ignore
+from board_material_aerial_enhancer import enhance_aerial
 
 
 __all__ = ["RenderEnhancementPlanner", "MaterialAwareEnhancementPlanner"]
@@ -96,7 +96,7 @@ def _kmeans_plus_plus_init(data: np.ndarray, k: int, rng: np.random.Generator) -
             idx = rng.integers(0, n)
         else:
             probs = dist2 / total
-            idx = rng.choice(n, p=probs)
+            idx = int(rng.choice(n, p=probs))
         centers.append(data[idx])
     return np.asarray(centers, dtype=np.float64)
 
@@ -154,9 +154,6 @@ class RenderEnhancementPlanner:
             target_width=target_width,
             strength=self.strength,
             jpeg_quality=jpeg_quality,
-            jpeg_subsampling=jpeg_subsampling,
-            show_progress=show_progress,
-            respect_icc=respect_icc,
             palette=self.palette,
         )
 

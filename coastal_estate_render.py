@@ -61,7 +61,7 @@ def _resolve_pipeline_main(mod: ModuleType) -> Callable[..., Any]:
             "lux_render_pipeline.main(...) was not found or is not callable. "
             "Ensure your pipeline exposes a `main(**kwargs)` entrypoint."
         )
-    return fn  # type: ignore[return-value]
+    return fn
 
 
 def _validate_options(

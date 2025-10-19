@@ -185,7 +185,7 @@ def apply_shadow_lift(arr: np.ndarray, amount: float) -> np.ndarray:
     lifted = np.power(np.clip(lum, 0.0, 1.0), gamma)
     if LOGGER.isEnabledFor(logging.DEBUG):
         LOGGER.debug("Shadow lift amount=%s gamma=%.3f", amount, gamma)
-    return arr + (lifted - lum)[..., None]
+    return arr + (lifted - lum)[..., None]  # type: ignore[no-any-return]
 
 
 def apply_highlight_recovery(arr: np.ndarray, amount: float) -> np.ndarray:
@@ -196,7 +196,7 @@ def apply_highlight_recovery(arr: np.ndarray, amount: float) -> np.ndarray:
     compressed = np.power(np.clip(lum, 0.0, 1.0), gamma)
     if LOGGER.isEnabledFor(logging.DEBUG):
         LOGGER.debug("Highlight recovery amount=%s gamma=%.3f", amount, gamma)
-    return arr + (compressed - lum)[..., None]
+    return arr + (compressed - lum)[..., None]  # type: ignore[no-any-return]
 
 
 def apply_midtone_contrast(arr: np.ndarray, amount: float) -> np.ndarray:
@@ -206,7 +206,7 @@ def apply_midtone_contrast(arr: np.ndarray, amount: float) -> np.ndarray:
     contrasted = 0.5 + (lum - 0.5) * (1.0 + amount)
     if LOGGER.isEnabledFor(logging.DEBUG):
         LOGGER.debug("Midtone contrast amount=%s", amount)
-    return arr + (contrasted - lum)[..., None]
+    return arr + (contrasted - lum)[..., None]  # type: ignore[no-any-return]
 
 
 def rgb_to_hsv(arr: np.ndarray) -> np.ndarray:
@@ -313,11 +313,11 @@ def _gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.nd
     kernel /= np.sum(kernel)
     cached = kernel.astype(np.float32)
     cached.setflags(write=False)
-    return cached
+    return cached  # type: ignore[no-any-return]
 
 
 def gaussian_kernel(radius: int, sigma: Optional[float] = None) -> np.ndarray:
-    return _gaussian_kernel_cached(radius, sigma).copy()
+    return _gaussian_kernel_cached(radius, sigma).copy()  # type: ignore[no-any-return]
 
 
 def gaussian_kernel_cached(radius: int, sigma: Optional[float] = None) -> np.ndarray:
@@ -359,7 +359,7 @@ def apply_clarity(arr: np.ndarray, amount: float) -> np.ndarray:
     high_pass = arr - blurred
     if LOGGER.isEnabledFor(logging.DEBUG):
         LOGGER.debug("Clarity amount=%s radius=%s", amount, radius)
-    return np.clip(arr + high_pass * (0.6 + amount * 0.8), 0.0, 1.0)
+    return np.clip(arr + high_pass * (0.6 + amount * 0.8), 0.0, 1.0)  # type: ignore[no-any-return]
 
 
 def rgb_to_yuv(arr: np.ndarray) -> np.ndarray:
@@ -373,7 +373,7 @@ def rgb_to_yuv(arr: np.ndarray) -> np.ndarray:
     )
     yuv = arr @ matrix.T
     yuv[..., 1:] += 0.5
-    return yuv
+    return yuv  # type: ignore[no-any-return]
 
 
 def yuv_to_rgb(arr: np.ndarray) -> np.ndarray:
@@ -388,7 +388,7 @@ def yuv_to_rgb(arr: np.ndarray) -> np.ndarray:
     rgb = arr.copy()
     rgb[..., 1:] -= 0.5
     rgb = rgb @ matrix.T
-    return rgb
+    return rgb  # type: ignore[no-any-return]
 
 
 def apply_chroma_denoise(arr: np.ndarray, amount: float) -> np.ndarray:
@@ -514,7 +514,7 @@ def batch_apply_adjustments(
         tasks: Iterable[Tuple[int, np.ndarray, AdjustmentSettings, Optional[ProcessingProfile]]] = (
             (i, arr[i], adjustments[i], profile) for i in range(n)
         )
-        results = [None] * n  # type: ignore[var-annotated]
+        results: list[Optional[np.ndarray]] = [None] * n
         try:
             with ProcessPoolExecutor(max_workers=max_workers) as ex:
                 futs = [ex.submit(_apply_adjustments_single, t) for t in tasks]
@@ -524,7 +524,7 @@ def batch_apply_adjustments(
         except Exception as exc:
             LOGGER.warning("Multiprocessing failed (%s); falling back to serial.", exc)
             results = [apply_adjustments(arr[i], adjustments[i], profile=profile) for i in range(n)]
-        return np.stack(results, axis=0).astype(np.float32, copy=False)
+        return np.stack([r for r in results if r is not None], axis=0).astype(np.float32, copy=False)
 
     # "vectorized" here means efficient serial loop (different presets).
     outputs = [apply_adjustments(arr[i], adjustments[i], profile=profile) for i in range(n)]

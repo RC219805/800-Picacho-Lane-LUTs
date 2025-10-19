@@ -9,8 +9,8 @@ import numpy as np
 from PIL import Image
 
 # Shim and new API must both be importable
-from evolutionary_checkpoint import EvolutionaryCheckpoint as EC_legacy, EvolutionStatus as ES_legacy
-from src.evolutionary import EvolutionaryCheckpoint as EC_new, EvolutionStatus as ES_new
+from evolutionary_checkpoint import EvolutionaryCheckpoint as EC_legacy, EvolutionaryStatus as ES_legacy
+from src.evolutionary import EvolutionaryCheckpoint as EC_new, EvolutionaryStatus as ES_new
 
 # Planners module surface must exist
 from material_response_optimizer import (

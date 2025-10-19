@@ -62,7 +62,7 @@ class ProcessingProfile:
 
     # --- misc ----------------------------------------------------------------
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Lightweight serialization for logs/debugging."""
         return {
             "name": self.name,
