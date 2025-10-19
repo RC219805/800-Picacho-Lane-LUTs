@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional, Sequence, Tuple, Literal, Union
+from typing import Iterable, Iterator, List, Optional, Sequence, Tuple, Literal, Union, TypeVar
 
 import numpy as np
 
 from .adjustments import AdjustmentSettings, apply_adjustments, batch_apply_adjustments
 from .io_utils import (
     ProcessingContext,
+    FloatDynamicRange,
     float_to_dtype_array,
     image_to_float,
     save_image,
@@ -35,10 +36,12 @@ except Exception:  # pragma: no cover
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 WORKER_LOGGER = LOGGER.getChild("worker")
 
+T = TypeVar("T")
+
 
 def _tqdm_progress(
-    iterable: Iterable[object], *, total: Optional[int], description: Optional[str]
-) -> Iterable[object]:
+    iterable: Iterable[T], *, total: Optional[int], description: Optional[str]
+) -> Iterable[T]:
     """Wrap iterable with tqdm if available."""
     if _tqdm is None:  # pragma: no cover
         return iterable
@@ -319,7 +322,7 @@ def process_images_batch(
     # Load + bucket by shape while keeping per-file metadata.
     from collections import defaultdict
 
-    BucketItem = Tuple[int, np.ndarray, np.dtype, Optional[np.ndarray], int, object, Optional[bytes]]
+    BucketItem = Tuple[int, np.ndarray, np.dtype, Optional[np.ndarray], int, Optional[FloatDynamicRange], Optional[bytes]]
     buckets: dict[Tuple[int, int], List[BucketItem]] = defaultdict(list)
 
     for idx in to_process:
