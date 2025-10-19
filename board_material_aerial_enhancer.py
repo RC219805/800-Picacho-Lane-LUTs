@@ -3,11 +3,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple, Any
+import io
 
 import numpy as np
 from PIL import Image, ImageOps
 from tqdm import tqdm
+
+# Optional color management; typed to satisfy static analysis when missing.
+try:  # pragma: no cover
+    from PIL import ImageCms as _ImageCms  # type: ignore
+    ImageCms: Any = _ImageCms
+except Exception:  # pragma: no cover
+    ImageCms = None  # type: ignore
 
 # ------------------------------- color utils -------------------------------
 
@@ -35,7 +43,7 @@ def _rgb_to_xyz(rgb: np.ndarray) -> np.ndarray:
     return np.tensordot(lin, M.T, axes=1)
 
 def _xyz_to_lab(xyz: np.ndarray) -> np.ndarray:
-    """CIE Lab using D65 white."""
+    """CIE Lab using D65 white (consistent with sRGB D65)."""
     Xn, Yn, Zn = 0.95047, 1.0, 1.08883
     x = xyz[..., 0] / Xn
     y = xyz[..., 1] / Yn
@@ -108,24 +116,33 @@ class KMeansResult:
     inertia: float
 
 def _kmeans_plus_plus_init(data: np.ndarray, k: int, *, rng: np.random.Generator) -> np.ndarray:
-    """k-means++ seeding on (n,3) data."""
+    """k-means++ seeding with degenerate fallback."""
     n = data.shape[0]
     idx0 = rng.integers(0, n)
     centers = [data[idx0]]
     dist2 = np.full(n, np.inf, dtype=np.float64)
     for _ in range(1, k):
         d = data - centers[-1]
-        dist2 = np.minimum(dist2, np.einsum("ij,ij->i", d, d))
-        probs = dist2 / (dist2.sum() + 1e-12)
-        idx = rng.choice(n, p=probs)
+        cur = np.einsum("ij,ij->i", d, d)
+        dist2 = np.minimum(dist2, cur)
+        total = float(dist2.sum())
+        if not np.isfinite(total) or total <= 1e-12:
+            idx = rng.integers(0, n)
+        else:
+            probs = dist2 / total
+            idx = rng.choice(n, p=probs)
         centers.append(data[idx])
     return np.asarray(centers, dtype=np.float64)
 
-def _kmeans(data: np.ndarray, k: int, *, seed: int, max_iter: int = 25, tol: float = 1e-4) -> KMeansResult:
-    """
-    Simple k-means on RGB01. Returns final centers and inertia.
-    Uses memory-friendly distance computation.
-    """
+def _kmeans(
+    data: np.ndarray,
+    k: int,
+    *,
+    seed: int,
+    max_iter: int = 25,
+    tol: float = 1e-4,
+) -> KMeansResult:
+    """Memory-friendly k-means on RGB01 with inertia-based convergence."""
     rng = np.random.default_rng(seed)
     n = data.shape[0]
     if n < k:
@@ -133,18 +150,13 @@ def _kmeans(data: np.ndarray, k: int, *, seed: int, max_iter: int = 25, tol: flo
     centers = _kmeans_plus_plus_init(data, k, rng=rng)
     last_inertia = np.inf
     for _ in range(max_iter):
-        # assign to current centers
-        dist2 = _pairwise_sq_dists(data, centers)   # (n,k)
+        dist2 = _pairwise_sq_dists(data, centers)  # (n,k)
         labels = np.argmin(dist2, axis=1)
         inertia = float(dist2[np.arange(n), labels].sum())
-
-        # convergence check against previous inertia (fix returning the right inertia)
         if abs(last_inertia - inertia) <= tol * max(1.0, last_inertia):
             last_inertia = inertia
             break
         last_inertia = inertia
-
-        # update centers; if any empty cluster -> random re-seed (keeps progress moving)
         new_centers = np.empty_like(centers)
         for j in range(k):
             mask = labels == j
@@ -153,8 +165,26 @@ def _kmeans(data: np.ndarray, k: int, *, seed: int, max_iter: int = 25, tol: flo
             else:
                 new_centers[j] = data[mask].mean(axis=0)
         centers = new_centers
-
     return KMeansResult(centers=centers, inertia=last_inertia)
+
+# -------------------------- color management (ICC) -------------------------
+
+def _ensure_srgb(im: Image.Image, *, respect_icc: bool = True) -> Image.Image:
+    """
+    Convert PIL Image with embedded ICC to sRGB if requested. Falls back to RGB
+    without color management when ImageCms is unavailable or conversion fails.
+    """
+    if not respect_icc:
+        return im.convert("RGB")
+    icc = im.info.get("icc_profile")
+    if not icc or ImageCms is None:
+        return im.convert("RGB")
+    try:
+        src = ImageCms.ImageCmsProfile(io.BytesIO(icc))
+        dst = ImageCms.createProfile("sRGB")
+        return ImageCms.profileToProfile(im, src, dst, outputMode="RGB")
+    except Exception:
+        return im.convert("RGB")
 
 # ---------------------------- aerial enhancer ------------------------------
 
@@ -168,20 +198,23 @@ def enhance_aerial(
     target_width: int = 4096,
     strength: float = 0.85,
     jpeg_quality: int = 95,
+    jpeg_subsampling: int = 1,
+    show_progress: bool = True,
+    respect_icc: bool = True,
     palette: Optional[Sequence[str]] = None,
 ) -> Path:
     """
     Apply MBAR palette transfer to an aerial image and save to disk as JPEG.
-    Keeps API stable; faster & more numerically robust.
     """
     input_path = Path(input_path)
     output_path = Path(output_path)
 
-    # load
-    with Image.open(input_path) as im:
-        im = ImageOps.exif_transpose(im).convert("RGB")
-        w0, h0 = im.size
-        arr = np.asarray(im, dtype=np.float32) / 255.0
+    with Image.open(input_path) as im_src:
+        im_src = ImageOps.exif_transpose(im_src)
+        im = _ensure_srgb(im_src, respect_icc=respect_icc)
+    w0, h0 = im.size
+    arr = np.asarray(im, dtype=np.float32) / 255.0
+    H, W = arr.shape[:2]
 
     # analysis image
     scale = min(1.0, analysis_max_dim / max(w0, h0)) if analysis_max_dim > 0 else 1.0
@@ -192,7 +225,7 @@ def enhance_aerial(
         arr_small = arr
 
     # sample for k-means
-    flat = arr_small.reshape(-1, 3).astype(np.float64)
+    flat = arr_small.reshape(-1, 3).astype(np.float64, copy=False)
     rng = np.random.default_rng(seed)
     sample_n = min(flat.shape[0], 250_000)
     if sample_n < 1:
@@ -210,39 +243,38 @@ def enhance_aerial(
 
     # nearest palette color for each center (Lab)
     diff2 = _pairwise_sq_dists(centers_lab, pal_lab)  # (k, m)
-    nearest_idx = np.argmin(diff2, axis=1)  # (k,)
-    target_rgb = pal_rgb[nearest_idx]  # (k,3)
+    nearest_idx = np.argmin(diff2, axis=1)            # (k,)
+    target_rgb = pal_rgb[nearest_idx]                 # (k,3)
 
     # per-center RGB delta
-    deltas = target_rgb - centers_rgb  # (k,3)
+    deltas = target_rgb - centers_rgb                 # (k,3)
 
-    # sigma from centroid spread; floor to keep weights well-behaved
+    # sigma from centroid spread; exclude diagonal to avoid biasing low
     if k > 1:
-        # RMS pairwise distance between centers in RGB space
-        pairwise = centers_rgb[:, None, :] - centers_rgb[None, :, :]
-        pd = float(np.sqrt(np.mean(np.sum(pairwise**2, axis=-1))))
+        cd2 = _pairwise_sq_dists(centers_rgb, centers_rgb)
+        iu = np.triu_indices(k, 1)
+        pd = float(np.sqrt(cd2[iu].mean())) if iu[0].size > 0 else 0.25
     else:
         pd = 0.25
     sigma2 = max((0.5 * pd) ** 2, 1e-8)
 
     # apply to full-res in chunks
-    H, W, _ = arr.shape
     rows_target = max(128, min(H, int(1_000_000 / max(1, W))))  # ~1M px per chunk
     out = np.empty_like(arr, dtype=np.float32)
 
     iterator: Iterable[int] = range(0, H, rows_target)
-    iterator = tqdm(iterator, desc="Applying palette", unit="rows")
+    if show_progress:
+        iterator = tqdm(iterator, desc="Applying palette", unit="rows")
 
+    inv_two_sigma2 = 1.0 / (2.0 * sigma2)
     for y0 in iterator:
         y1 = min(H, y0 + rows_target)
-        chunk = arr[y0:y1].reshape(-1, 3).astype(np.float64)  # (n,3)
+        chunk = arr[y0:y1].reshape(-1, 3).astype(np.float64, copy=False)  # (n,3)
 
-        # distances to centers -> weights (no (n,k,3) allocation)
         dist2 = _pairwise_sq_dists(chunk, centers_rgb)  # (n,k)
-        weights = np.exp(-dist2 / (2 * sigma2))
+        weights = np.exp(-dist2 * inv_two_sigma2)
         weights /= (weights.sum(axis=1, keepdims=True) + 1e-12)
 
-        # blended delta
         blended = weights @ deltas  # (n,3)
         new_chunk = np.clip(chunk + strength * blended, 0.0, 1.0).astype(np.float32)
         out[y0:y1] = new_chunk.reshape(y1 - y0, W, 3)
@@ -257,7 +289,13 @@ def enhance_aerial(
         out_img = Image.fromarray((out * 255.0 + 0.5).astype(np.uint8), mode="RGB")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    out_img.save(output_path, format="JPEG", quality=int(jpeg_quality), subsampling=1, optimize=True)
+    out_img.save(
+        output_path,
+        format="JPEG",
+        quality=int(jpeg_quality),
+        subsampling=int(jpeg_subsampling),
+        optimize=True,
+    )
     return output_path
 
 # ---------------------------------- CLI ------------------------------------
@@ -266,6 +304,7 @@ def _format_bytes(n: int) -> str:
     return f"{n / (1024**2):.2f} MB"
 
 def _print_header(inp: Path, out: Path, k: int, pal_len: int) -> None:
+    # Keep legacy strings to satisfy old tests.
     print(f"Processing: {inp.name}")
     print(f"Output: {out.name}")
     print(f"Resolution: 4K (4096px width)")
@@ -273,7 +312,7 @@ def _print_header(inp: Path, out: Path, k: int, pal_len: int) -> None:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
-        import typer  # lazy import for optional dep
+        import typer  # pylint: disable=import-outside-toplevel
     except Exception:
         print("This CLI requires 'typer'. Install with: pip install typer", flush=True)
         return 2
@@ -281,7 +320,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     app = typer.Typer(add_completion=False, no_args_is_help=True, help="MBAR aerial enhancer")
 
     @app.command("enhance")
-    def _enhance(
+    def _enhance(  # pylint: disable=too-many-arguments
         input_path: Path = typer.Option(..., "--input", "-i", exists=True, readable=True, dir_okay=False, file_okay=True),
         output_path: Path = typer.Option(..., "--output", "-o"),
         analysis_max_dim: int = typer.Option(1280, help="Max dimension for clustering preview."),
@@ -290,10 +329,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         target_width: int = typer.Option(4096, help="Final output width."),
         strength: float = typer.Option(0.85, min=0.0, max=1.0, help="Blend strength toward palette."),
         jpeg_quality: int = typer.Option(95, min=70, max=100, help="JPEG quality."),
+        jpeg_subsampling: int = typer.Option(1, min=0, max=2, help="JPEG chroma subsampling: 0=4:4:4, 1=4:2:2, 2=4:2:0"),
+        progress: bool = typer.Option(True, "--progress/--no-progress", help="Show progress bar."),
+        respect_icc: bool = typer.Option(True, "--respect-icc/--ignore-icc", help="Honor embedded ICC by converting to sRGB."),
+        verbose_header: bool = typer.Option(False, "--verbose-header/--no-verbose-header", help="Print extra header details (e.g., ICC handling)."),
         palette: List[str] = typer.Option(None, "--palette", "-p", help="Override palette with HEX colors. Repeatable."),
     ) -> None:
         pal = palette if palette else None
+
+        # Always print the legacy header first (keeps old tests passing).
         _print_header(input_path, output_path, k, len(pal or _DEFAULT_MBAR_8))
+
+        # Optionally print extra header lines (doesn't affect legacy tests).
+        if verbose_header:
+            print(f"ICC handling: {'respect' if respect_icc else 'ignore'}\n")
+
         result = enhance_aerial(
             input_path=input_path,
             output_path=output_path,
@@ -303,6 +353,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             target_width=target_width,
             strength=strength,
             jpeg_quality=jpeg_quality,
+            jpeg_subsampling=jpeg_subsampling,
+            show_progress=progress,
+            respect_icc=respect_icc,
             palette=pal,
         )
         print(f"✅ Enhanced aerial saved to: {result}")
