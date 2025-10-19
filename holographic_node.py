@@ -83,6 +83,7 @@ class GlobalSystemState:
             try:
                 self._observers.remove(callback)
             except ValueError:
+                # It is not an error if the callback was not subscribed; ignore.
                 pass
 
     @contextmanager
