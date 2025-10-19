@@ -38,7 +38,7 @@ jobs:
         id: changed
         uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47
         with:
-    # Github API URL.
+    # GitHub API URL.
     # Type: string
     # Default: "${{ github.api_url }}"
     api_url: ''
