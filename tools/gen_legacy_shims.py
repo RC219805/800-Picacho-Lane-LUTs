@@ -7,7 +7,6 @@ Usage:
   Write shims:   python tools/gen_legacy_shims.py --write
   JSON report:   python tools/gen_legacy_shims.py --json
   Limit files:   python tools/gen_legacy_shims.py --modules tests/test_*.py,tests/smoke/**.py
-                  (you can repeat --modules; comma-separated globs are supported)
 
 In CI, keep using: --fail-on-create to enforce that shims are already committed.
 """
@@ -21,10 +20,13 @@ from pathlib import Path
 from typing import Iterable, List, Sequence, Set, Tuple
 
 HEADER = "# Auto-generated shim by tools/gen_legacy_shims.py; do not edit."
+STRICT_SHIMS = {"evolutionary_checkpoint"}  # never overwrite once present
 
 SKIP_NAMES = {
-    "src","tests","__future__","typing","dataclasses","unittest","pytest","numpy","PIL","cv2",
-    "scipy","typer","tqdm","json","pathlib","argparse","logging","os","sys","math","re","io","importlib",
+    "src", "tests", "__future__", "typing", "dataclasses",
+    "unittest", "pytest", "numpy", "PIL", "cv2",
+    "scipy", "typer", "tqdm", "json", "pathlib",
+    "argparse", "logging", "os", "sys", "math", "re", "io", "importlib",
 }
 
 # ------------------------------- file discovery -------------------------------
@@ -43,7 +45,6 @@ def _expand_module_globs(root: Path, patterns: Sequence[str]) -> List[Path]:
         pat = raw.strip()
         if not pat:
             continue
-        # Path.glob supports ** recursive patterns
         for m in root.glob(pat):
             if m.is_file() and m.suffix == ".py" and m not in seen:
                 files.append(m)
@@ -74,7 +75,7 @@ def _collect_imports_from_files(files: Iterable[Path]) -> Set[str]:
 def _collect_test_imports(test_root: Path) -> Set[str]:
     return _collect_imports_from_files(_iter_py([test_root]))
 
-# --------------------------------- utilities ---------------------------------
+# --------------------------------- utilities ----------------------------------
 
 def _importable(mod: str) -> bool:
     try:
@@ -84,9 +85,9 @@ def _importable(mod: str) -> bool:
         return False
 
 def _strict_evo_shim() -> str:
+    # Strict, flake8-safe shim (never overwrite once present)
     return '''"""Compatibility shim for legacy imports. Re-exports src.evolutionary."""
 from __future__ import annotations
-{header}
 
 from src.evolutionary import (
     EvolutionStatus,
@@ -95,7 +96,7 @@ from src.evolutionary import (
 )
 
 __all__ = ["EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionStatus"]
-'''.format(header=HEADER)
+'''
 
 def _generic_shim(mod: str) -> str:
     return f'''"""Auto-generated legacy shim for `{mod}`. Re-exports from `src.{mod}`."""
@@ -119,14 +120,11 @@ def _write(path: Path, text: str) -> None:
 
 # ----------------------------------- scan ------------------------------------
 
-def scan(repo: Path, limit_files: Sequence[Path] | None = None) -> Tuple[List[str], List[str], List[str]]:
+def scan(repo: Path, files: Sequence[Path] | None = None) -> Tuple[List[str], List[str], List[str]]:
     """
     Returns (ok, missing_shims, updatable_shims) as module names.
-    If limit_files is provided, only those files are scanned; otherwise scans tests/.
     """
-    if limit_files is not None:
-        files = list(limit_files)
-    else:
+    if files is None:
         tests_dir = repo / "tests"
         if not tests_dir.exists():
             return [], [], []
@@ -144,12 +142,14 @@ def scan(repo: Path, limit_files: Sequence[Path] | None = None) -> Tuple[List[st
             if not target.exists():
                 missing.append(name)
             else:
-                existing = target.read_text(encoding="utf-8")
-                if existing != desired:
-                    updatable.append(name)
-        else:
-            # Neither top-level nor src.<name> importable: ignore (not shim-able).
-            pass
+                # Never overwrite strict shims if already present
+                if name in STRICT_SHIMS:
+                    # treat as ok, even if contents differ (owner-managed)
+                    ok.append(name)
+                else:
+                    existing = target.read_text(encoding="utf-8")
+                    if existing != desired:
+                        updatable.append(name)
     return ok, missing, updatable
 
 # ----------------------------------- CLI -------------------------------------
@@ -175,7 +175,6 @@ def main() -> int:
     (repo / "src").mkdir(parents=True, exist_ok=True)
     (repo / "src" / "__init__.py").touch()
 
-    # Build limited file list if --modules provided
     limit_files: List[Path] | None = None
     if args.modules:
         patterns: List[str] = []
@@ -183,16 +182,12 @@ def main() -> int:
             patterns.extend([p.strip() for p in entry.split(",") if p.strip()])
         matches = _expand_module_globs(repo, patterns)
         if not matches:
-            msg = f"No files matched --modules patterns: {patterns}"
-            if args.json:
-                print(json.dumps({"ok": [], "missing": [], "updatable": [], "note": msg}, indent=2))
-            else:
-                print(msg)
+            out = {"ok": [], "missing": [], "updatable": [], "note": "no files matched --modules"}
+            print(json.dumps(out, indent=2) if args.json else out["note"])
             return 0
         limit_files = matches
-        print(f"Scanning subset ({len(matches)} files) from --modules filter.")
 
-    ok, missing, updatable = scan(repo, limit_files=limit_files)
+    ok, missing, updatable = scan(repo, files=limit_files)
 
     if args.json:
         print(json.dumps({"ok": ok, "missing": missing, "updatable": updatable}, indent=2))
@@ -208,10 +203,20 @@ def main() -> int:
         return 1
 
     if args.write:
-        for name in missing + updatable:
+        # Create any missing shims (strict shims created with strict template)
+        for name in missing:
             p = repo / f"{name}.py"
             _write(p, _shim_code(name))
             print(f"✓ wrote {p.relative_to(repo)}")
+
+        # Refresh only non-strict shims that need update
+        for name in updatable:
+            if name in STRICT_SHIMS:
+                print(f"↷ skipped strict shim update: {name}")
+                continue
+            p = repo / f"{name}.py"
+            _write(p, _shim_code(name))
+            print(f"✓ updated {p.relative_to(repo)}")
 
     return 0
 
