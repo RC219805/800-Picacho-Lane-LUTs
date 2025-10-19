@@ -388,7 +388,6 @@ jobs:
     # changed files from GitHub's API. 
     # Type: string
     # Default: "${{ github.token }}"
-    token: ''
 
     # Get changed files for commits 
     # whose timestamp is earlier than 
