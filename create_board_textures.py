@@ -14,6 +14,7 @@ from typing import Dict, Iterable, Mapping, Tuple
 
 import numpy as np
 from PIL import Image
+from PIL.ImageFont import FreeTypeFont, ImageFont
 
 # MBAR-approved material colors (RGB 0-255)
 MATERIAL_COLORS: Dict[str, Tuple[int, int, int]] = {
@@ -102,13 +103,16 @@ def _make_grid(
     grid_h = rows * h + (rows + 1) * pad
     grid = Image.new("RGB", (grid_w, grid_h), bg)
     try:
-        from PIL import ImageDraw, ImageFont
+        from PIL import ImageDraw
 
         draw = ImageDraw.Draw(grid)
+        font: FreeTypeFont | ImageFont | None
         try:
-            font = ImageFont.truetype("DejaVuSans.ttf", size=max(12, w // 20))
+            from PIL import ImageFont as IF
+            font = IF.truetype("DejaVuSans.ttf", size=max(12, w // 20))
         except Exception:
-            font = ImageFont.load_default()
+            from PIL import ImageFont as IF
+            font = IF.load_default()
     except Exception:
         draw = None
         font = None
