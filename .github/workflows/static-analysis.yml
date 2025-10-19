@@ -160,8 +160,13 @@ jobs:
         run: |
           set -o pipefail
           pytest -v --cov=. --cov-report=xml --cov-report=term-missing 2>&1 | tee pytest.log
-          test ${PIPESTATUS[0]} -eq 0
-
+          rc=${PIPESTATUS[0]}
+          if [ ! -f coverage.xml ]; then
+            echo \"coverage.xml missing (pytest rc=$rc)\"
+            ls -la
+            if [ \"$rc\" -eq 0 ]; then exit 1; fi
+          fi
+          exit \"$rc\"
       - name: Upload pytest log
         if: always()
         uses: actions/upload-artifact@v4
@@ -182,7 +187,7 @@ jobs:
 
       # Upload coverage once (3.12)
       - name: Upload Coverage to Codecov (OIDC)
-        if: always() && matrix.python-version == '3.12'
+        if: always() && matrix.python-version == '3.12' && hashFiles('coverage.xml') != ''
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true
