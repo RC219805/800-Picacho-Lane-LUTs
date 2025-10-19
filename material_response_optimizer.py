@@ -133,6 +133,23 @@ class RenderEnhancementPlanner:
     strength: float = 0.85
     palette: Optional[Sequence[str]] = None
     analysis_max_dim: int = 1280
+    _blueprint: Optional[dict] = None  # Loaded from JSON
+
+    @classmethod
+    def from_json(cls, path: Path | str) -> "RenderEnhancementPlanner":
+        """Load planner configuration from a JSON blueprint file."""
+        import json
+        with open(path, 'r', encoding='utf-8') as f:
+            blueprint = json.load(f)
+        instance = cls()
+        instance._blueprint = blueprint
+        return instance
+
+    def build_blueprint(self) -> dict:
+        """Return the loaded blueprint data."""
+        if self._blueprint is None:
+            raise RuntimeError("No blueprint loaded; use from_json() to load data")
+        return self._blueprint
 
     def plan(
         self,
