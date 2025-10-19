@@ -14,11 +14,11 @@ Rules (regex-based, intentionally simple for CI speed):
 - design:long-function — flag functions > N lines (warning)
 """
 
+import ast
 import fnmatch
 import json
 import os
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 
@@ -26,27 +26,102 @@ Severity = str  # "info" | "warning" | "error"
 SEVERITY_ORDER: Dict[Severity, int] = {"info": 0, "warning": 1, "error": 2}
 
 
-@dataclass(order=True, frozen=True)
 class Violation:
     """Immutable violation record; ordering sorts by severity→rule→path→line.
 
     Why frozen: prevents accidental mutation when aggregating or caching.
+    
+    Note: 'principle' can be used as an alias for 'rule' for backward compatibility.
     """
 
-    sort_index: Tuple[int, str, str, int] = field(init=False, repr=False)
-
+    __slots__ = ('rule', 'message', 'path', 'line', 'severity', 'hint', 'meta', 'sort_index')
+    
     rule: str
     message: str
     path: str
-    line: Optional[int] = None
-    severity: Severity = "warning"
-    hint: Optional[str] = None
-    meta: Dict[str, Any] = field(default_factory=dict)
+    line: Optional[int]
+    severity: Severity
+    hint: Optional[str]
+    meta: Dict[str, Any]
+    sort_index: Tuple[int, str, str, int]
 
-    def __post_init__(self) -> None:
-        sev_rank = SEVERITY_ORDER.get(self.severity, 1)
-        ln = self.line if isinstance(self.line, int) and self.line is not None and self.line >= 0 else 0
-        object.__setattr__(self, "sort_index", (sev_rank, self.rule or "", self.path or "", ln))
+    def __init__(
+        self,
+        *,
+        rule: str = "",
+        principle: Optional[str] = None,
+        message: str = "",
+        path: str = "",
+        line: Optional[int] = None,
+        severity: Severity = "warning",
+        hint: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        # Handle principle as alias for rule
+        if principle is not None and not rule:
+            rule = principle
+        
+        object.__setattr__(self, 'rule', rule)
+        object.__setattr__(self, 'message', message)
+        object.__setattr__(self, 'path', path)
+        object.__setattr__(self, 'line', line)
+        object.__setattr__(self, 'severity', severity)
+        object.__setattr__(self, 'hint', hint)
+        object.__setattr__(self, 'meta', meta if meta is not None else {})
+        
+        sev_rank = SEVERITY_ORDER.get(severity, 1)
+        ln = line if isinstance(line, int) and line is not None and line >= 0 else 0
+        object.__setattr__(self, 'sort_index', (sev_rank, rule or "", path or "", ln))
+
+    @property
+    def principle(self) -> str:
+        """Alias for 'rule' to maintain backward compatibility."""
+        return self.rule
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError("Violation is immutable")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError("Violation is immutable")
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Violation):
+            return NotImplemented
+        return (
+            self.rule == other.rule
+            and self.message == other.message
+            and self.path == other.path
+            and self.line == other.line
+            and self.severity == other.severity
+            and self.hint == other.hint
+            and self.meta == other.meta
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.rule, self.message, self.path, self.line, self.severity, self.hint, tuple(sorted(self.meta.items())) if self.meta else ()))
+
+    def __lt__(self, other: Any) -> bool:
+        if not isinstance(other, Violation):
+            return NotImplemented
+        return self.sort_index < other.sort_index
+
+    def __le__(self, other: Any) -> bool:
+        if not isinstance(other, Violation):
+            return NotImplemented
+        return self.sort_index <= other.sort_index
+
+    def __gt__(self, other: Any) -> bool:
+        if not isinstance(other, Violation):
+            return NotImplemented
+        return self.sort_index > other.sort_index
+
+    def __ge__(self, other: Any) -> bool:
+        if not isinstance(other, Violation):
+            return NotImplemented
+        return self.sort_index >= other.sort_index
+
+    def __repr__(self) -> str:
+        return f"Violation(rule={self.rule!r}, message={self.message!r}, path={self.path!r}, line={self.line!r}, severity={self.severity!r}, hint={self.hint!r}, meta={self.meta!r})"
 
     def to_dict(self) -> Dict[str, Any]:
         """Stable dict representation for JSON/IPC."""
@@ -110,14 +185,104 @@ class CodebasePhilosophyAuditor:
         ignore_globs: Sequence[str] | None = None,
         max_files: Optional[int] = 5000,
         long_function_limit: int = 120,
+        rules: Optional[List] = None,
     ) -> None:
         self.root = Path(root) if root is not None else Path.cwd()
         self.include_globs: Tuple[str, ...] = tuple(include_globs or self.DEFAULT_INCLUDE)
         self.ignore_globs: Tuple[str, ...] = tuple(ignore_globs or self.DEFAULT_IGNORE)
         self.max_files = max_files
         self.long_function_limit = int(long_function_limit)
+        self.custom_rules = rules or []
 
     # ---------- public API ----------
+
+    def audit_module(self, module_path: os.PathLike[str] | str) -> List[Violation]:
+        """Audit a single Python module file for philosophy violations.
+        
+        Checks for:
+        - Missing module docstring
+        - Undocumented public API (classes and functions without docstrings)
+        - Respects decision comments like: # Decision: <principle> - <reason>
+        """
+        import ast
+        
+        path = Path(module_path)
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            return [
+                Violation(
+                    rule="auditor:file-unreadable",
+                    message="Could not read file (permission/encoding).",
+                    path=str(path),
+                    line=None,
+                    severity="warning",
+                )
+            ]
+        
+        violations: List[Violation] = []
+        
+        # Apply custom rules if any
+        for rule_func in self.custom_rules:
+            violations.extend(rule_func(path, text))
+        
+        # Parse decision comments - these exempt certain violations
+        decision_lines: Dict[int, set[str]] = {}
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            # Match pattern: # Decision: <principle> - <reason>
+            match = re.match(r'^\s*#\s*Decision:\s*(\w+)', line)
+            if match:
+                principle = match.group(1)
+                # Decision applies to the next line
+                decision_lines[lineno + 1] = decision_lines.get(lineno + 1, set()) | {principle}
+        
+        # Parse AST
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError:
+            return violations  # Can't parse, return what we have
+        
+        # Check for module docstring
+        has_module_docstring = (
+            ast.get_docstring(tree) is not None
+        )
+        if not has_module_docstring:
+            violations.append(
+                Violation(
+                    rule="module_docstring",
+                    message="Module missing docstring.",
+                    path=str(path),
+                    line=1,
+                    severity="warning",
+                )
+            )
+        
+        # Check for undocumented public API (only top-level, not class methods)
+        for node in tree.body:  # Only check top-level nodes
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                # Skip private members (start with _)
+                if node.name.startswith('_'):
+                    continue
+                
+                # Check if there's a decision comment exempting this
+                node_line = node.lineno
+                if node_line in decision_lines and 'undocumented_public_api' in decision_lines[node_line]:
+                    continue
+                
+                # Check for docstring
+                docstring = ast.get_docstring(node)
+                if docstring is None:
+                    violations.append(
+                        Violation(
+                            rule="public_api_documentation",
+                            message=f"Public {node.__class__.__name__.replace('Def', '').lower()} '{node.name}' missing docstring.",
+                            path=str(path),
+                            line=node.lineno,
+                            severity="warning",
+                        )
+                    )
+        
+        return violations
 
     def scan(self) -> List[Violation]:
         """Walk files and collect violations. Never raises on unreadable files."""
