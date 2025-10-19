@@ -37,7 +37,7 @@ class EvolutionaryCheckpoint:
     score: Optional[float] = None
     created_at: datetime = datetime.now(timezone.utc)
     notes: Optional[str] = None
-    meta: Dict[str, Any] = None  # intentionally plain dict for JSON-friendliness
+    meta: Optional[Dict[str, Any]] = None  # intentionally plain dict for JSON-friendliness
 
     def to_dict(self) -> Dict[str, Any]:
         """Stable, JSON-serializable representation."""
