@@ -351,8 +351,8 @@ def main() -> None:
     pad = 16
     box = 18
 
-    assigned_keys = sorted(assignments.keys())
-    unassigned_keys = [i for i in range(k) if i not in assignments]
+    assigned_keys: list[int] = sorted(assignments.keys())
+    unassigned_keys: list[int] = [i for i in range(k) if i not in assignments]
     n_lines = 1 + len(assigned_keys) + (1 + len(unassigned_keys) if unassigned_keys else 0)
     legend_h = pad + n_lines * (line_h + 6) + pad
 
@@ -368,13 +368,13 @@ def main() -> None:
     y += line_h + 8
 
     # Assigned entries
-    for idx in assigned_keys:
-        rule = assignments[idx]
+    for cluster_idx in assigned_keys:
+        rule = assignments[cluster_idx]
         # color box
-        draw.rectangle([x, y, x + box, y + box], fill=tuple(int(v) for v in colors[idx]), outline=(0, 0, 0))
+        draw.rectangle([x, y, x + box, y + box], fill=tuple(int(v) for v in colors[cluster_idx]), outline=(0, 0, 0))
         # coverage
-        pct = stats.get(idx).fraction * 100.0 if idx in stats else 0.0
-        label_text = f"{rule.name.upper()} – Cluster {idx} ({pct:.1f}%)"
+        pct = stats[cluster_idx].fraction * 100.0 if cluster_idx in stats else 0.0
+        label_text = f"{rule.name.upper()} – Cluster {cluster_idx} ({pct:.1f}%)"
         draw.text((x + box + 10, y - 2), label_text, fill=(0, 0, 0), font=font)
         y += line_h + 6
 
@@ -382,10 +382,10 @@ def main() -> None:
     if unassigned_keys:
         draw.text((x, y), "UNASSIGNED CLUSTERS", fill=(80, 80, 80), font=font)
         y += line_h + 6
-        for idx in unassigned_keys:
-            draw.rectangle([x, y, x + box, y + box], fill=tuple(int(v) for v in colors[idx]), outline=(0, 0, 0))
-            pct = stats.get(idx).fraction * 100.0 if idx in stats else 0.0
-            label_text = f"Cluster {idx} ({pct:.1f}%) – no material match"
+        for cluster_idx in unassigned_keys:
+            draw.rectangle([x, y, x + box, y + box], fill=tuple(int(v) for v in colors[cluster_idx]), outline=(0, 0, 0))
+            pct = stats[cluster_idx].fraction * 100.0 if cluster_idx in stats else 0.0
+            label_text = f"Cluster {cluster_idx} ({pct:.1f}%) – no material match"
             draw.text((x + box + 10, y - 2), label_text, fill=(90, 90, 90), font=font)
             y += line_h + 6
 
@@ -397,15 +397,15 @@ def main() -> None:
     # Console summary
     if assigned_keys:
         print("\nMaterial Assignments:")
-        for idx in assigned_keys:
-            pct = stats.get(idx).fraction * 100.0 if idx in stats else 0.0
-            rule = assignments[idx]
-            print(f"  • {rule.name.upper()}: Cluster {idx} ({pct:.1f}% of image)")
+        for cluster_idx in assigned_keys:
+            pct = stats[cluster_idx].fraction * 100.0 if cluster_idx in stats else 0.0
+            rule = assignments[cluster_idx]
+            print(f"  • {rule.name.upper()}: Cluster {cluster_idx} ({pct:.1f}% of image)")
     if unassigned_keys:
         print(f"\nUnassigned Clusters: {len(unassigned_keys)}")
-        for idx in unassigned_keys:
-            pct = stats.get(idx).fraction * 100.0 if idx in stats else 0.0
-            print(f"  • Cluster {idx}: {pct:.1f}% of image (below threshold)")
+        for cluster_idx in unassigned_keys:
+            pct = stats[cluster_idx].fraction * 100.0 if cluster_idx in stats else 0.0
+            print(f"  • Cluster {cluster_idx}: {pct:.1f}% of image (below threshold)")
 
 
 if __name__ == "__main__":
