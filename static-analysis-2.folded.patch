@@ -1,0 +1,16 @@
+--- .github/workflows/static-analysis-2.yml
++++ .github/workflows/static-analysis-2.yml
+@@ -182,11 +182,12 @@
+ 
+       # Upload coverage once (3.12)
+       - name: Upload Coverage to Codecov (OIDC)
+         if: >-
+           always() && matrix.python-version == '3.12' && hashFiles('coverage.xml') != ''
+         uses: codecov/codecov-action@v5
+         with:
+           use_oidc: true
+           files: ./coverage.xml
+           flags: unittests
+           name: codecov-umbrella
+-          fail_ci_if_error: false
++          fail_ci_if_error: false
