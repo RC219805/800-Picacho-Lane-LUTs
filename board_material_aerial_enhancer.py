@@ -7,6 +7,7 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 from PIL import Image, ImageOps
+from PIL.Image import Resampling
 from tqdm import tqdm
 
 # ------------------------------- color utils -------------------------------
@@ -186,7 +187,7 @@ def enhance_aerial(
     # analysis image
     scale = min(1.0, analysis_max_dim / max(w0, h0)) if analysis_max_dim > 0 else 1.0
     if scale < 1.0:
-        im_small = im.resize((int(round(w0 * scale)), int(round(h0 * scale))), Image.LANCZOS)
+        im_small = im.resize((int(round(w0 * scale)), int(round(h0 * scale))), Resampling.LANCZOS)
         arr_small = np.asarray(im_small, dtype=np.float32) / 255.0
     else:
         arr_small = arr
@@ -251,7 +252,7 @@ def enhance_aerial(
     if target_width and W != target_width:
         new_h = int(round(H * (target_width / W)))
         out_img = Image.fromarray((out * 255.0 + 0.5).astype(np.uint8), mode="RGB").resize(
-            (target_width, new_h), Image.LANCZOS
+            (target_width, new_h), Resampling.LANCZOS
         )
     else:
         out_img = Image.fromarray((out * 255.0 + 0.5).astype(np.uint8), mode="RGB")
