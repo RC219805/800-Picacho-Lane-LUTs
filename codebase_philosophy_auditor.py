@@ -1,11 +1,18 @@
 # file: codebase_philosophy_auditor.py
 from __future__ import annotations
 
+"""
+Analyze docstring coverage (module/class/function) across a Python codebase.
+
+Outputs a concise plaintext summary by default or structured JSON with --json.
+Designed to be mypy-friendly and resilient to syntax errors in scanned files.
+"""
+
 import ast
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Iterator, List, Optional, Sequence, Union
 
 
 AllowedDocNode = Union[ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef]
@@ -19,7 +26,6 @@ def get_docstring_safe(node: ast.AST) -> Optional[str]:
     node doesn't support docstrings or when no docstring is present.
     """
     if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-        # ast.get_docstring returns Optional[str]
         return ast.get_docstring(node)
     return None
 
@@ -58,15 +64,16 @@ def _iter_defs(tree: ast.AST) -> Iterator[AllowedDocNode]:
 
 
 def _module_name_for(path: Path, root: Path) -> str:
+    """
+    Derive a dotted module name relative to a root directory.
+    Falls back to a filename-based name if path is outside root.
+    """
     try:
         rel = path.resolve().relative_to(root.resolve())
+        return ".".join(Path(rel).with_suffix("").parts)
     except Exception:
-        rel = path.name
-        if isinstance(rel, Path):
-            rel = rel.name
-        return str(rel).replace(".py", "").replace("/", ".").replace("\\", ".")
-    parts = list(rel.with_suffix("").parts)
-    return ".".join(parts)
+        # Fallback: best-effort module-ish name from filename only
+        return path.with_suffix("").name
 
 
 def analyze_file(file_path: Path, *, root: Optional[Path] = None) -> FileMetrics:
@@ -106,8 +113,7 @@ def analyze_file(file_path: Path, *, root: Optional[Path] = None) -> FileMetrics
         path=file_path,
         module_name=module_name,
         definitions=defs,
-        documented_definitions=doc
-umented,
+        documented_definitions= documented,  # fixed: use the local counter
         classes=cls_count,
         functions=fn_count,
         has_module_docstring=has_module_doc,
@@ -119,7 +125,7 @@ def analyze_path(path: Path) -> List[FileMetrics]:
     if path.is_file() and path.suffix == ".py":
         return [analyze_file(path, root=path.parent)]
     out: List[FileMetrics] = []
-    for file in path.rglob("*.py"):
+    for file in sorted(path.rglob("*.py")):
         out.append(analyze_file(file, root=path))
     return out
 
@@ -168,6 +174,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"Analyzed {len(result)} file(s)")
         print(f"Docstring coverage: {total_docd}/{total_defs} = {ratio:.1%}")
         for m in result:
+            # Quiet perfect files to keep output focused
             if not m.undocumented and m.has_module_docstring:
                 continue
             print(f"\n{m.module_name} — doc={m.has_module_docstring}, defs={m.definitions}, covered={m.documented_definitions}")
@@ -179,88 +186,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-# ---------------------------------------------------------------------------
-# file: patches/luxury_video_master_grader_typing.patch
-# Apply with:  git apply patches/luxury_video_master_grader_typing.patch
-# This starts the gradual typing: adds TypedDicts and safe converters.
-# It doesn't change runtime behavior where not adopted yet.
-
-*** a/luxury_video_master_grader.py
---- b/luxury_video_master_grader.py
-@@
--from __future__ import annotations
-+from __future__ import annotations
-+
-+from fractions import Fraction
-+from typing import Any, Dict, List, Mapping, MutableMapping, NotRequired, Optional, TypedDict, Union
-@@
-+# ---- Typed probe metadata (ffprobe-like) ------------------------------------
-+class ProbeStream(TypedDict, total=False):
-+    index: int
-+    codec_type: str  # "video" | "audio" | etc.; keep wide, narrow later
-+    codec_name: str
-+    width: int
-+    height: int
-+    avg_frame_rate: str
-+    r_frame_rate: str
-+    duration: NotRequired[str]
-+    tags: NotRequired[Dict[str, str]]
-+
-+class ProbeFormat(TypedDict, total=False):
-+    format_name: str
-+    duration: str
-+    size: str
-+    bit_rate: str
-+    tags: NotRequired[Dict[str, str]]
-+
-+def _safe_str(val: object) -> Optional[str]:
-+    """Return string value when meaningful; otherwise None (typed helper for mypy)."""
-+    if isinstance(val, str):
-+        return val
-+    if isinstance(val, bytes):
-+        try:
-+            return val.decode("utf-8", errors="ignore")
-+        except Exception:
-+            return None
-+    return None
-+
-+def _to_float(val: object) -> Optional[float]:
-+    """
-+    Best-effort numeric coercion used instead of raw float(val).
-+    Accepts: int/float/Fraction, numeric strings, and "num/den" frame rate strings.
-+    Returns None on failure.
-+    """
-+    if val is None:
-+        return None
-+    if isinstance(val, (int, float)):
-+        return float(val)
-+    if isinstance(val, Fraction):
-+        return float(val)
-+    if isinstance(val, str):
-+        s = val.strip()
-+        if not s:
-+            return None
-+        if "/" in s:  # e.g., "30000/1001"
-+            num, _, den = s.partition("/")
-+            try:
-+                n = float(num.strip())
-+                d = float(den.strip())
-+                return n / d if d else None
-+            except Exception:
-+                return None
-+        try:
-+            return float(s)
-+        except Exception:
-+            return None
-+    return None
-+
-@@
--# ... existing imports and code ...
-+# Replace bare uses like:
-+#   float(meta.get("duration"))  -->  _to_float(meta.get("duration")) or (_to_float(...) or 0.0)
-+#   some_str.lower()             -->  (_safe_str(some_str) or "").lower()
-+# Add local variables annotations where needed, e.g.:
-+#   video: List[ProbeStream] = probe.get("streams", [])
-+#   fmt: ProbeFormat = cast(ProbeFormat, probe.get("format", {}))
-+# These targeted changes eliminate "object has no attribute" / arg-type errors gradually.
