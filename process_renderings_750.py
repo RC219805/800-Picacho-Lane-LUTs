@@ -78,8 +78,8 @@ def _convert_exr_to_jpg(exr_path: Path, jpg_path: Path, *, exposure: float = 1.0
     pt = Imath.PixelType(Imath.PixelType.FLOAT)
     channels = [np.frombuffer(exr_file.channel(c, pt), dtype=np.float32) for c in ("R", "G", "B")]
     exr_file.close()
-    rgb = [ch.reshape(height, width) for ch in channels]
-    rgb = np.stack(rgb, axis=-1)
+    rgb_channels = [ch.reshape(height, width) for ch in channels]
+    rgb = np.stack(rgb_channels, axis=-1)
     x = np.clip(rgb * float(exposure), 0.0, None)
     tonemapped = x / (1.0 + x)
     tonemapped = np.power(np.clip(tonemapped, 0.0, 1.0), 1.0 / float(gamma))
