@@ -38,21 +38,45 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pylint
-          key: ${{ runner.os }}-pylint-${{ hashFiles('.pylintrc', 'pyproject.toml') }}-3.12
+          key: ${{ runner.os }}-pylint-${{ hashFiles('.pylintrc', 'pyproject.toml', 'requirements-ci.txt') }}-3.12
           restore-keys: |
             ${{ runner.os }}-pylint-
 
-      - name: Install dev-lean extras (ensures imports resolve) + pylint
+      - name: Install pinned CI tools + project (lean)
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
           PIP_PROGRESS_BAR: "off"
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev-lean]" pylint
+          pip install -r requirements-ci.txt
+          pip install -e ".[dev-lean]"
 
       - name: Generate legacy shims from tests (fail if new shims are needed)
         run: python tools/gen_legacy_shims.py --fail-on-create
 
+      # --- mypy cache + type checking ---
+      - name: Restore mypy cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-mypy-3.12-${{ hashFiles('pyproject.toml', 'mypy.ini', 'setup.cfg', 'requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-mypy-3.12-
+            ${{ runner.os }}-mypy-
+
+      - name: Type check (mypy)
+        run: |
+          mypy --version
+          mypy .
+
+      - name: Save mypy cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .mypy_cache
+          key: ${{ runner.os }}-mypy-3.12-${{ hashFiles('pyproject.toml', 'mypy.ini', 'setup.cfg', 'requirements-ci.txt') }}
+
+      # --- pylint ---
       - name: Run Pylint
         shell: bash
         run: |
@@ -62,5 +86,4 @@ jobs:
             echo "No Python files to lint."
             exit 0
           fi
-          # Pylint 3 expects logging-format-style in {old,new}; 'percent' is invalid.
           pylint -j 0 --fail-under=8.0 --logging-format-style=old $(tr '\0' ' ' < pyfiles.z)
