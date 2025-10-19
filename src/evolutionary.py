@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Optional
 
 
-class EvolutionStatus(Enum):
+class EvolutionaryStatus(Enum):
     """Machine-friendly status for evolution decisions."""
     STABLE = "stable"
     EVOLUTION_REQUIRED = "evolution_required"
@@ -16,29 +16,29 @@ class EvolutionStatus(Enum):
 @dataclass(frozen=True, slots=True)
 class EvolutionOutcome:
     """Structured outcome of an evolution check."""
-    status: EvolutionStatus
+    status: EvolutionaryStatus
     horizon: date
     mutation_path: str
     today: date
 
     @property
     def is_required(self) -> bool:
-        return self.status is EvolutionStatus.EVOLUTION_REQUIRED
+        return self.status is EvolutionaryStatus.EVOLUTION_REQUIRED
 
     @property
     def due_in_days(self) -> Optional[int]:
-        if self.status is EvolutionStatus.STABLE:
+        if self.status is EvolutionaryStatus.STABLE:
             return max((self.horizon - self.today).days, 0)
         return None
 
     @property
     def overdue_by_days(self) -> Optional[int]:
-        if self.status is EvolutionStatus.EVOLUTION_REQUIRED:
+        if self.status is EvolutionaryStatus.EVOLUTION_REQUIRED:
             return (self.today - self.horizon).days
         return None
 
     def message(self) -> str:
-        if self.status is EvolutionStatus.EVOLUTION_REQUIRED:
+        if self.status is EvolutionaryStatus.EVOLUTION_REQUIRED:
             return f"EVOLUTION REQUIRED: Migrate to {self.mutation_path}"
         return f"STABLE: Current form viable until {self.horizon.isoformat()}"
 
@@ -62,9 +62,9 @@ class EvolutionaryCheckpoint:
     def evaluate(self, *, today: Optional[date] = None) -> EvolutionOutcome:
         reference_date = today or date.today()
         status = (
-            EvolutionStatus.EVOLUTION_REQUIRED
+            EvolutionaryStatus.EVOLUTION_REQUIRED
             if reference_date > self.horizon
-            else EvolutionStatus.STABLE
+            else EvolutionaryStatus.STABLE
         )
         return EvolutionOutcome(
             status=status,
