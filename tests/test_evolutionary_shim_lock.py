@@ -9,7 +9,7 @@ def test_evolutionary_shim_exports_exist_and_match():
     new = importlib.import_module("src.evolutionary")
 
     # Names must exist on the shim
-    for name in ("EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionStatus"):
+    for name in ("EvolutionaryCheckpoint", "EvolutionOutcome", "EvolutionStatus"):
         assert hasattr(shim, name), f"shim missing {name}"
 
     # Identity equality with canonical types
@@ -20,6 +20,6 @@ def test_evolutionary_shim_exports_exist_and_match():
     # __all__ must be exactly these names (order locked)
     assert getattr(shim, "__all__", None) == [
         "EvolutionaryCheckpoint",
-        "EvolutionaryOutcome",
+        "EvolutionOutcome",
         "EvolutionStatus",
     ]
