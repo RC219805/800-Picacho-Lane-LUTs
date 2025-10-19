@@ -1,13 +1,12 @@
 # file: evolutionary_checkpoint.py
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
-__all__ = ["EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionaryStatus"]
-
+__all__ = ["EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionaryStatus", "EvolutionStatus"]
 
 class EvolutionaryStatus(str, Enum):
     """Lifecycle state of an evolutionary step."""
@@ -16,6 +15,9 @@ class EvolutionaryStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+# Compatibility alias so older imports like `EvolutionStatus` still work.
+# This is non-invasive and can be removed later if you standardize on the longer name.
+EvolutionStatus = EvolutionaryStatus
 
 class EvolutionaryOutcome(str, Enum):
     """Result quality of a completed step."""
@@ -35,9 +37,11 @@ class EvolutionaryCheckpoint:
     status: EvolutionaryStatus
     outcome: Optional[EvolutionaryOutcome] = None
     score: Optional[float] = None
-    created_at: datetime = datetime.now(timezone.utc)
+    # Use a default_factory so each instance gets its own timestamp at creation time.
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     notes: Optional[str] = None
-    meta: Dict[str, Any] = None  # intentionally plain dict for JSON-friendliness
+    # Make the intent explicit: meta may be absent (None) or a mapping; keep dict for JSON-friendliness.
+    meta: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Stable, JSON-serializable representation."""
