@@ -12,7 +12,7 @@ import asyncio
 import inspect
 import itertools
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
+from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, cast
 
 
 # --------------------------------------------------------------------
@@ -276,6 +276,8 @@ class QuantumOptimizer:
                         raw = await asyncio.wait_for(raw, timeout=self.evaluation_timeout)  # type: ignore[assignment]
                     else:
                         raw = await raw  # type: ignore[assignment]
+                # At this point, raw is either float or Dict[str, float], not Awaitable
+                raw = cast(float | Dict[str, float], raw)
                 if isinstance(raw, dict):
                     diagnostics = raw
                     reducer = self.score_reducer or (lambda d: sum(d.values()) / max(len(d), 1))
