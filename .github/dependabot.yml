@@ -1,15 +1,72 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
+# file: .github/dependabot.yml
 version: 2
 updates:
+  # ---------------------------- Python (pip) ----------------------------
   - package-ecosystem: "pip"
-    directory: "/"
+    directory: "/"                     # scans requirements*.txt in repo root
     schedule:
       interval: "weekly"
+      day: "sunday"
+      time: "07:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 10
+    versioning-strategy: increase      # bump pins; don't widen ranges by default
+    labels: ["deps", "python", "ci"]
+    reviewers: ["RC219805"]
+    # Group related updates to reduce PR noise
+    groups:
+      ci-tools:
+        applies-to: version-updates
+        patterns:
+          - "pytest*"
+          - "pytest-cov*"
+          - "flake8*"
+          - "pylint*"
+          - "mypy*"
+          - "bandit*"
+          - "radon*"
+          - "black*"
+          - "isort*"
+      imaging-stack:
+        applies-to: version-updates
+        patterns:
+          - "numpy*"
+          - "Pillow*"
+          - "tifffile*"
+          - "imagecodecs*"
+      ml-stack:
+        applies-to: version-updates
+        patterns:
+          - "torch*"
+          - "diffusers*"
+          - "controlnet-aux*"
+          - "realesrgan*"
+    # Avoid surprise breaking upgrades for heavyweight ML libs
+    ignore:
+      - dependency-name: "torch*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "diffusers*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "controlnet-aux*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "realesrgan*"
+        update-types: ["version-update:semver-major"]
+
+  # ------------------------ GitHub Actions workflow ---------------------
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 10
+    labels: ["deps", "github-actions"]
+    reviewers: ["RC219805"]
+    groups:
+      actions-core:
+        applies-to: version-updates
+        patterns:
+          - "actions/*"
+          - "github/codeql-action*"
+          - "codecov/codecov-action*"
