@@ -36,7 +36,7 @@ jobs:
       
       - name: Get changed files
         id: changed
-        uses: tj-actions/changed-files@v40
+        uses: tj-actions/changed-files@v46
         with:
           files: '**.py'
       
