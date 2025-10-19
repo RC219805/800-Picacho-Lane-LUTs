@@ -385,7 +385,7 @@ jobs:
     tags_pattern: ''
 
     # GitHub token used to fetch 
-    # changed files from Github's API. 
+    # changed files from GitHub's API. 
     # Type: string
     # Default: "${{ github.token }}"
     token: ''
