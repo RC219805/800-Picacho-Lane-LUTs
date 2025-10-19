@@ -41,10 +41,17 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           # Install your CI pins (mypy, pytest-cov, flake8, pylint, etc.)
           pip install -r requirements-ci.txt
-          # Optionally pull dev tools (black, isort, bandit, radon) if you keep them here
+          # Optionally pull dev tools (black, isort, bandit, radon)
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
           # Install project deps (lean extras)
           pip install -e ".[dev-lean]"
+
+      - name: Verify pinned tool versions
+        run: |
+          python -m pip show mypy
+          python -m pip show pylint
+          python -m pip show flake8
+          python -m pip show pytest-cov
 
       - name: Generate legacy shims from tests (fail if new shims are needed)
         run: python tools/gen_legacy_shims.py --fail-on-create
@@ -89,6 +96,20 @@ jobs:
         with:
           path: .mypy_cache
           key: ${{ runner.os }}-mypy-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'mypy.ini', 'setup.cfg', 'requirements-ci.txt') }}
+
+      # ---------------- Sanity imports (fail early) ----------------
+      - name: Sanity imports (fail early with context)
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          try:
+              importlib.import_module('src.evolutionary')
+              importlib.import_module('evolutionary_checkpoint')
+              print("✅ import sanity OK")
+          except Exception as e:
+              print(f"❌ Import sanity failed: {e}")
+              sys.exit(2)
+          PY
 
       # ---------------- Security & Complexity (once) ----------------
       - name: Run Bandit Security Scan
