@@ -50,7 +50,7 @@ jobs:
       # --- sanity imports for Python repos (fail early with context) ---
       - name: Set up Python (for sanity import)
         if: matrix.language == 'python'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -70,7 +70,7 @@ jobs:
 
       # Initialize CodeQL with extended + quality suites.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -84,6 +84,6 @@ jobs:
           exit 1  # Deliberate until you replace with real build
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
