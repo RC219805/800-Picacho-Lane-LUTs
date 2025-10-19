@@ -294,7 +294,7 @@ def image_to_float(  # pylint: disable=too-many-locals,too-many-branches,too-man
         )
 
         if return_format == "tuple3":
-            return result.array, result.dtype, result.alpha
+            return result.array, result.dtype, result.alpha, None
         if return_format == "tuple4":
             return result.array, result.dtype, result.alpha, result.base_channels
         allowed = ("object", "tuple3", "tuple4")
