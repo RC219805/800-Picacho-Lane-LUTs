@@ -119,7 +119,7 @@ def _normalise_directives(name: str, directives: object) -> List[EvolutionDirect
         raise TypeError(f"Directives for discipline '{name}' must be a sequence of steps")
 
     result: List[EvolutionDirective] = []
-    for entry in directives:  # type: ignore[union-attr]
+    for entry in directives:
         if isinstance(entry, Mapping):
             if len(entry) != 1:
                 raise TypeError(
