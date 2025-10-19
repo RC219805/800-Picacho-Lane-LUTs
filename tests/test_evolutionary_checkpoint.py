@@ -42,7 +42,7 @@ def test_today_defaults_to_current_date(monkeypatch: pytest.MonkeyPatch) -> None
         horizon=date(2024, 1, 10), mutation_path="lux/v3/pipeline"
     )
 
-    monkeypatch.setattr("evolutionary_checkpoint.date", _FrozenDate)
+    monkeypatch.setattr("src.evolutionary.date", _FrozenDate)
 
     message = checkpoint.evolve_or_alert()
 
