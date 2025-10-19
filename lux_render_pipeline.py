@@ -23,7 +23,6 @@ except Exception:  # pragma: no cover
                 "CLI features require the optional dependency 'typer'. "
                 "Library functions can be imported without it."
             )
-    typer = _TyperShim()  # type: ignore
 # -------------------------------------------------------------------------------------
 
 # --- stdlib ---
