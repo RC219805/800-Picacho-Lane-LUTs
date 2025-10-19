@@ -18,12 +18,12 @@ from PIL import Image
 try:  # Optional high-fidelity TIFF writer
     import tifffile  # type: ignore
 except (ImportError, ModuleNotFoundError):  # pragma: no cover - optional dependency
-    tifffile = None
+    tifffile = None  # type: ignore[assignment]
 
 try:  # Optional codec pack used by tifffile for certain compressions
     import imagecodecs  # type: ignore  # pylint: disable=import-error
 except (ImportError, ModuleNotFoundError):  # pragma: no cover - optional dependency
-    imagecodecs = None
+    imagecodecs = None  # type: ignore[assignment]
 
 LOGGER = logging.getLogger("luxury_tiff_batch_processor")
 
@@ -39,6 +39,7 @@ class ProcessingCapabilities:
 
     def __init__(self, tifffile_module: Any | None | object = _SENTINEL) -> None:
         """Initialise capability detection."""
+        self._tifffile: Any
         if tifffile_module is self._SENTINEL:
             self._tifffile = tifffile
         else:
@@ -527,7 +528,7 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
     photometric, extrasample_needed = _infer_photometric_and_extras(array_to_write)
 
     if use_tifffile:
-        tiff_kwargs = {
+        tiff_kwargs: Dict[str, Any] = {
             "photometric": photometric,
             "compression": writer_compression,
             "metadata": None,
@@ -567,7 +568,7 @@ def save_image(  # pylint: disable=too-many-arguments,too-many-positional-argume
         mode = "L"
 
     image = Image.fromarray(array_to_write, mode=mode)
-    save_kwargs = {"compression": compression}
+    save_kwargs: Dict[str, Any] = {"compression": compression}
     if metadata is not None:
         normalised_metadata = {}
         for key, value in metadata.items():
@@ -604,9 +605,9 @@ class ProcessingContext:
         self._staged_path = self._temp_path()
         return self._staged_path
 
-    def __exit__(self, exc_type, exc, tb) -> bool:
+    def __exit__(self, exc_type, exc, tb) -> None:
         if self._staged_path is None:
-            return False
+            return
         staged = self._staged_path
         self._staged_path = None
         if exc_type is None:
@@ -619,7 +620,6 @@ class ProcessingContext:
         else:
             with contextlib.suppress(FileNotFoundError):
                 staged.unlink()
-        return False
 
 
 __all__ = [
