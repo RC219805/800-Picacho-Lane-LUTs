@@ -15,3 +15,5 @@ pytest-cov>=4,<5
 flake8>=7,<8
 pylint>=3,<4
 mypy>=1.8,<2
+black>=24.0,<26
+isort>=5.12,<6
