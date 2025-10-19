@@ -26,7 +26,7 @@ import sys
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Callable, TypedDict, Any, cast
+from typing import Dict, Iterable, List, Optional, Tuple, TypedDict, Any, cast
 from typing_extensions import NotRequired
 
 # ---------------------------- Typed ffprobe data -------------------------------
