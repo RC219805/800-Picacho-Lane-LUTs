@@ -26,7 +26,7 @@ import sys
 from dataclasses import dataclass, field
 from fractions import Fraction
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple, Callable, cast, Any
+from typing import Dict, Iterable, List, Optional, Tuple, cast, Any
 
 # ---------------------------- Data Models & Presets ----------------------------
 
