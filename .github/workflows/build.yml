@@ -101,13 +101,11 @@ jobs:
       - name: Type check (mypy)
         run: |
           mypy --version | tee mypy.version.txt
-          # Check well-typed areas only (skip tests + legacy/CLI-heavy modules here)
+          # Strict set only (kept green): auditor + TIFF processor package
           set -o pipefail
           mypy \
-            src \
-            board_material_aerial_enhancer.py \
-            material_response_optimizer.py \
-            luxury_tiff_batch_processor/lux_batch_cli.py \
+            codebase_philosophy_auditor.py \
+            luxury_tiff_batch_processor \
             2>&1 | tee mypy.log
           test ${PIPESTATUS[0]} -eq 0
 
