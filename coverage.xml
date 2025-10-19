@@ -1,180 +1,91 @@
-# path: .coveragerc
-[run]
-omit =
-    # generated & caches
-    **/__pycache__/**
-    *.pyc
-    # test fixtures
-    tests/fixtures/*
-[report]
-exclude_lines =
-    pragma: no cover
-    if __name__ == .__main__.:
-
-# path: tests/test_codebase_philosophy_auditor_cli_ext.py
-import json
-from pathlib import Path
-import textwrap
-
-import pytest
-
-import codebase_philosophy_auditor as cpa
-
-
-def _write(tmp_path: Path, name: str, src: str) -> Path:
-    p = tmp_path / name
-    p.write_text(textwrap.dedent(src), encoding="utf-8")
-    return p
-
-
-def test_cli_json_and_fail_on_all(tmp_path: Path, capsys: pytest.CaptureFixture):
-    mod = _write(
-        tmp_path,
-        "bad_mod.py",
-        """
-        # no module docstring on purpose
-        from x import *  # wildcard
-        def public_func():  # undocumented public api
-            return 1
-        """,
-    )
-    # JSON format
-    code = cpa._main([str(mod), "--format", "json"])
-    out = json.loads(capsys.readouterr().out)
-    assert any(v["principle"] == "module_docstring" for v in out)
-    assert any(v["principle"] == "no_wildcard_imports" for v in out)
-    assert any(v["principle"] == "public_api_documentation" for v in out)
-    assert code == 0  # no fail-on yet
-
-    # Now fail on any
-    code2 = cpa._main([str(mod), "--format", "json", "--fail-on", "all"])
-    assert code2 == 2
-
-
-def test_decision_proximity_allows_escape(tmp_path: Path):
-    mod = _write(
-        tmp_path,
-        "escaped.py",
-        '''
-        # Decision: undocumented_public_api - inherited docs
-        def public_ok(): pass
-        '''
-    )
-    code = cpa._main([str(mod)])
-    # text output "No violations found."
-    assert code == 0
-
-
-# path: tests/test_coastal_estate_render_additional.py
-import types
-import pytest
-
-import coastal_estate_render as cer
-
-
-class _FakePipeline(types.ModuleType):
-    def __init__(self):
-        super().__init__("lux_render_pipeline")
-        self.calls = []
-    def main(self, **kwargs):
-        self.calls.append(kwargs)
-
-
-def test_render_passes_expected_flags(monkeypatch, tmp_path):
-    fake = _FakePipeline()
-    monkeypatch.setattr(cer, "import_module", lambda name: fake)
-    inp = "in.png"
-    out = tmp_path.as_posix()
-    cer.render_coastal_estate(
-        input_image=inp,
-        output_dir=out,
-        seed=123,
-        export_4k=True,
-        use_realesrgan=True,
-        extra_options={"custom": 1, "nested": {"k": "v"}},
-    )
-    assert fake.calls and fake.calls[-1]["input"] == inp
-    assert fake.calls[-1]["out"] == out
-    assert fake.calls[-1]["w4k"] is True
-    assert fake.calls[-1]["use_realesrgan"] is True
-    assert fake.calls[-1]["seed"] == 123
-    assert fake.calls[-1]["custom"] == 1
-    assert fake.calls[-1]["nested"] == {"k": "v"}
-
-
-def test_render_extra_conflict_raises(monkeypatch):
-    monkeypatch.setattr(cer, "import_module", lambda name: _FakePipeline())
-    with pytest.raises(ValueError):
-        cer.render_coastal_estate("x.png", extra_options={"input": "conflict"})
-
-
-# path: tests/test_luxury_tiff_batch_processor_cli_smoke.py
-from pathlib import Path
-from PIL import Image
-import luxury_tiff_batch_processor.cli as lcli
-
-def _make_tiff(dirpath: Path) -> Path:
-    p = dirpath / "tiny.tiff"
-    Image.new("RGB", (2, 2), (128, 128, 128)).save(p, format="TIFF", compression="tiff_lzw")
-    return p
-
-def test_lux_batch_dry_run_smoke(tmp_path):
-    inp = tmp_path / "input"
-    out = tmp_path / "out"
-    inp.mkdir()
-    _make_tiff(inp)
-    # run CLI main in dry-run single process, no progress
-    lcli.main([str(inp), str(out), "--preset", "signature", "--dry-run", "--workers", "1", "--no-progress"])
-
-
-# path: tests/test_color_space_contract.py
-import json
-import pytest
-
-# Skip gracefully if module isn't present in this checkout.
-csc = pytest.importorskip("color_space_contract")
-
-def test_compatibility_aliases_and_report():
-    sdr = csc.ColorSpace.from_tokens(name="Rec.709", primaries="bt.709", transfer="iec61966-2-1", matrix="bt.709-matrix")
-    tag = csc.ColorSpace.from_tokens(name="srgb", primaries="rec709", transfer="srgb", matrix="bt709")
-    assert sdr.compatible_with(tag)
-
-    hdr = csc.ColorSpace.from_tokens(name="Rec.2020", primaries="bt2020", transfer="pq", matrix="bt2020nc")
-    tagged = csc.ColorSpace.from_tokens(name="bt2020", primaries="bt2020", transfer="arib-std-b67", matrix="bt2020ncl")
-    reasons = hdr.mismatch_reasons(tagged)
-    assert "transfer mismatch" in " ".join(reasons)
-
-def test_contract_threshold_and_errors():
-    ok = csc.ColorSpaceContract(
-        content_space=csc.ColorSpace.from_tokens(name="bt709"),
-        tagged_space=csc.ColorSpace.from_tokens(name="bt709"),
-        confidence=0.8,
-    )
-    assert ok.validate_coherence()
-    report = ok.coherence_report()
-    assert report["coherent"] is True
-
-    low = csc.ColorSpaceContract(
-        content_space=csc.ColorSpace.from_tokens(name="bt709"),
-        tagged_space=csc.ColorSpace.from_tokens(name="bt2020"),
-        confidence=0.5,
-    )
-    assert low.validate_coherence(minimum_confidence=0.75) is False
-    with pytest.raises(ValueError):
-        csc.ColorSpaceContract(ok.content_space, ok.tagged_space, confidence=1.2).validate_coherence()
-    with pytest.raises(ValueError):
-        ok.validate_coherence(minimum_confidence=2.0)
-
-
-# path: tests/test_import_smokes_zero_modules.py
-# Fast import-only smokes to register lines for modules at ~0% in coverage.
-def test_import_presence_v1_2_smokes():
-    __import__("presence_security_v1_2.__init__")
-    __import__("presence_security_v1_2.countermeasures")
-    __import__("presence_security_v1_2.presence_cli_v1_2")
-    __import__("presence_security_v1_2.presence_params")
-    __import__("presence_security_v1_2.watermarking")
-
-def test_import_dreaming_pipeline_and_color_science():
-    __import__("dreaming_pipeline")
-    __import__("color_science")
+<?xml version="1.0" ?>
+<coverage version="7.11.0" timestamp="1760859986339" lines-valid="68" lines-covered="0" line-rate="0" branches-covered="0" branches-valid="0" branch-rate="0" complexity="0">
+	<!-- Generated by coverage.py: https://coverage.readthedocs.io/en/7.11.0 -->
+	<!-- Based on https://raw.githubusercontent.com/cobertura/web/master/htdocs/xml/coverage-04.dtd -->
+	<sources>
+		<source>/home/runner/work/800-Picacho-Lane-LUTs/800-Picacho-Lane-LUTs/src</source>
+	</sources>
+	<packages>
+		<package name="." line-rate="0" branch-rate="0" complexity="0">
+			<classes>
+				<class name="__init__.py" filename="__init__.py" complexity="0" line-rate="1" branch-rate="0">
+					<methods/>
+					<lines/>
+				</class>
+				<class name="evolutionary.py" filename="evolutionary.py" complexity="0" line-rate="0" branch-rate="0">
+					<methods/>
+					<lines>
+						<line number="2" hits="0"/>
+						<line number="4" hits="0"/>
+						<line number="5" hits="0"/>
+						<line number="6" hits="0"/>
+						<line number="7" hits="0"/>
+						<line number="10" hits="0"/>
+						<line number="12" hits="0"/>
+						<line number="13" hits="0"/>
+						<line number="16" hits="0"/>
+						<line number="17" hits="0"/>
+						<line number="19" hits="0"/>
+						<line number="20" hits="0"/>
+						<line number="21" hits="0"/>
+						<line number="22" hits="0"/>
+						<line number="24" hits="0"/>
+						<line number="25" hits="0"/>
+						<line number="26" hits="0"/>
+						<line number="28" hits="0"/>
+						<line number="29" hits="0"/>
+						<line number="30" hits="0"/>
+						<line number="31" hits="0"/>
+						<line number="32" hits="0"/>
+						<line number="34" hits="0"/>
+						<line number="35" hits="0"/>
+						<line number="36" hits="0"/>
+						<line number="37" hits="0"/>
+						<line number="38" hits="0"/>
+						<line number="40" hits="0"/>
+						<line number="41" hits="0"/>
+						<line number="42" hits="0"/>
+						<line number="43" hits="0"/>
+						<line number="45" hits="0"/>
+						<line number="46" hits="0"/>
+						<line number="49" hits="0"/>
+						<line number="50" hits="0"/>
+						<line number="52" hits="0"/>
+						<line number="53" hits="0"/>
+						<line number="55" hits="0"/>
+						<line number="56" hits="0"/>
+						<line number="57" hits="0"/>
+						<line number="58" hits="0"/>
+						<line number="59" hits="0"/>
+						<line number="60" hits="0"/>
+						<line number="62" hits="0"/>
+						<line number="63" hits="0"/>
+						<line number="64" hits="0"/>
+						<line number="69" hits="0"/>
+						<line number="76" hits="0"/>
+						<line number="77" hits="0"/>
+						<line number="80" hits="0"/>
+						<line number="82" hits="0"/>
+						<line number="83" hits="0"/>
+						<line number="84" hits="0"/>
+						<line number="85" hits="0"/>
+						<line number="86" hits="0"/>
+						<line number="87" hits="0"/>
+						<line number="88" hits="0"/>
+						<line number="90" hits="0"/>
+						<line number="91" hits="0"/>
+						<line number="92" hits="0"/>
+						<line number="93" hits="0"/>
+						<line number="94" hits="0"/>
+						<line number="96" hits="0"/>
+						<line number="100" hits="0"/>
+						<line number="101" hits="0"/>
+						<line number="103" hits="0"/>
+						<line number="104" hits="0"/>
+						<line number="118" hits="0"/>
+					</lines>
+				</class>
+			</classes>
+		</package>
+	</packages>
+</coverage>
