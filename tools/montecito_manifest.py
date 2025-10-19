@@ -160,7 +160,8 @@ def write_manifest(
                     else:
                         raise
 
-            for e, md5 in zip(files, results):
+            for e, md5_result in zip(files, results):
+                md5: Optional[str] = md5_result
                 if md5 is None or md5 == "":
                     if skip_errors:
                         continue

@@ -199,7 +199,7 @@ def _parse_probe_duration(raw: object) -> Optional[float]:
     if raw in (None, ""):
         return None
     try:
-        value = float(raw)
+        value = float(cast(float, raw))
     except (TypeError, ValueError):
         return None
     if not math.isfinite(value):
@@ -609,7 +609,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     current = new_label
     graded_label = current
 
-    lut_strength = float(config.get("lut_strength", 1.0))
+    lut_strength = float(cast(float, config.get("lut_strength", 1.0)))
     if lut_strength < 0.999:
         blend_label = next_label()
         nodes.append(

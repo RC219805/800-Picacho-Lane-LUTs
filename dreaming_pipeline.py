@@ -12,7 +12,7 @@ import asyncio
 import inspect
 import itertools
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Sequence
+from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Sequence, cast
 
 
 # --------------------------------------------------------------------
@@ -273,15 +273,15 @@ class QuantumOptimizer:
                 raw = performance_metrics(hypothesis)
                 if inspect.isawaitable(raw):
                     if self.evaluation_timeout is not None:
-                        raw = await asyncio.wait_for(raw, timeout=self.evaluation_timeout)  # type: ignore[assignment]
+                        raw = await asyncio.wait_for(raw, timeout=self.evaluation_timeout)
                     else:
-                        raw = await raw  # type: ignore[assignment]
+                        raw = await raw
                 if isinstance(raw, dict):
                     diagnostics = raw
                     reducer = self.score_reducer or (lambda d: sum(d.values()) / max(len(d), 1))
                     score = float(reducer(diagnostics))
                 else:
-                    score = float(raw)
+                    score = float(cast(float, raw))
                     diagnostics = {"score": score}
             except asyncio.TimeoutError:
                 # Why: make timeouts visible and penalize stalled hypotheses.

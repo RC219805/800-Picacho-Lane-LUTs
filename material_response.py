@@ -14,7 +14,7 @@ from collections.abc import Sequence as SequenceABC
 from dataclasses import dataclass
 import math
 import re
-from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple, cast
 
 import numpy as np
 
@@ -48,7 +48,7 @@ def _coerce_matrix(data: Sequence[Sequence[float]]) -> List[List[float]]:
             rows.append(coerced_row)
         return rows
 
-    coerced = [float(value) for value in data]
+    coerced = [float(cast(float, value)) for value in data]
     if len(coerced) == 0:
         raise ValueError("material data cannot be empty")
     return [coerced]
@@ -339,7 +339,7 @@ class EmotionalResonance:
         if not self.cultural_background:
             raise ValueError("cultural_background must be a non-empty string")
 
-    def as_dict(self) -> Dict[str, float]:
+    def as_dict(self) -> Dict[str, float | str]:
         """Return the resonance as a serialisable mapping."""
         return {
             "awe": self.awe,
@@ -631,13 +631,13 @@ def violates(decision: str, tenet: str) -> bool:
         "crush",
         "erase",
     }
-    keywords = _extract_keywords(tenet_lower)
+    keywords_list: List[str] = _extract_keywords(tenet_lower)
 
     for negation in negating_words:
         if negation in decision_lower:
-            if any(f"{negation} {keyword}" in decision_lower for keyword in keywords):
+            if any(f"{negation} {keyword}" in decision_lower for keyword in keywords_list):
                 return True
-            for keyword in keywords:
+            for keyword in keywords_list:
                 if keyword in decision_lower:
                     return True
 
@@ -821,8 +821,8 @@ def compose_operations(*operations: OperationLike, size: int = 3, dtype: np.dtyp
 
         name: str | None = None
 
-        if callable(operation):  # type: ignore[call-arg]
-            resolved = operation(size)  # type: ignore[misc]
+        if callable(operation):
+            resolved = operation(size)
             name = getattr(operation, "__name__", None)
             return _ensure_matrix(resolved, size), name
 
@@ -993,7 +993,7 @@ class QuantumMaterialResponse:
 
         coherence_map = self._apply_coherence(amplitude_normalised, context_wave)
         entanglement_matrix = self._entanglement_matrix(coherence_map, frequency_domain)
-        conflict_resolution = self.identify_and_resolve_conflicts(coherence_map, context_wave)
+        conflict_resolution = self.identify_and_resolve_conflicts(cast(Sequence[Sequence[float]], coherence_map), context_wave)
         collapse_guidance = self._collapse_guidance(conflict_resolution, context_wave)
 
         return {

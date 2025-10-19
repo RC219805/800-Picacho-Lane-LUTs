@@ -165,13 +165,17 @@ def collect_philosophy_violations(
     summaries: Dict[str, PrincipleSummary] = {}
 
     for module_path in _iter_python_files(paths):
-        violations = auditor.audit_module(module_path)
+        try:
+            text = module_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        violations = auditor.scan_text(module_path, text)
         for violation in violations:
-            summary = summaries.get(violation.principle)
+            summary = summaries.get(violation.rule)
             location = _format_violation_location(module_path, violation)
             if summary is None:
-                summaries[violation.principle] = PrincipleSummary(
-                    principle=violation.principle, count=1, examples=[location]
+                summaries[violation.rule] = PrincipleSummary(
+                    principle=violation.rule, count=1, examples=[location]
                 )
             else:
                 summary.count += 1

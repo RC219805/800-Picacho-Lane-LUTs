@@ -230,7 +230,7 @@ def _parse_probe_duration(raw: object) -> Optional[float]:
     if raw in (None, ""):
         return None
     try:
-        value = float(raw)  # accepts str/num
+        value = float(cast(float, raw))  # accepts str/num
     except (TypeError, ValueError):
         return None
     if not math.isfinite(value):
@@ -244,9 +244,9 @@ def summarize_probe(data: ProbeData) -> str:
     duration = fmt.get("duration")
     streams = data.get("streams", [])
     video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
-    video: ProbeStream = video_stream if video_stream is not None else {}  # type: ignore[assignment]
+    video: ProbeStream = video_stream if video_stream is not None else {}
     audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
-    audio: ProbeStream = audio_stream if audio_stream is not None else {}  # type: ignore[assignment]
+    audio: ProbeStream = audio_stream if audio_stream is not None else {}
     pieces: List[str] = []
 
     numeric_duration = _parse_probe_duration(duration)
@@ -306,7 +306,7 @@ def extract_video_stream(probe: ProbeData) -> ProbeStream:
     """Return the first video stream dictionary from an ffprobe result."""
     streams = probe.get("streams", [])
     result = next((s for s in streams if s.get("codec_type") == "video"), None)
-    return result if result is not None else {}  # type: ignore[return-value]
+    return result if result is not None else {}
 
 # --------------------------- HDR / Color Tag Utilities -------------------------
 
@@ -630,7 +630,7 @@ def build_filter_graph(config: Dict[str, object]) -> Tuple[str, str]:
     current = new_label
     graded_label = current
 
-    lut_strength = float(config.get("lut_strength", 1.0))
+    lut_strength = float(cast(float, config.get("lut_strength", 1.0)))
     if lut_strength < 0.999:
         blend_label = next_label()
         nodes.append(
