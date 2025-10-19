@@ -19,5 +19,5 @@ def test_evolutionary_checkpoint_shim_is_strict():
     assert public == expected, f"Unexpected public names: {sorted(public - expected)}"
 
     # __all__ must be exactly these names, fixed order (guard accidental edits)
-    expected_all = ["EvolutionaryCheckpoint", "EvolutionaryOutcome", "EvolutionStatus"]
+    expected_all = ["EvolutionaryCheckpoint", "EvolutionOutcome", "EvolutionStatus"]
     assert getattr(sh, "__all__", None) == expected_all
