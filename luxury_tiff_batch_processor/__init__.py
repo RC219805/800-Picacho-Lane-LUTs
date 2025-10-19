@@ -53,6 +53,9 @@ __all__ = [
     "float_to_dtype_array",
     "image_to_float",
     "save_image",
+    # compatibility (legacy argparse-style API)
+    "parse_args",
+    "run_pipeline",
     # meta
     "__version__",
 ]
@@ -79,6 +82,9 @@ _EXPORTS = {
     "float_to_dtype_array": ("luxury_tiff_batch_processor.io_utils", "float_to_dtype_array"),
     "image_to_float": ("luxury_tiff_batch_processor.io_utils", "image_to_float"),
     "save_image": ("luxury_tiff_batch_processor.io_utils", "save_image"),
+    # compat (legacy argparse-style API)
+    "parse_args": ("luxury_tiff_batch_processor.compat", "parse_args"),
+    "run_pipeline": ("luxury_tiff_batch_processor.compat", "run_pipeline"),
     # meta
     "__version__": (__name__, "__version__"),
 }
@@ -116,6 +122,10 @@ if TYPE_CHECKING:  # pragma: no cover
         app,
         lux_batch,
         main,
+    )
+    from .compat import (  # noqa: F401
+        parse_args,
+        run_pipeline,
     )
     from .io_utils import (  # noqa: F401
         FloatDynamicRange,
