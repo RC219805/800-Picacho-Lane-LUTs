@@ -145,6 +145,8 @@ class RenderEnhancementPlanner:
         show_progress: bool = False,
         respect_icc: bool = True,
     ) -> Path:
+        # Note: jpeg_subsampling, show_progress, and respect_icc are accepted for API compatibility
+        # but not currently used by enhance_aerial
         return enhance_aerial(
             input_path=input_path,
             output_path=output_path,
@@ -154,9 +156,6 @@ class RenderEnhancementPlanner:
             target_width=target_width,
             strength=self.strength,
             jpeg_quality=jpeg_quality,
-            jpeg_subsampling=jpeg_subsampling,
-            show_progress=show_progress,
-            respect_icc=respect_icc,
             palette=self.palette,
         )
 

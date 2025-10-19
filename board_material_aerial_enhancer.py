@@ -778,13 +778,10 @@ def _print_header(inp: Path, out: Path, k: int, pal_len: int) -> None:
     print(f"Resolution: 4K (4096px width)")
     print(f"Materials: MBAR-approved palette ({pal_len} colors), k={k}\n")
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    try:
-        import typer  # lazy import for optional dep
-    except Exception:
-        print("This CLI requires 'typer'. Install with: pip install typer", flush=True)
-        return 2
-
+# Create app at module level for testability with CliRunner
+try:
+    import typer  # lazy import for optional dep
+    
     app = typer.Typer(add_completion=False, no_args_is_help=True, help="MBAR aerial enhancer")
 
     @app.command("enhance")
@@ -817,7 +814,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"✅ File size: {_format_bytes(result.stat().st_size)}")
         except Exception:
             pass
+except ImportError:
+    app = None  # type: ignore
 
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    if app is None:
+        print("This CLI requires 'typer'. Install with: pip install typer", flush=True)
+        return 2
     return app(standalone_mode=True)
 
 if __name__ == "__main__":
