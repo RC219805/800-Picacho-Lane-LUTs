@@ -42,7 +42,7 @@ exr = ["OpenEXR>=2.5,<4", "Imath>=3.1,<4"]
 # Full dev toolchain
 dev = [
     "pytest>=7.3,<9",
-    "pytest-cov>=4,<5",      # <-- added
+    "pytest-cov>=4,<5",
     "ruff>=0.5,<1",
     "black>=24,<25",
     "mypy>=1.8,<2",
@@ -59,7 +59,7 @@ dev-lean = [
     "imagecodecs>=2023.9.18,<2025",
     "tqdm>=4.66,<5",
     "pytest>=8,<9",
-    "pytest-cov>=4,<5",      # <-- added
+    "pytest-cov>=4,<5",
 ]
 
 all = [
@@ -82,6 +82,7 @@ presence = "picacho_lane_luts.presence_cli_v1_3:main"
 mr-blueprint = "picacho_lane_luts.mr_blueprint_cli:main"
 process-renderings-750 = "picacho_lane_luts.process_renderings_750:main"
 prophetic = "picacho_lane_luts.prophetic_orchestrator:main"
+lux-batch = "luxury_tiff_batch_processor.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -89,6 +90,13 @@ exclude = ["tests*", "input_images", "processed_images"]
 
 [tool.setuptools.package-data]
 picacho_lane_luts = ["**/*.cube", "**/*.png", "**/*.jpg", "assets/**/*"]
+luxury_tiff_batch_processor = [
+  "luts/**/*.cube",
+  "luts/**/*.CUBE",
+  "luts/**/*.png",
+  "luts/**/*.jpg",
+  "luts/**/*.txt"
+]
 
 [tool.pylint.main]
 max-args = 8
