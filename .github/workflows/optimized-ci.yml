@@ -1,4 +1,6 @@
 name: Optimized CI
+permissions:
+  contents: read
 
 on:
   push:
