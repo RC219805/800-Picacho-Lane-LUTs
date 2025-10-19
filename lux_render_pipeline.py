@@ -19,7 +19,7 @@ try:  # keep tests importable without typer
 except Exception:  # pragma: no cover
     class _TyperShim:
         def __getattr__(self, _):
-            raise RuntimeError(
+            raise AttributeError(
                 "CLI features require the optional dependency 'typer'. "
                 "Library functions can be imported without it."
             )
