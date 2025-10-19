@@ -2,9 +2,8 @@
 """Typer-based batch CLI for luxury TIFF processing.
 
 Install an entrypoint like:
-    lux-batch = luxury_tiff_batch_processor.lux_batch_cli:main
+    lux-batch = luxury_tiff_batch_processor.cli:main
 """
-
 from __future__ import annotations
 
 import json
@@ -36,7 +35,6 @@ AppMethod = Literal["auto", "vectorized", "multiprocessing"]
 
 app = typer.Typer(name="lux-batch", no_args_is_help=True, add_completion=False)
 
-
 # --------------------------- internal helpers (why: robustness) ---------------
 
 def _ensure_mutually_exclusive(preset: Optional[str], preset_file: Optional[Path]) -> None:
@@ -45,10 +43,8 @@ def _ensure_mutually_exclusive(preset: Optional[str], preset_file: Optional[Path
     if not preset and not preset_file:
         raise typer.BadParameter("One of --preset or --preset-file is required.")
 
-
 def _is_tiff(p: Path) -> bool:
     return p.suffix.lower() in {".tif", ".tiff"}
-
 
 def _collect_inputs(sources: Sequence[Path]) -> List[Tuple[Path, Path]]:
     """Return list of (input_path, anchor_root). Anchor is used for mirroring."""
@@ -62,22 +58,18 @@ def _collect_inputs(sources: Sequence[Path]) -> List[Tuple[Path, Path]]:
                     pairs.append((p.resolve(), src.resolve()))
     return pairs
 
-
 def _suffix_for_outputs(uniform_name: Optional[str]) -> str:
     return (uniform_name or "lux").strip().replace(" ", "_")
-
 
 def _build_output_path(out_root: Path, inp: Path, anchor: Path, suffix: str) -> Path:
     rel = inp.relative_to(anchor)
     new_name = f"{rel.stem}_{suffix}{rel.suffix}"
     return (out_root / rel.parent / new_name).resolve()
 
-
 def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
-
-def _extract_array(image_result) -> NDArray[np.float32]:
+def _extract_array(image_result) -> "NDArray[np.float32]":
     # Why: tolerate minor IO result-shape variations without breaking.
     import numpy as np  # lazy import
     for attr in ("array", "arr", "data"):
@@ -89,7 +81,6 @@ def _extract_array(image_result) -> NDArray[np.float32]:
         return image_result["array"].astype("float32", copy=False)
     raise RuntimeError("Unsupported ImageToFloatResult; expected an '.array' field.")
 
-
 def _safe_save(path: Path, array, reference) -> None:
     # Why: preserve metadata when available; degrade gracefully if signature changes.
     try:
@@ -100,12 +91,10 @@ def _safe_save(path: Path, array, reference) -> None:
         except TypeError:
             save_image(path, array)  # type: ignore[misc]
 
-
 def _settings_from_dict(d: Dict[str, object]) -> AdjustmentSettings:
     valid = {f.name for f in fields(AdjustmentSettings)}
     filtered = {k: v for k, v in d.items() if k in valid}
     return AdjustmentSettings(**filtered)
-
 
 def _load_preset_file(
     preset_file: Path,
@@ -159,6 +148,28 @@ def _load_preset_file(
 
     raise typer.BadParameter("Unrecognized preset-file schema.")
 
+# --------------------------- top-level worker (picklable) ----------------------
+
+def _worker_task(
+    idx: int,
+    inputs: Sequence[Tuple[Path, Path]],
+    outputs: Sequence[Path],
+    overwrite: bool,
+    single_settings: Sequence[AdjustmentSettings],
+) -> Tuple[int, Optional[str]]:
+    """Process one image entry; returns (index, error-message-or-None)."""
+    p_in, _anchor = inputs[idx]
+    p_out = outputs[idx]
+    if p_out.exists() and not overwrite:
+        return idx, None
+    try:
+        res = image_to_float(p_in)
+        arr = _extract_array(res)
+        out = apply_adjustments(arr, single_settings[idx])
+        _safe_save(p_out, out, res)
+        return idx, None
+    except Exception as exc:  # keep other items running
+        return idx, f"{p_in} → {exc}"
 
 # --------------------------------- CLI ---------------------------------------
 
@@ -208,7 +219,7 @@ def lux_batch(
         from collections import defaultdict
         import numpy as np  # lazy import
 
-        buckets: Dict[Tuple[int, int], List[Tuple[int, NDArray[np.float32], object]]] = defaultdict(list)
+        buckets: Dict[Tuple[int, int], List[Tuple[int, "NDArray[np.float32]", object]]] = defaultdict(list)
         for idx, (inp, _anchor) in enumerate(inputs):
             res = image_to_float(inp)
             arr = _extract_array(res)
@@ -250,26 +261,12 @@ def lux_batch(
         # Per-file settings: allow multiprocessing; each worker loads/saves its own file.
         from concurrent.futures import ProcessPoolExecutor, as_completed
 
-        def _task(idx: int) -> Tuple[int, Optional[str]]:
-            p_in, _anchor = inputs[idx]
-            p_out = outputs[idx]
-            if p_out.exists() and not overwrite:
-                return idx, None
-            try:
-                res = image_to_float(p_in)
-                arr = _extract_array(res)
-                out = apply_adjustments(arr, settings[idx])
-                _safe_save(p_out, out, res)
-                return idx, None
-            except Exception as exc:  # why: isolate failures; continue rest
-                return idx, f"{p_in} → {exc}"
-
         n = len(inputs)
         use_mp = (method == "multiprocessing") or (method == "auto" and n >= 8)
         if use_mp:
             max_workers = workers or max(1, (os.cpu_count() or 1))
             with ProcessPoolExecutor(max_workers=max_workers) as ex:
-                futs = [ex.submit(_task, i) for i in range(n)]
+                futs = [ex.submit(_worker_task, i, inputs, outputs, overwrite, settings) for i in range(n)]
                 for fut in as_completed(futs):
                     idx, err = fut.result()
                     if err:
@@ -279,7 +276,7 @@ def lux_batch(
                         typer.echo(str(outputs[idx]))
         else:
             for i in range(n):
-                idx, err = _task(i)
+                idx, err = _worker_task(i, inputs, outputs, overwrite, settings)
                 if err:
                     failures += 1
                     typer.secho(f"Failed: {err}", fg=typer.colors.RED)
@@ -289,10 +286,8 @@ def lux_batch(
     if failures:
         raise typer.Exit(code=1)
 
-
 def main() -> None:
     app()
-
 
 if __name__ == "__main__":
     main()
