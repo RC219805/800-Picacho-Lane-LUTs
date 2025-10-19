@@ -17,7 +17,7 @@ class _SpyCapabilities:
         self.invocations += 1
 
 
-def test_process_courtyard_scene_invokes_pipeline(monkeypatch, tmp_path):
+def test_process_courtyard_scene_invokes_pipeline(monkeypatch, tmp_path) -> None:
     captured: dict[str, Any] = {}
     namespace = argparse.Namespace()
 
@@ -50,7 +50,7 @@ def test_process_courtyard_scene_invokes_pipeline(monkeypatch, tmp_path):
         namespace.log_level = "INFO"
         return namespace
 
-    processed = {"count": None}
+    processed: dict[str, Any] = {}
 
     def fake_run_pipeline(args: argparse.Namespace) -> int:
         processed["count"] = 7
@@ -92,7 +92,7 @@ def test_process_courtyard_scene_rejects_unknown_override():
         ghc.process_courtyard_scene("in", "out", overrides={"unknown": 1.0})
 
 
-def test_process_courtyard_scene_allows_override_removal(monkeypatch, tmp_path):
+def test_process_courtyard_scene_allows_override_removal(monkeypatch, tmp_path) -> None:
     captured: dict[str, Any] = {}
 
     def fake_parse_args(argv: list[str]) -> argparse.Namespace:
