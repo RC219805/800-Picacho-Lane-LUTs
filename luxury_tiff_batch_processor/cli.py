@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import fields
 from pathlib import Path
-from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple, Union, TYPE_CHECKING
+from typing import Dict, Iterable, List, Literal, Optional, Sequence, Tuple, Union, TYPE_CHECKING, cast
 
 import typer
 
@@ -94,7 +94,8 @@ def _safe_save(path: Path, array, reference) -> None:
 def _settings_from_dict(d: Dict[str, object]) -> AdjustmentSettings:
     valid = {f.name for f in fields(AdjustmentSettings)}
     filtered = {k: v for k, v in d.items() if k in valid}
-    return AdjustmentSettings(**filtered)
+    # Cast values to appropriate types - mypy needs this for **kwargs unpacking
+    return AdjustmentSettings(**filtered)  # type: ignore[arg-type]
 
 def _load_preset_file(
     preset_file: Path,
@@ -163,7 +164,7 @@ def _worker_task(
     if p_out.exists() and not overwrite:
         return idx, None
     try:
-        res = image_to_float(p_in)
+        res = image_to_float(str(p_in), return_format="object")
         arr = _extract_array(res)
         out = apply_adjustments(arr, single_settings[idx])
         _safe_save(p_out, out, res)
@@ -221,7 +222,7 @@ def lux_batch(
 
         buckets: Dict[Tuple[int, int], List[Tuple[int, "NDArray[np.float32]", object]]] = defaultdict(list)
         for idx, (inp, _anchor) in enumerate(inputs):
-            res = image_to_float(inp)
+            res = image_to_float(str(inp), return_format="object")
             arr = _extract_array(res)
             if arr.ndim != 3 or arr.shape[-1] != 3:
                 failures += 1
