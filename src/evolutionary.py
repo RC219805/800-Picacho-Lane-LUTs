@@ -60,7 +60,10 @@ class EvolutionaryCheckpoint:
         object.__setattr__(self, "mutation_path", self.mutation_path.strip())
 
     def evaluate(self, *, today: Optional[date] = None) -> EvolutionOutcome:
-        reference_date = today or date.today()
+        # Support monkeypatching via the public module interface
+        import sys
+        date_class = getattr(sys.modules.get('evolutionary_checkpoint'), 'date', date)
+        reference_date = today or date_class.today()
         status = (
             EvolutionStatus.EVOLUTION_REQUIRED
             if reference_date > self.horizon
