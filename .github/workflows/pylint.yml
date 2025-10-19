@@ -51,6 +51,13 @@ jobs:
           pip install -r requirements-ci.txt
           pip install -e ".[dev-lean]"
 
+      - name: Verify pinned tool versions
+        run: |
+          python -m pip show mypy
+          python -m pip show pylint
+          python -m pip show flake8
+          python -m pip show pytest-cov
+
       - name: Generate legacy shims from tests (fail if new shims are needed)
         run: python tools/gen_legacy_shims.py --fail-on-create
 
@@ -76,6 +83,20 @@ jobs:
           path: .mypy_cache
           key: ${{ runner.os }}-mypy-3.12-${{ hashFiles('pyproject.toml', 'mypy.ini', 'setup.cfg', 'requirements-ci.txt') }}
 
+      # --- sanity imports (fail early) ---
+      - name: Sanity imports (fail early with context)
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          try:
+              importlib.import_module('src.evolutionary')
+              importlib.import_module('evolutionary_checkpoint')
+              print("✅ import sanity OK")
+          except Exception as e:
+              print(f"❌ Import sanity failed: {e}")
+              sys.exit(2)
+          PY
+
       # --- pylint ---
       - name: Run Pylint
         shell: bash
@@ -86,4 +107,5 @@ jobs:
             echo "No Python files to lint."
             exit 0
           fi
+          # Pylint 3 expects {old,new}; explicitly set to 'old' for % formatting.
           pylint -j 0 --fail-under=8.0 --logging-format-style=old $(tr '\0' ' ' < pyfiles.z)
