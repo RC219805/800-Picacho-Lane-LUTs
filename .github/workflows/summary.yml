@@ -1,4 +1,4 @@
-# .github/workflows/summary.yml
+# file: .github/workflows/summary.yml
 name: Summarize new issues
 
 on:
@@ -12,6 +12,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.issue.number }}  # avoid duplicate comments
   cancel-in-progress: true
 
+env:
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
 jobs:
   summarize:
     runs-on: ubuntu-latest
@@ -21,13 +26,25 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'  # speed up installs
+          python-version: "3.12"
+          cache: pip  # speed up installs
 
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir "openai>=1.43,<2"
+
+      - name: Verify OpenAI client
+        run: |
+          python - <<'PY'
+          try:
+              import openai
+              import importlib.metadata as md
+              print("openai version:", md.version("openai"))
+          except Exception as e:
+              print("OpenAI client not importable:", e)
+              raise
+          PY
 
       - name: Generate summary with OpenAI
         id: summarize
@@ -42,22 +59,22 @@ jobs:
           python - <<'PY'
           import os, sys, textwrap, time
 
-          def write(path: str, content: str) -> None:
-              with open(path, "w", encoding="utf-8") as f:
+          def write(path: str, content: str, mode: str = "w") -> None:
+              with open(path, mode, encoding="utf-8") as f:
                   f.write(content)
 
           resp_file = os.environ["RESPONSE_FILE"]
           title = (os.getenv("ISSUE_TITLE") or "").strip()
           body  = (os.getenv("ISSUE_BODY") or "").strip()
 
-          # Skip gracefully if no key or nothing to summarize (prevents noisy fallbacks)
+          # Skip gracefully if no key or nothing to summarize (prevents noisy fallbacks).
           if not os.getenv("OPENAI_API_KEY") or not (title or body):
               write(resp_file, "")
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as g:
                   g.write("has_summary=false\n")
               sys.exit(0)
 
-          # Keep prompt small to reduce latency/cost
+          # Keep prompt small to reduce latency/cost.
           body = body[:4000]
 
           from openai import OpenAI
@@ -77,7 +94,7 @@ jobs:
           summary = ""
           last_err = None
 
-          # Simple exponential backoff for transient errors
+          # Exponential backoff for transient errors.
           for wait in (1, 2, 4, 0):
               try:
                   completion = client.chat.completions.create(
@@ -93,18 +110,19 @@ jobs:
                   if wait:
                       time.sleep(wait)
 
+          # Persist result (may be empty).
           write(resp_file, summary)
 
-          # Write to step summary for quick visibility
+          # Append to step summary for quick visibility.
           step_summary = os.getenv("GITHUB_STEP_SUMMARY")
           if step_summary:
-              write(step_summary, summary or "No summary generated.")
+              write(step_summary, (summary or "No summary generated.") + "\n", mode="a")
 
-          # Expose whether we actually produced a summary
+          # Expose whether we actually produced a summary.
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as g:
               g.write(f"has_summary={'true' if summary else 'false'}\n")
 
-          # If we failed to call the API, surface the error in logs (kept non-fatal by continue-on-error)
+          # If we failed to call the API, surface the error in logs (kept non-fatal by continue-on-error).
           if not summary and last_err:
               print(f"OpenAI call failed: {last_err}", file=sys.stderr)
           PY
