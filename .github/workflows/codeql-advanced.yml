@@ -47,6 +47,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
+      # --- sanity imports for Python repos (fail early with context) ---
+      - name: Set up Python (for sanity import)
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sanity imports (fail early with context)
+        if: matrix.language == 'python'
+        run: |
+          python - <<'PY'
+          import importlib, sys
+          try:
+              importlib.import_module('src.evolutionary')
+              importlib.import_module('evolutionary_checkpoint')
+              print("✅ import sanity OK")
+          except Exception as e:
+              print(f"❌ Import sanity failed: {e}")
+              sys.exit(2)
+          PY
+
       # Initialize CodeQL with extended + quality suites.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
