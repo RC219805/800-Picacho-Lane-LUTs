@@ -1,4 +1,4 @@
-# file: .github/workflows/static-analysis-and-tests.yml
+# file: .github/workflows/static-analysis.yml
 name: Static Analysis & Testing
 
 on:
@@ -39,11 +39,8 @@ jobs:
       - name: Install pinned CI tools + project (lean)
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          # Install your CI pins (mypy, pytest-cov, flake8, pylint, etc.)
           pip install -r requirements-ci.txt
-          # Optionally pull dev tools (black, isort, bandit, radon)
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
-          # Install project deps (lean extras)
           pip install -e ".[dev-lean]"
 
       - name: Verify pinned tool versions
@@ -56,7 +53,7 @@ jobs:
       - name: Generate legacy shims from tests (fail if new shims are needed)
         run: python tools/gen_legacy_shims.py --fail-on-create
 
-      # ---------------- MyPy (restore → run → save) ----------------
+      # ---------------- MyPy cache (restore → run → save) ----------------
       - name: Restore MyPy cache
         uses: actions/cache/restore@v4
         with:
@@ -66,7 +63,7 @@ jobs:
             ${{ runner.os }}-mypy-${{ matrix.python-version }}-
             ${{ runner.os }}-mypy-
 
-      # Run style/lint only once (3.12) to avoid duplicate work
+      # Style/lint only once (3.12) to avoid duplicate work
       - name: Run Black
         if: matrix.python-version == '3.12'
         run: black --check .
@@ -84,11 +81,24 @@ jobs:
         run: |
           git ls-files '*.py' | xargs pylint --fail-under=8.0 --logging-format-style=old
 
-      - name: Run MyPy
+      - name: Run MyPy (with logs)
         if: matrix.python-version == '3.12'
         run: |
-          mypy --version
-          mypy . --exclude '(01_Film_Emulation|02_Location_Aesthetic|03_Material_Response|venv)/'
+          mypy --version | tee mypy.version.txt
+          set -o pipefail
+          mypy . --exclude '(01_Film_Emulation|02_Location_Aesthetic|03_Material_Response|venv)/' 2>&1 | tee mypy.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload MyPy logs
+        if: always() && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-${{ matrix.python-version }}
+          path: |
+            mypy.log
+            mypy.version.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Save MyPy cache
         if: always() && matrix.python-version == '3.12'
@@ -145,9 +155,21 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # ---------------- Tests (all Pythons) ----------------
-      - name: Run Tests with Coverage
-        run: pytest -v --cov=. --cov-report=xml --cov-report=term-missing
+      # ---------------- Tests (all Pythons, with logs) ----------------
+      - name: Run Tests with Coverage (with logs)
+        run: |
+          set -o pipefail
+          pytest -v --cov=. --cov-report=xml --cov-report=term-missing 2>&1 | tee pytest.log
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.python-version }}
+          path: pytest.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload coverage artifact
         if: always()
