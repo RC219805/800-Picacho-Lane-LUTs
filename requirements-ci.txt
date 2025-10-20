@@ -9,9 +9,9 @@ tqdm>=4.66,<5
 
 # test runner & coverage
 pytest>=8,<9
-pytest-cov>=4,<5
+pytest-cov>=4,<8
 
 # linters & type checker (pinned for reproducible CI)
 flake8>=7,<8
-pylint>=3,<4
+pylint>=3,<5
 mypy>=1.8,<2
