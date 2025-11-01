@@ -585,9 +585,9 @@ _DEFAULT_MBAR_8 = [
     "#244A5A",  # deep teal
 ]
 
-def _hex_to_rgb01(s: str) -> tuple[float, float, float]:
+def _hex_to_rgb01(s: str) -> tuple:
     """Convert hex color like '#RRGGBB' to (r, g, b) in [0,1]."""
-    s = s.lstrip("#")
+    s = s[1:] if s.startswith("#") else s
     r = int(s[0:2], 16) / 255.0
     g = int(s[2:4], 16) / 255.0
     b = int(s[4:6], 16) / 255.0
