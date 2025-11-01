@@ -17,11 +17,12 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any, Callable
+from typing import Mapping, Sequence, Optional, TYPE_CHECKING, Dict, Any, Callable, List, Iterable
 
 # --- third-party (kept light) ---
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
+from tqdm import tqdm
 
 # Optional dependency (keep soft so CI stays lean)
 try:  # pragma: no cover - optional
@@ -569,10 +570,7 @@ def main(argv: Sequence[str] | None = None) -> Path:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    main()    r = int(s[0:2], 16) / 255.0
-    g = int(s[2:4], 16) / 255.0
-    b = int(s[4:6], 16) / 255.0
-    return (r, g, b)
+    main()
 
 # ------------------------------- palettes ----------------------------------
 
@@ -587,10 +585,54 @@ _DEFAULT_MBAR_8 = [
     "#244A5A",  # deep teal
 ]
 
+def _hex_to_rgb01(s: str) -> tuple[float, float, float]:
+    """Convert hex color like '#RRGGBB' to (r, g, b) in [0,1]."""
+    s = s.lstrip("#")
+    r = int(s[0:2], 16) / 255.0
+    g = int(s[2:4], 16) / 255.0
+    b = int(s[4:6], 16) / 255.0
+    return (r, g, b)
+
 def _palette_rgb01(palette: Optional[Sequence[str]]) -> np.ndarray:
     """Return palette as (m,3) float64 RGB01."""
     src = _DEFAULT_MBAR_8 if palette is None or len(palette) == 0 else list(palette)
     return np.asarray([_hex_to_rgb01(h) for h in src], dtype=np.float64)
+
+def _rgb_to_lab(rgb: np.ndarray) -> np.ndarray:
+    """
+    Convert RGB01 to LAB color space for perceptual color matching.
+    Simplified implementation using standard transformations.
+    
+    Args:
+        rgb: Array of shape (..., 3) with values in [0, 1]
+    
+    Returns:
+        Array of same shape with LAB values
+    """
+    # Convert to linear RGB
+    mask = rgb > 0.04045
+    linear = np.where(mask, np.power((rgb + 0.055) / 1.055, 2.4), rgb / 12.92)
+    
+    # Convert to XYZ (using sRGB D65 matrix)
+    M = np.array([
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041]
+    ])
+    xyz = linear @ M.T
+    
+    # Normalize by D65 white point
+    xyz = xyz / np.array([0.95047, 1.00000, 1.08883])
+    
+    # XYZ to LAB
+    mask = xyz > 0.008856
+    f = np.where(mask, np.power(xyz, 1/3), (7.787 * xyz) + (16/116))
+    
+    L = 116 * f[..., 1] - 16
+    a = 500 * (f[..., 0] - f[..., 1])
+    b = 200 * (f[..., 1] - f[..., 2])
+    
+    return np.stack([L, a, b], axis=-1)
 
 # ------------------------------- distances ---------------------------------
 
