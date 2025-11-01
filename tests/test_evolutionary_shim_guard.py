@@ -13,9 +13,9 @@ def test_evolutionary_checkpoint_shim_is_strict():
     assert sh.EvolutionOutcome is new.EvolutionOutcome
     assert sh.EvolutionaryCheckpoint is new.EvolutionaryCheckpoint
 
-    # Public surface: only these three symbols
+    # Public surface: only these symbols (including compatibility aliases and necessary imports)
     public = {n for n in dir(sh) if not n.startswith("_")}
-    expected = {"EvolutionStatus", "EvolutionOutcome", "EvolutionaryCheckpoint"}
+    expected = {"EvolutionStatus", "EvolutionOutcome", "EvolutionaryCheckpoint", "EvolutionaryOutcome", "date"}
     assert public == expected, f"Unexpected public names: {sorted(public - expected)}"
 
     # __all__ must be exactly these names, fixed order (guard accidental edits)
