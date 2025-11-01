@@ -48,6 +48,7 @@ dev = [
     "mypy>=1.8,<2",
     "types-Pillow",
     "types-requests",
+    "types-tqdm>=4.66,<5",
 ]
 
 # Lean dev toolchain for CI (CPU-only)
