@@ -1,5 +1,7 @@
 # file: .github/workflows/ci.yml
 name: CI (lean)
+permissions:
+  contents: read
 
 on:
   push:

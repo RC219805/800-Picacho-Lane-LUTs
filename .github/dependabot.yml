@@ -5,11 +5,10 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"                     # scans requirements*.txt in repo root
     schedule:
-      interval: "weekly"
-      day: "sunday"
+      interval: "daily"
       time: "07:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 100
     versioning-strategy: increase      # bump pins; don't widen ranges by default
     labels: ["deps", "python", "ci"]
     reviewers: ["RC219805"]
